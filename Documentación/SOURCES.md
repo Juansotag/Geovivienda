@@ -15,13 +15,15 @@
 # **3. Ingresos y estrato**
 - Facturación de impuesto predial: https://datosabiertos.bogota.gov.co/dataset/total-recaudo-impuesto-predial-por-sector-catastral-ano-2019 
 - Facturación de impuesto vehicular: https://datosabiertos.bogota.gov.co/dataset/total-de-recaudo-de-impuesto-de-vehiculo-por-sector-catastral-ano-2019
+- Mediana del Valor de Referencia de Terreno por Manzana: https://datosabiertos.bogota.gov.co/en/dataset/valor-de-referencia-por-metro-cuadrado-de-terreno 
+- Mediana del avalúo catastral por manzana: https://datosabiertos.bogota.gov.co/en/dataset/mediana-del-avaluo-catastral-por-manzana
 # **4. Educación**
 - Puntaje promedio de las pruebas SABER 11 de los colegios del entorno: https://datosabiertos.bogota.gov.co/dataset/resultados-pruebas-saber-11-bogota-d-c 
 - Colegios en Bogotá: https://datosabiertos.bogota.gov.co/dataset/colegios-bogota-d-c
 # **5. Transporte**
 - Red de ciclorutas en Bogotá: https://datosabiertos.bogota.gov.co/dataset/red-cicloinfraestructura-bogota-d-c
-- Estaciones de TransMilenio en Bogotá: 
-- Paradas de SITP en Bogotá: 
-- Estaciones de TransMiCable en Bogotá:
-- Estaciones futuras del metro: 
-
+- Red de cicloalamedas en Bogotá: https://datosabiertos.bogota.gov.co/dataset/cicloalameda-bogota-d-c
+- Estaciones de TransMilenio en Bogotá: https://datosabiertos-transmilenio.hub.arcgis.com/datasets/Transmilenio::estaciones-troncales-de-transmilenio/explore?location=4.650177%2C-74.125000%2C11.81 
+- Paradas de SITP en Bogotá: https://datosabiertos-transmilenio.hub.arcgis.com/datasets/70b111e96b514bdfb36a7eb532d0eb4f_0/explore?location=4.613881%2C-74.171800%2C10.96
+- Estaciones de TransMiCable en Bogotá: https://datosabiertos-transmilenio.hub.arcgis.com/datasets/6dacb5b86b30406698c93a01fbd7f128_11/explore?location=4.558996%2C-74.153150%2C13.00 
+- Estaciones futuras del metro: https://datosabiertos.bogota.gov.co/dataset/estaciones-de-la-primera-linea-del-metro-de-bogota
