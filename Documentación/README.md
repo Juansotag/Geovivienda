@@ -169,3 +169,76 @@ Adicionalmente, el usuario puede **seleccionar un apartamento específico** y ob
 ---
 
 **Geovivienda** busca demostrar cómo la integración de datos inmobiliarios y territoriales, combinada con analítica espacial, puede enriquecer la toma de decisiones urbanas desde un enfoque transparente e interpretable.
+
+# **Uso de FLS para archivos grandes**
+
+Este documento explica paso a paso cómo actualizar un repositorio de Git que ya tienes clonado en tu computador local, independientemente del IDE que uses (por ejemplo Antigravity u otro editor). El proceso se hace usando Git.
+
+## REQUISITOS PREVIOS
+1. Tener Git instalado en tu computador.
+2. Tener el repositorio ya clonado en tu máquina.
+3. Tener acceso al repositorio remoto (GitHub, GitLab, Bitbucket, etc.).
+
+## PASO 1: ABRIR LA CARPETA DEL PROYECTO
+Abre la carpeta donde está tu proyecto:
+- Puedes hacerlo desde tu IDE.
+- O desde el explorador de archivos y luego abrir una terminal allí.
+
+Es importante que la terminal esté ubicada en la raíz del repositorio (donde está la carpeta .git).
+
+## PASO 2: VERIFICAR EL ESTADO DEL REPOSITORIO
+
+En la terminal, ejecute:
+
+git status
+
+Este comando te indica:
+- Si tienes archivos modificados.
+- Si hay cambios sin guardar.
+- Si tu rama está adelantada o atrasada respecto al repositorio remoto.
+
+## **PASO 3: GUARDAR O DESCARTAR CAMBIOS LOCALES (SI EXISTEN)**
+Si tienes cambios locales, tienes dos opciones:
+
+A) Guardar los cambios (commit):
+git add .
+git commit -m "Mensaje descriptivo del cambio"
+
+B) Descartar los cambios (¡cuidado!):
+git checkout .
+
+## **PASO 4: ACTUALIZAR EL REPOSITORIO DESDE EL REMOTO**
+
+Para traer los cambios más recientes del repositorio remoto, ejecuta:
+
+git pull origin main
+
+Nota:
+- Cambia 'main' por 'master' u otra rama si tu proyecto usa un nombre diferente.
+
+Este comando:
+- Descarga los cambios del repositorio remoto.
+- Los integra automáticamente en tu copia local.
+
+## **PASO 5: VERIFICAR QUE TODO ESTÉ ACTUALIZADO**
+
+Vuelve a ejecutar:
+
+git status
+
+Si todo está bien, deberías ver un mensaje indicando que tu rama está actualizada.
+
+## **PASO 6: USO DESDE EL IDE**
+
+Una vez actualizado el repositorio:
+- Reinicia el IDE si no ves los cambios.
+- Verifica que los archivos nuevos o modificados aparezcan correctamente.
+- Ejecuta nuevamente tu código si es necesario.
+
+## **ERRORES COMUNES**
+
+- Conflictos de merge: ocurren cuando Git no puede unir cambios automáticamente.
+- Falta de permisos: asegúrate de tener acceso al repositorio remoto.
+- Rama incorrecta: verifica en qué rama estás con:
+
+git branch
