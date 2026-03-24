@@ -32,6 +32,12 @@ def get_data():
     if os.path.exists(CSV_PATH):
         try:
             df = pd.read_csv(CSV_PATH, sep=';', decimal=',', encoding='utf-8-sig')
+            
+            # Forzar redondeo a enteros en áreas para evitar el bug de comas en el frontend
+            for col in ['Area_Metros', 'Area_Construida', 'Area_Privada']:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').round(0).astype('Int64')
+            
             df = df.fillna('')
             return jsonify(df.to_dict(orient='records'))
         except Exception as e:
