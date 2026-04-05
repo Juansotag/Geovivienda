@@ -53,17 +53,12 @@ body {
 }
 
 .sidebar-header {
-    padding: 1.25rem 1.5rem;
+    padding: 1.1rem 1.5rem;
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
     gap: 0.75rem;
     flex-shrink: 0;
-}
-
-.sidebar-header i {
-    font-size: 1.5rem;
-    color: var(--primary);
 }
 
 .sidebar-header h1 {
@@ -73,12 +68,93 @@ body {
     color: var(--text-1);
 }
 
+/* ---- Sidebar Tabs ---- */
+.sidebar-tabs {
+    display: flex;
+    padding: 0.6rem 1rem;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--bg-900);
+}
+
+.tab-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-700);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-2);
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.18s;
+    letter-spacing: 0.02em;
+}
+
+.tab-btn:hover {
+    border-color: var(--text-2);
+    color: var(--text-1);
+}
+
+.tab-btn.active {
+    background: var(--primary-dim);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.tab-btn svg {
+    flex-shrink: 0;
+}
+
+/* ---- Tab Panels ---- */
+.tab-panel {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.tab-panel.active {
+    display: flex;
+}
+
 .sidebar-body {
     flex: 1;
     overflow-y: auto;
     padding: 1.25rem 1.5rem;
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
+}
+
+/* ---- Clear filters button ---- */
+.btn-clear-filters {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.65rem;
+    background: var(--bg-700);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-2);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s;
+    margin-top: 0.25rem;
+}
+
+.btn-clear-filters:hover {
+    border-color: var(--text-2);
+    color: var(--text-1);
+    background: var(--bg-600);
 }
 
 /* ---- Form Elements ---- */
@@ -463,35 +539,6 @@ tbody tr.selected-row {
     text-decoration: underline;
 }
 
-/* === TABLE SORT/FILTER ADDITIONS === */
-.filter-row {
-    display: flex;
-    border-bottom: 1px solid var(--border);
-    background: var(--bg-900);
-    flex-shrink: 0;
-    overflow-x: auto;
-}
-
-.filter-cell {
-    padding: 0.35rem 0.5rem;
-    flex-shrink: 0;
-}
-
-.filter-cell input {
-    width: 100%;
-    min-width: 60px;
-    background: var(--bg-700);
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    color: var(--text-1);
-    font-size: 0.72rem;
-    padding: 0.28rem 0.4rem;
-}
-
-.filter-cell input:focus {
-    outline: none;
-    border-color: var(--primary);
-}
 
 th.sortable {
     cursor: pointer;

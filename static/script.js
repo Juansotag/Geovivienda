@@ -35,11 +35,21 @@ let filters = {};
 document.addEventListener("DOMContentLoaded", () => {
     initMap();
     buildTableHead();
-    buildFilterRow();
     loadData();
     bindToggleGroups();
+    bindFilterPanel();
     document.getElementById("scrape-form").addEventListener("submit", triggerScrape);
 });
+
+// ==============================
+// TAB SWITCHING
+// ==============================
+function switchTab(tab) {
+    ['filter', 'scrape'].forEach(t => {
+        document.getElementById(`tab-btn-${t}`).classList.toggle('active', t === tab);
+        document.getElementById(`tab-panel-${t}`).classList.toggle('active', t === tab);
+    });
+}
 
 // Layer registry for toggle control
 const ESTRATO_COLOR = {
@@ -69,7 +79,7 @@ function initMap() {
 
     // ---- Estratos (polígonos coloreados por ESTRATO) ----
     fetch('/api/geo/estratos.geojson')
-        .then(r => r.json())
+        .then(r => r.ok ? r.json() : Promise.reject())
         .then(gj => {
             LAYERS.estratos.layer = L.geoJSON(gj, {
                 style: f => {
@@ -82,7 +92,7 @@ function initMap() {
 
     // ---- SITP (azul rey, radio 3) ----
     fetch('/api/geo/estaciones_sitp.geojson')
-        .then(r => r.json())
+        .then(r => r.ok ? r.json() : Promise.reject())
         .then(gj => {
             LAYERS.sitp.layer = L.geoJSON(gj, {
                 pointToLayer: (f, latlng) => L.circleMarker(latlng, {
@@ -98,7 +108,7 @@ function initMap() {
 
     // ---- TM (rojo oscuro, radio 5) ----
     fetch('/api/geo/estaciones_tm.geojson')
-        .then(r => r.json())
+        .then(r => r.ok ? r.json() : Promise.reject())
         .then(gj => {
             LAYERS.tm.layer = L.geoJSON(gj, {
                 pointToLayer: (f, latlng) => L.circleMarker(latlng, {
@@ -114,7 +124,7 @@ function initMap() {
 
     // ---- Metro (naranja, centroide de MultiPolygon) ----
     fetch('/api/geo/estaciones_metro.geojson')
-        .then(r => r.json())
+        .then(r => r.ok ? r.json() : Promise.reject())
         .then(gj => {
             const markers = L.layerGroup();
             gj.features.forEach(f => {
@@ -139,7 +149,7 @@ function initMap() {
 
     // ---- Cable (rojo claro, radio 6) ----
     fetch('/api/geo/estaciones_cable.geojson')
-        .then(r => r.json())
+        .then(r => r.ok ? r.json() : Promise.reject())
         .then(gj => {
             LAYERS.cable.layer = L.geoJSON(gj, {
                 pointToLayer: (f, latlng) => L.circleMarker(latlng, {
@@ -155,7 +165,7 @@ function initMap() {
 
     // ---- Ciclorutas (blanco, línea fina, sin tooltip) ----
     fetch('/api/geo/cliclorutas.geojson')
-        .then(r => r.json())
+        .then(r => r.ok ? r.json() : Promise.reject())
         .then(gj => {
             LAYERS.ciclorutas.layer = L.geoJSON(gj, {
                 style: { color: '#e8e8e8', weight: 1.2, opacity: 0.55 }
@@ -234,42 +244,89 @@ function buildTableHead() {
     });
 }
 
-function buildFilterRow() {
-    const fr = document.getElementById('filter-row');
-    fr.innerHTML = '';
-    COLUMNS.forEach(col => {
-        const cell = document.createElement('div');
-        cell.className = 'filter-cell';
-        if (col.filterable) {
-            const inp = document.createElement('input');
-            inp.type = 'text';
-            inp.placeholder = col.label;
-            inp.dataset.key = col.key;
-            inp.addEventListener('input', () => {
-                filters[col.key] = inp.value.trim().toLowerCase();
+// ==============================
+// FILTER PANEL BINDING
+// ==============================
+function bindFilterPanel() {
+    // Text / numeric inputs
+    ['f-ubicacion', 'f-precio-min', 'f-precio-max', 'f-area-min', 'f-comodidades'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', applyFiltersAndSort);
+    });
+    // Multi-select: estrato
+    const estratoGrp = document.getElementById('f-estrato-group');
+    if (estratoGrp) {
+        estratoGrp.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.classList.toggle('active');
                 applyFiltersAndSort();
             });
-            cell.appendChild(inp);
-        }
-        fr.appendChild(cell);
+        });
+    }
+    // Single-select: habitaciones, banos
+    ['f-habitaciones-group', 'f-banos-group'].forEach(id => {
+        const grp = document.getElementById(id);
+        if (!grp) return;
+        grp.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                grp.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                applyFiltersAndSort();
+            });
+        });
     });
+}
+
+function clearFilters() {
+    ['f-ubicacion', 'f-precio-min', 'f-precio-max', 'f-area-min', 'f-comodidades'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    const estratoGrp = document.getElementById('f-estrato-group');
+    if (estratoGrp) estratoGrp.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    ['f-habitaciones-group', 'f-banos-group'].forEach(id => {
+        const grp = document.getElementById(id);
+        if (!grp) return;
+        const btns = grp.querySelectorAll('.toggle-btn');
+        btns.forEach(b => b.classList.remove('active'));
+        if (btns[0]) btns[0].classList.add('active');
+    });
+    applyFiltersAndSort();
+}
+
+function getFilterPanelValues() {
+    const get = id => document.getElementById(id);
+    const val = id => (get(id) ? get(id).value : '');
+    const ubicacion  = val('f-ubicacion').trim().toLowerCase();
+    const precioMin  = parseNum(val('f-precio-min'));
+    const precioMax  = parseNum(val('f-precio-max'));
+    const areaMin    = parseNum(val('f-area-min'));
+    const comodidades = val('f-comodidades').trim().toLowerCase();
+    const estratos   = [...document.querySelectorAll('#f-estrato-group .toggle-btn.active')].map(b => b.dataset.val);
+    const habMinVal   = (document.querySelector('#f-habitaciones-group .toggle-btn.active') || {}).dataset?.val || '0';
+    const banosMinVal = (document.querySelector('#f-banos-group .toggle-btn.active') || {}).dataset?.val || '0';
+    return { ubicacion, precioMin, precioMax, areaMin, comodidades, estratos, habMin: parseInt(habMinVal), banosMin: parseInt(banosMinVal) };
 }
 
 // ==============================
 // TOGGLE GROUPS
 // ==============================
 function bindToggleGroups() {
-    // Multi-select: estrato, comodidades
-    ['estrato-group', 'comodidades-group'].forEach(id => {
-        document.getElementById(id).querySelectorAll('.toggle-btn').forEach(btn => {
+    // Multi-select: estrato, comodidades, estado, tipo (scrape panel)
+    ['estrato-group', 'comodidades-group', 'estado-group', 'tipo-group'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.querySelectorAll('.toggle-btn').forEach(btn => {
             btn.addEventListener('click', () => btn.classList.toggle('active'));
         });
     });
-    // Single-select: cuartos, banos, parqueaderos
+    // Single-select: cuartos, banos, parqueaderos (scrape panel)
     ['cuartos-group', 'banos-group', 'parq-group'].forEach(id => {
-        document.getElementById(id).querySelectorAll('.toggle-btn').forEach(btn => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.querySelectorAll('.toggle-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                document.getElementById(id).querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+                el.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
             });
         });
@@ -292,9 +349,11 @@ function loadData() {
     fetch('/api/data')
         .then(r => r.json())
         .then(data => {
+            console.log("Cargando", data.length, "registros");
             rawDataset = data.map(enrichRow);
             applyFiltersAndSort();
-        });
+        })
+        .catch(err => console.error("Error cargando tabla:", err));
 }
 
 // Fill gaps: area fields, precio_m2
@@ -338,16 +397,40 @@ function handleSort(key, th) {
 
 function applyFiltersAndSort() {
     let result = [...rawDataset];
+    const f = getFilterPanelValues();
 
-    // Filter
-    Object.entries(filters).forEach(([key, val]) => {
-        if (!val) return;
-        result = result.filter(row => {
-            const cell = row[key];
-            if (cell === null || cell === undefined || cell === '') return false;
-            return String(cell).toLowerCase().includes(val);
-        });
-    });
+    // Ubicacion text
+    if (f.ubicacion) {
+        result = result.filter(r => String(r.Ubicacion || '').toLowerCase().includes(f.ubicacion));
+    }
+    // Precio min
+    if (f.precioMin > 0) {
+        result = result.filter(r => parseNum(r.Precio_Venta) >= f.precioMin);
+    }
+    // Precio max
+    if (f.precioMax > 0) {
+        result = result.filter(r => parseNum(r.Precio_Venta) <= f.precioMax);
+    }
+    // Area min
+    if (f.areaMin > 0) {
+        result = result.filter(r => parseNum(r.Area_Metros) >= f.areaMin);
+    }
+    // Estratos (multi-select — if none selected, show all)
+    if (f.estratos.length > 0) {
+        result = result.filter(r => f.estratos.includes(String(r.Estrato)));
+    }
+    // Habitaciones min
+    if (f.habMin > 0) {
+        result = result.filter(r => parseNum(r.Habitaciones) >= f.habMin);
+    }
+    // Banos min
+    if (f.banosMin > 0) {
+        result = result.filter(r => parseNum(r.Banos) >= f.banosMin);
+    }
+    // Comodidades free text
+    if (f.comodidades) {
+        result = result.filter(r => String(r.Comodidades || '').toLowerCase().includes(f.comodidades));
+    }
 
     // Sort
     if (sortCol) {
@@ -380,10 +463,12 @@ const copFmt = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'CO
 function renderAll() {
     markerGroup.clearLayers();
     const tbody = document.getElementById('table-body');
+    if (!tbody) return;
     tbody.innerHTML = '';
 
     const prices = viewDataset.map(d => parseNum(d.Precio_Venta)).filter(p => p > 0);
-    const minP = Math.min(...prices), maxP = Math.max(...prices);
+    const minP = prices.length > 0 ? Math.min(...prices) : 0;
+    const maxP = prices.length > 0 ? Math.max(...prices) : 0;
     const bounds = [];
 
     viewDataset.forEach((row, idx) => {
@@ -458,7 +543,11 @@ function renderAll() {
 function parseNum(val) {
     if (val === null || val === undefined || val === '') return 0;
     if (typeof val === 'number') return val;
-    return parseFloat(String(val).replace(/\./g, '').replace(',', '.')) || 0;
+    let s = String(val);
+    // Si ya es un float nativo con punto y sin comas (ej: 3.5 desde pandas)
+    if (s.includes('.') && !s.includes(',')) return parseFloat(s) || 0;
+    // Si tiene comas (formato latino), quitamos los puntos de miles y cambiamos coma por punto
+    return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
 }
 
 function truncate(str, n) {
@@ -509,6 +598,8 @@ function triggerScrape(e) {
 
     const comodidades = getActiveVals('comodidades-group');
     const estratos = getActiveVals('estrato-group');
+    const tipos = getActiveVals('tipo-group');
+    const estados = getActiveVals('estado-group');
     const cuartosVal = getActiveVal('cuartos-group');
     const banosVal = getActiveVal('banos-group');
     const parqVal = getActiveVal('parq-group');
@@ -516,8 +607,8 @@ function triggerScrape(e) {
     const payload = {
         ubicacion: document.getElementById('ubicacion').value,
         operacion: document.getElementById('operacion').value,
-        tipo: document.getElementById('tipo').value,
-        estado: document.getElementById('estado').value,
+        tipos,
+        estados,
         precio_min: document.getElementById('precio_min').value,
         precio_max: document.getElementById('precio_max').value,
         estratos,

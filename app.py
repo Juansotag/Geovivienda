@@ -7,9 +7,9 @@ from extractor_links import extraer_links_fincaraiz
 from extractor_detalles import procesar_lista_links
 
 app = Flask(__name__)
-CSV_PATH = 'dataset_fincaraiz.csv'
-GEO_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        'Información geográfica', 'Datasets', 'Transporte')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_PATH = os.path.join(BASE_DIR, 'dataset_fincaraiz.csv')
+GEO_DIR  = os.path.join(BASE_DIR, 'Información geográfica', 'Datasets', 'Transporte')
 
 # Estado compartido del job de scraping actual
 job_state = {
@@ -33,15 +33,28 @@ def get_data():
         try:
             df = pd.read_csv(CSV_PATH, sep=';', decimal=',', encoding='utf-8-sig')
             
-            # Forzar redondeo a enteros en áreas para evitar el bug de comas en el frontend
+            # Convertir áreas a entero, usando object type para permitir fillna('') después
             for col in ['Area_Metros', 'Area_Construida', 'Area_Privada']:
                 if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce').round(0).astype('Int64')
+                    df[col] = pd.to_numeric(df[col], errors='coerce').round(0)
+                    # Convertir a object antes de fillna para evitar error con Int64 + ''
+                    df[col] = df[col].astype(object).where(df[col].notna(), other=None)
             
-            df = df.fillna('')
-            return jsonify(df.to_dict(orient='records'))
+            # Reemplazar NaN/None por vacío para serialización JSON limpia
+            records = []
+            for rec in df.to_dict(orient='records'):
+                clean = {}
+                for k, v in rec.items():
+                    if v is None or (isinstance(v, float) and v != v):  # None o NaN
+                        clean[k] = ''
+                    else:
+                        clean[k] = v
+                records.append(clean)
+            return jsonify(records)
         except Exception as e:
+            import traceback
             print("Error cargando CSV:", e)
+            traceback.print_exc()
     return jsonify([])
 
 @app.route('/api/status', methods=['GET'])
@@ -146,7 +159,7 @@ def run_scrape_job(data):
         links_obtenidos = extraer_links_fincaraiz(
             paginas_a_extraer=paginas,
             operacion=data.get('operacion', 'venta'),
-            tipos_inmueble=[data.get('tipo', 'apartamento')],
+            tipos_inmueble=data.get('tipos', ['apartamento']),
             ubicacion=data.get('ubicacion', 'bogota/bogota-dc'),
             habitaciones=data.get('habitaciones', '1-o-mas'),
             banos=data.get('banos', '1-o-mas'),
@@ -154,7 +167,7 @@ def run_scrape_job(data):
             con_ascensor=con_ascensor,
             extras=extras,
             parqueaderos=parqueaderos,
-            estado=data.get('estado', 'usados'),
+            estado=data.get('estados')[0] if len(data.get('estados', [])) == 1 else None,
             precio_min=int(float(data.get('precio_min', 0))),
             precio_max=int(float(data.get('precio_max', 500000000))),
             antiguedad='de-1-a-8-anios',

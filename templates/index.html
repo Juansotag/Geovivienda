@@ -24,8 +24,6 @@
                     <span id="prop-count" class="badge">0 registros</span>
                     <button class="btn-danger" onclick="clearAllData()">Eliminar todo</button>
                 </div>
-                <!-- Filter row -->
-                <div class="filter-row" id="filter-row"></div>
                 <div class="table-body-wrap">
                     <table id="data-table">
                         <thead id="table-head">
@@ -37,45 +35,40 @@
             </div>
         </main>
 
-        <!-- Panel Lateral de Filtros -->
+        <!-- Panel Lateral -->
         <aside class="sidebar">
             <div class="sidebar-header">
                 <span class="brand-icon">&#9670;</span>
                 <h1>GeoVivienda</h1>
             </div>
 
-            <div class="sidebar-body">
-                <form id="scrape-form">
+            <!-- Tabs -->
+            <div class="sidebar-tabs">
+                <button class="tab-btn active" id="tab-btn-filter" onclick="switchTab('filter')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                    </svg>
+                    Filtrar
+                </button>
+                <button class="tab-btn" id="tab-btn-scrape" onclick="switchTab('scrape')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    Rastrear
+                </button>
+            </div>
+
+            <!-- TAB: Filtrar Inventario -->
+            <div class="tab-panel active" id="tab-panel-filter">
+                <div class="sidebar-body">
 
                     <div class="form-section">
-                        <div class="section-label">Busqueda</div>
+                        <div class="section-label">Barrio / Ubicacion</div>
                         <div class="form-group">
-                            <label class="field-label">Ciudad / Zona (slug de FincaRaiz)</label>
-                            <input type="text" id="ubicacion" value="bogota/bogota-dc">
-                        </div>
-                        <div class="grid-2">
-                            <div class="form-group">
-                                <label class="field-label">Operacion</label>
-                                <select id="operacion">
-                                    <option value="venta">Venta</option>
-                                    <option value="arriendo">Arriendo</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="field-label">Estado</label>
-                                <select id="estado">
-                                    <option value="usados">Usados</option>
-                                    <option value="nuevos">Nuevos</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label class="field-label">Tipo de inmueble</label>
-                            <select id="tipo">
-                                <option value="apartamento">Apartamento</option>
-                                <option value="casa">Casa</option>
-                                <option value="oficina">Oficina</option>
-                            </select>
+                            <input type="text" id="f-ubicacion" placeholder="Ej: Chapinero, Suba...">
                         </div>
                     </div>
 
@@ -83,28 +76,28 @@
                         <div class="section-label">Presupuesto (COP)</div>
                         <div class="grid-2">
                             <div class="form-group">
-                                <label class="field-label">Minimo</label>
+                                <label class="field-label">Mínimo</label>
                                 <div class="price-input-wrap">
                                     <span>$</span>
-                                    <input type="number" id="precio_min" value="250000000" step="5000000">
+                                    <input type="number" id="f-precio-min" placeholder="0" step="5000000">
                                 </div>
                             </div>
                             <div class="form-group">
                                 <label class="field-label">Maximo</label>
                                 <div class="price-input-wrap">
                                     <span>$</span>
-                                    <input type="number" id="precio_max" value="350000000" step="5000000">
+                                    <input type="number" id="f-precio-max" placeholder="Sin limite" step="5000000">
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="form-section">
-                        <div class="section-label">Estrato (seleccion multiple)</div>
-                        <div class="btn-group" id="estrato-group">
+                        <div class="section-label">Estrato</div>
+                        <div class="btn-group" id="f-estrato-group">
                             <button type="button" class="toggle-btn" data-val="1">1</button>
                             <button type="button" class="toggle-btn" data-val="2">2</button>
-                            <button type="button" class="toggle-btn active" data-val="3">3</button>
+                            <button type="button" class="toggle-btn" data-val="3">3</button>
                             <button type="button" class="toggle-btn" data-val="4">4</button>
                             <button type="button" class="toggle-btn" data-val="5">5</button>
                             <button type="button" class="toggle-btn" data-val="6">6</button>
@@ -114,63 +107,178 @@
                     <div class="form-section">
                         <div class="section-label">Caracteristicas</div>
                         <div class="form-group">
-                            <label class="field-label">Cuartos minimos</label>
-                            <div class="btn-group" id="cuartos-group">
+                            <label class="field-label">Cuartos mínimos</label>
+                            <div class="btn-group" id="f-habitaciones-group">
+                                <button type="button" class="toggle-btn active" data-val="0">Todos</button>
                                 <button type="button" class="toggle-btn" data-val="1">1+</button>
-                                <button type="button" class="toggle-btn active" data-val="2">2+</button>
+                                <button type="button" class="toggle-btn" data-val="2">2+</button>
                                 <button type="button" class="toggle-btn" data-val="3">3+</button>
                                 <button type="button" class="toggle-btn" data-val="4">4+</button>
                             </div>
                         </div>
                         <div class="form-group">
-                            <label class="field-label">Banos minimos</label>
-                            <div class="btn-group" id="banos-group">
+                            <label class="field-label">Baños mínimos</label>
+                            <div class="btn-group" id="f-banos-group">
+                                <button type="button" class="toggle-btn active" data-val="0">Todos</button>
                                 <button type="button" class="toggle-btn" data-val="1">1+</button>
-                                <button type="button" class="toggle-btn active" data-val="2">2+</button>
+                                <button type="button" class="toggle-btn" data-val="2">2+</button>
                                 <button type="button" class="toggle-btn" data-val="3">3+</button>
                             </div>
                         </div>
                         <div class="form-group">
-                            <label class="field-label">Parqueaderos</label>
-                            <div class="btn-group" id="parq-group">
-                                <button type="button" class="toggle-btn" data-val="0">Sin filtro</button>
-                                <button type="button" class="toggle-btn" data-val="1">1+</button>
-                                <button type="button" class="toggle-btn" data-val="2">2+</button>
+                            <label class="field-label">Area total mínima (m²)</label>
+                            <input type="number" id="f-area-min" placeholder="Ej: 45" min="0">
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="section-label">Comodidades (texto libre)</div>
+                        <div class="form-group">
+                            <input type="text" id="f-comodidades" placeholder="Ej: piscina, gimnasio...">
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn-clear-filters" onclick="clearFilters()">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5">
+                            <polyline points="1 4 1 10 7 10" />
+                            <path d="M3.51 15a9 9 0 1 0 .49-3.46" />
+                        </svg>
+                        Limpiar filtros
+                    </button>
+                </div>
+            </div>
+
+            <!-- TAB: Rastrear nuevos datos -->
+            <div class="tab-panel" id="tab-panel-scrape">
+                <div class="sidebar-body">
+                    <form id="scrape-form">
+
+                        <div class="form-section">
+                            <div class="section-label">Busqueda</div>
+                            <div class="form-group">
+                                <label class="field-label">Ciudad / Zona (slug de FincaRaiz)</label>
+                                <input type="text" id="ubicacion" value="bogota/bogota-dc">
+                            </div>
+                            <div class="form-group">
+                                <label class="field-label">Operacion</label>
+                                <select id="operacion">
+                                    <option value="venta">Venta</option>
+                                    <option value="arriendo">Arriendo</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="field-label">Estado</label>
+                                <div class="btn-group" id="estado-group">
+                                    <button type="button" class="toggle-btn active" data-val="usados">Usados</button>
+                                    <button type="button" class="toggle-btn" data-val="nuevos">Nuevos</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="field-label">Tipo de inmueble</label>
+                                <div class="btn-group" id="tipo-group">
+                                    <button type="button" class="toggle-btn active" data-val="apartamento">Apto</button>
+                                    <button type="button" class="toggle-btn" data-val="casa">Casa</button>
+                                    <button type="button" class="toggle-btn" data-val="oficina">Oficina</button>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="form-section">
-                        <div class="section-label">Comodidades</div>
-                        <div class="btn-group" id="comodidades-group">
-                            <button type="button" class="toggle-btn" data-val="con-ascensor">Ascensor</button>
-                            <button type="button" class="toggle-btn" data-val="con-balcon">Balcon</button>
-                            <button type="button" class="toggle-btn" data-val="con-citofono">Citofono</button>
-                            <button type="button" class="toggle-btn" data-val="cocina-integral">Cocina Integral</button>
-                            <button type="button" class="toggle-btn" data-val="barra-americana">Barra Americana</button>
-                            <button type="button" class="toggle-btn" data-val="calentador">Calentador</button>
-                            <button type="button" class="toggle-btn" data-val="con-gimnasio">Gimnasio</button>
-                            <button type="button" class="toggle-btn" data-val="zona-bbq">Zona BBQ</button>
-                            <button type="button" class="toggle-btn" data-val="piscina">Piscina</button>
-                            <button type="button" class="toggle-btn" data-val="conjunto-cerrado">Conjunto
-                                Cerrado</button>
+                        <div class="form-section">
+                            <div class="section-label">Presupuesto (COP)</div>
+                            <div class="grid-2">
+                                <div class="form-group">
+                                    <label class="field-label">Minimo</label>
+                                    <div class="price-input-wrap">
+                                        <span>$</span>
+                                        <input type="number" id="precio_min" value="250000000" step="5000000">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="field-label">Maximo</label>
+                                    <div class="price-input-wrap">
+                                        <span>$</span>
+                                        <input type="number" id="precio_max" value="350000000" step="5000000">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="form-section">
-                        <div class="section-label">Cobertura</div>
-                        <div class="form-group">
-                            <label class="field-label">Numero de inmuebles objetivo</label>
-                            <input type="number" id="num_inmuebles" value="42" min="1" max="500">
-                            <span class="field-hint">Cada pagina contiene ~21 anuncios.</span>
+                        <div class="form-section">
+                            <div class="section-label">Estrato (seleccion multiple)</div>
+                            <div class="btn-group" id="estrato-group">
+                                <button type="button" class="toggle-btn" data-val="1">1</button>
+                                <button type="button" class="toggle-btn" data-val="2">2</button>
+                                <button type="button" class="toggle-btn active" data-val="3">3</button>
+                                <button type="button" class="toggle-btn" data-val="4">4</button>
+                                <button type="button" class="toggle-btn" data-val="5">5</button>
+                                <button type="button" class="toggle-btn" data-val="6">6</button>
+                            </div>
                         </div>
-                    </div>
 
-                    <button type="submit" id="btn-scrape" class="btn-search">Iniciar rastreo</button>
-                </form>
+                        <div class="form-section">
+                            <div class="section-label">Caracteristicas</div>
+                            <div class="form-group">
+                                <label class="field-label">Cuartos mínimos</label>
+                                <div class="btn-group" id="cuartos-group">
+                                    <button type="button" class="toggle-btn" data-val="1">1+</button>
+                                    <button type="button" class="toggle-btn active" data-val="2">2+</button>
+                                    <button type="button" class="toggle-btn" data-val="3">3+</button>
+                                    <button type="button" class="toggle-btn" data-val="4">4+</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="field-label">Banos mínimos</label>
+                                <div class="btn-group" id="banos-group">
+                                    <button type="button" class="toggle-btn" data-val="1">1+</button>
+                                    <button type="button" class="toggle-btn active" data-val="2">2+</button>
+                                    <button type="button" class="toggle-btn" data-val="3">3+</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="field-label">Parqueaderos</label>
+                                <div class="btn-group" id="parq-group">
+                                    <button type="button" class="toggle-btn" data-val="0">Sin filtro</button>
+                                    <button type="button" class="toggle-btn" data-val="1">1+</button>
+                                    <button type="button" class="toggle-btn" data-val="2">2+</button>
+                                </div>
+                            </div>
+                        </div>
 
-                <div id="log-console" class="log-console">
-                    <div class="log-line info">GeoVivienda listo. Configure los filtros y presione Iniciar rastreo.
+                        <div class="form-section">
+                            <div class="section-label">Comodidades</div>
+                            <div class="btn-group" id="comodidades-group">
+                                <button type="button" class="toggle-btn" data-val="con-ascensor">Ascensor</button>
+                                <button type="button" class="toggle-btn" data-val="con-balcon">Balcon</button>
+                                <button type="button" class="toggle-btn" data-val="con-citofono">Citofono</button>
+                                <button type="button" class="toggle-btn" data-val="cocina-integral">Cocina
+                                    Integral</button>
+                                <button type="button" class="toggle-btn" data-val="barra-americana">Barra
+                                    Americana</button>
+                                <button type="button" class="toggle-btn" data-val="calentador">Calentador</button>
+                                <button type="button" class="toggle-btn" data-val="con-gimnasio">Gimnasio</button>
+                                <button type="button" class="toggle-btn" data-val="zona-bbq">Zona BBQ</button>
+                                <button type="button" class="toggle-btn" data-val="piscina">Piscina</button>
+                                <button type="button" class="toggle-btn" data-val="conjunto-cerrado">Conjunto
+                                    Cerrado</button>
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <div class="section-label">Cobertura</div>
+                            <div class="form-group">
+                                <label class="field-label">Numero de inmuebles objetivo</label>
+                                <input type="number" id="num_inmuebles" value="42" min="1" max="500">
+                                <span class="field-hint">Cada pagina contiene ~21 anuncios.</span>
+                            </div>
+                        </div>
+
+                        <button type="submit" id="btn-scrape" class="btn-search">Iniciar rastreo</button>
+                    </form>
+
+                    <div id="log-console" class="log-console">
+                        <div class="log-line info">GeoVivienda listo. Configure los filtros y presione Iniciar rastreo.
+                        </div>
                     </div>
                 </div>
             </div>
