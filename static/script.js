@@ -16,6 +16,7 @@ const COLUMNS = [
     { key: 'Parqueaderos', label: 'Parq.', sortable: true, filterable: true, numeric: true },
     { key: 'Administracion', label: 'Admin.', sortable: true, filterable: true, numeric: true },
     { key: 'Comodidades', label: 'Comodidades', sortable: false, filterable: true },
+    { key: '_dist_tm', label: 'Dist. TM (m)', sortable: true, filterable: true, numeric: true },
     { key: '_url', label: 'Enlace', sortable: false, filterable: false },
 ];
 
@@ -28,6 +29,7 @@ let viewDataset = [];       // after sort+filter
 let sortCol = null;
 let sortDir = 'asc';
 let filters = {};
+let tmStationsArr = []; // To calculate distances later
 
 // ==============================
 // INIT
@@ -110,6 +112,18 @@ function initMap() {
     fetch('/api/geo/estaciones_tm.geojson')
         .then(r => r.ok ? r.json() : Promise.reject())
         .then(gj => {
+            // Save stations for distance calculation
+            tmStationsArr = gj.features.map(f => ({
+                lat: f.geometry.coordinates[1],
+                lng: f.geometry.coordinates[0]
+            }));
+
+            // Force recalculation of distances in dataset if already loaded
+            if (rawDataset.length > 0) {
+                rawDataset = rawDataset.map(enrichRow);
+                applyFiltersAndSort();
+            }
+
             LAYERS.tm.layer = L.geoJSON(gj, {
                 pointToLayer: (f, latlng) => L.circleMarker(latlng, {
                     radius: 5, fillColor: '#cc2222', color: '#cc2222', weight: 0, fillOpacity: 0.9
@@ -253,16 +267,17 @@ function bindFilterPanel() {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', applyFiltersAndSort);
     });
-    // Multi-select: estrato
-    const estratoGrp = document.getElementById('f-estrato-group');
-    if (estratoGrp) {
-        estratoGrp.querySelectorAll('.toggle-btn').forEach(btn => {
+    // Multi-select: estrato, estado, tipo
+    ['f-estrato-group', 'f-estado-group', 'f-tipo-group'].forEach(id => {
+        const grp = document.getElementById(id);
+        if (!grp) return;
+        grp.querySelectorAll('.toggle-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 btn.classList.toggle('active');
                 applyFiltersAndSort();
             });
         });
-    }
+    });
     // Single-select: habitaciones, banos
     ['f-habitaciones-group', 'f-banos-group'].forEach(id => {
         const grp = document.getElementById(id);
@@ -282,8 +297,10 @@ function clearFilters() {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
-    const estratoGrp = document.getElementById('f-estrato-group');
-    if (estratoGrp) estratoGrp.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    ['f-estrato-group', 'f-estado-group', 'f-tipo-group'].forEach(id => {
+        const grp = document.getElementById(id);
+        if (grp) grp.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    });
     ['f-habitaciones-group', 'f-banos-group'].forEach(id => {
         const grp = document.getElementById(id);
         if (!grp) return;
@@ -303,9 +320,11 @@ function getFilterPanelValues() {
     const areaMin    = parseNum(val('f-area-min'));
     const comodidades = val('f-comodidades').trim().toLowerCase();
     const estratos   = [...document.querySelectorAll('#f-estrato-group .toggle-btn.active')].map(b => b.dataset.val);
+    const estados    = [...document.querySelectorAll('#f-estado-group .toggle-btn.active')].map(b => b.dataset.val);
+    const tipos      = [...document.querySelectorAll('#f-tipo-group .toggle-btn.active')].map(b => b.dataset.val);
     const habMinVal   = (document.querySelector('#f-habitaciones-group .toggle-btn.active') || {}).dataset?.val || '0';
     const banosMinVal = (document.querySelector('#f-banos-group .toggle-btn.active') || {}).dataset?.val || '0';
-    return { ubicacion, precioMin, precioMax, areaMin, comodidades, estratos, habMin: parseInt(habMinVal), banosMin: parseInt(banosMinVal) };
+    return { ubicacion, precioMin, precioMax, areaMin, comodidades, estratos, estados, tipos, habMin: parseInt(habMinVal), banosMin: parseInt(banosMinVal) };
 }
 
 // ==============================
@@ -376,7 +395,33 @@ function enrichRow(row) {
     const precio = parseNum(row.Precio_Venta);
     row._precio_m2 = (precio > 0 && total > 0) ? Math.round(precio / total) : null;
 
+    // Distancia a TM mas cercano
+    if (tmStationsArr.length > 0 && row.Latitud && row.Longitud) {
+        let minDist = Infinity;
+        const rLat = parseFloat(String(row.Latitud).replace(',', '.'));
+        const rLng = parseFloat(String(row.Longitud).replace(',', '.'));
+        
+        for (const st of tmStationsArr) {
+            const d = haversineDistance(rLat, rLng, st.lat, st.lng);
+            if (d < minDist) minDist = d;
+        }
+        row._dist_tm = Math.round(minDist);
+    } else {
+        row._dist_tm = null;
+    }
+
     return row;
+}
+
+function haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // Earth radius in meters
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
 }
 
 // ==============================
@@ -430,6 +475,14 @@ function applyFiltersAndSort() {
     // Comodidades free text
     if (f.comodidades) {
         result = result.filter(r => String(r.Comodidades || '').toLowerCase().includes(f.comodidades));
+    }
+    // Estado (multi)
+    if (f.estados.length > 0) {
+        result = result.filter(r => f.estados.some(ev => String(r.Estado || '').toLowerCase().includes(ev)));
+    }
+    // Tipo (multi)
+    if (f.tipos.length > 0) {
+        result = result.filter(r => f.tipos.some(tv => String(r.Tipo_Inmueble || '').toLowerCase().includes(tv)));
     }
 
     // Sort
@@ -508,6 +561,7 @@ function renderAll() {
         // Table row
         const tr = document.createElement('tr');
         tr.id = `row-${idx}`;
+        const distStr = row._dist_tm !== null ? `${row._dist_tm} m` : '--';
         tr.innerHTML = `
             <td><button class="del-row-btn" title="Eliminar" onclick="deleteRow(event,'${row.URL}')">&#10005;</button></td>
             <td class="price-cell">${priceStr}</td>
@@ -523,6 +577,7 @@ function renderAll() {
             <td>${row.Parqueaderos || '--'}</td>
             <td>${adminCell}</td>
             <td title="${row.Comodidades || ''}">${truncate(row.Comodidades, 30)}</td>
+            <td class="dist-tm-cell">${distStr}</td>
             <td><a class="link-out" href="${row.URL}" target="_blank">Ver</a></td>
         `;
         tr.addEventListener('click', (e) => {
@@ -672,4 +727,13 @@ function appendLog(msg, type = '') {
     line.textContent = `[${ts}] ${msg}`;
     con.appendChild(line);
     con.scrollTop = con.scrollHeight;
+}
+
+function parseNum(v) {
+    if (v === undefined || v === null || v === "") return 0;
+    // Format: 480.000.000,0 or 480000000,0
+    let s = String(v).trim();
+    // Remove dots (thousands) and replace comma with dot
+    s = s.replace(/\./g, "").replace(",", ".");
+    return parseFloat(s) || 0;
 }
