@@ -9,14 +9,13 @@ const COLUMNS = [
     { key: 'Ubicacion', label: 'Barrio', sortable: true, filterable: true },
     { key: 'Estrato', label: 'Estrato', sortable: true, filterable: true, numeric: true },
     { key: 'Area_Metros', label: 'Area Total', sortable: true, filterable: true, numeric: true },
-    { key: 'Area_Construida', label: 'A. Const.', sortable: true, filterable: true, numeric: true },
-    { key: 'Area_Privada', label: 'A. Priv.', sortable: true, filterable: true, numeric: true },
     { key: 'Habitaciones', label: 'Cuartos', sortable: true, filterable: true, numeric: true },
     { key: 'Banos', label: 'Banos', sortable: true, filterable: true, numeric: true },
-    { key: 'Parqueaderos', label: 'Parq.', sortable: true, filterable: true, numeric: true },
-    { key: 'Administracion', label: 'Admin.', sortable: true, filterable: true, numeric: true },
-    { key: 'Comodidades', label: 'Comodidades', sortable: false, filterable: true },
-    { key: '_url', label: 'Enlace', sortable: false, filterable: false },
+    { key: 'dist_sitp', label: 'SITP (m)', sortable: true, filterable: true, numeric: true },
+    { key: 'dist_tm', label: 'TM (m)', sortable: true, filterable: true, numeric: true },
+    { key: 'dist_ciclo', label: 'Ciclo (m)', sortable: true, filterable: true, numeric: true },
+    { key: 'estrato_promedio_200m', label: 'Estrato (200m)', sortable: true, filterable: true, numeric: true },
+    { key: '_profile', label: 'Perfil', sortable: false, filterable: false },
 ];
 
 // ==============================
@@ -58,7 +57,7 @@ const LAYERS = {
 
 function initMap() {
     map = L.map('map').setView([4.6097, -74.0817], 11);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; CartoDB', maxZoom: 19
     }).addTo(map);
 
@@ -529,14 +528,13 @@ function renderAll() {
             <td>${row.Ubicacion || '--'}</td>
             <td>${row.Estrato || '--'}</td>
             <td>${row.Area_Metros || '--'}</td>
-            <td>${row.Area_Construida || '--'}</td>
-            <td>${row.Area_Privada || '--'}</td>
             <td>${row.Habitaciones || '--'}</td>
             <td>${row.Banos || '--'}</td>
-            <td>${row.Parqueaderos || '--'}</td>
-            <td>${adminCell}</td>
-            <td title="${row.Comodidades || ''}">${truncate(row.Comodidades, 30)}</td>
-            <td><a class="link-out" href="${row.URL}" target="_blank">Ver</a></td>
+            <td class="metric-cell">${Math.round(row.dist_sitp) || '--'} m</td>
+            <td class="metric-cell">${Math.round(row.dist_tm) || '--'} m</td>
+            <td class="metric-cell">${Math.round(row.dist_ciclo) || '--'} m</td>
+            <td class="estrato-badge">${row.estrato_promedio_200m || '--'}</td>
+            <td><button class="btn-profile" onclick="showProfile(event, ${idx})">Perfil</button></td>
         `;
         tr.addEventListener('click', (e) => {
             if (e.target.classList.contains('del-row-btn')) return;
@@ -680,3 +678,101 @@ function appendLog(msg, type = '') {
     con.appendChild(line);
     con.scrollTop = con.scrollHeight;
 }
+function _ensureModal() {
+    let modal = document.getElementById('profile-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'profile-modal';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-card">
+                <button class="modal-close" onclick="closeProfile()">&#10005;</button>
+                <div id="profile-content"></div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    return { modal, content: document.getElementById('profile-content') };
+}
+
+function showProfile(e, idx) {
+    if (e) e.stopPropagation();
+    const row = viewDataset[idx];
+    if (!row) return;
+
+    const { modal, content } = _ensureModal();
+
+    const price = parseNum(row.Precio_Venta);
+    const pM2   = row._precio_m2 ? copFmt.format(row._precio_m2) : '--';
+    const estratoColor = ESTRATO_COLOR[Math.round(row.estrato_promedio_200m)] || 'var(--navy)';
+
+    content.innerHTML = `
+        <div class="profile-grid">
+            <div class="profile-main">
+                <h3>${row.Tipo_Inmueble || 'Inmueble'} en ${row.Ubicacion || '--'}</h3>
+                <div class="profile-price">${copFmt.format(price)} <small>(${pM2}/m2)</small></div>
+                <p class="profile-desc">${row.Descripcion || 'Sin descripcion disponible.'}</p>
+
+                <div class="features-grid">
+                    <div class="feat">Area: ${row.Area_Metros || '--'} m2</div>
+                    <div class="feat">Cuartos: ${row.Habitaciones || '--'}</div>
+                    <div class="feat">Banos: ${row.Banos || '--'}</div>
+                    <div class="feat">Parqueaderos: ${row.Parqueaderos || '--'}</div>
+                    <div class="feat">Estrato: ${row.Estrato || '--'}</div>
+                    <div class="feat">Antiguedad: ${row.Antiguedad || '--'}</div>
+                </div>
+
+                <h4>Comodidades</h4>
+                <div class="comodidades-tags">
+                    ${(row.Comodidades || '').split(',').filter(c => c.trim()).map(c => `<span class="tag">${c.trim()}</span>`).join('')}
+                </div>
+            </div>
+
+            <div class="profile-stats">
+                <h4>Analisis de Entorno (200m)</h4>
+                <div class="stat-card">
+                    <label>Estrato Promedio Ponderado</label>
+                    <div class="stat-val" style="color:${estratoColor}">
+                        ${row.estrato_promedio_200m || '--'}
+                    </div>
+                    <div class="stat-hint">Solo areas con estrato 1-6</div>
+                </div>
+
+                <div class="transport-metrics">
+                    <div class="t-met">
+                        <span class="t-icon sitp">S</span>
+                        <div class="t-info">
+                            <label>SITP</label>
+                            <b>${row.dist_sitp ? Math.round(row.dist_sitp) + ' m' : '--'}</b>
+                        </div>
+                    </div>
+                    <div class="t-met">
+                        <span class="t-icon tm">TM</span>
+                        <div class="t-info">
+                            <label>TransMilenio</label>
+                            <b>${row.dist_tm ? Math.round(row.dist_tm) + ' m' : '--'}</b>
+                        </div>
+                    </div>
+                    <div class="t-met">
+                        <span class="t-icon ciclo">C</span>
+                        <div class="t-info">
+                            <label>Ciclorruta</label>
+                            <b>${row.dist_ciclo ? Math.round(row.dist_ciclo) + ' m' : '--'}</b>
+                        </div>
+                    </div>
+                </div>
+
+                <a href="${row.URL}" target="_blank" class="btn-search">Ver en FincaRaiz</a>
+            </div>
+        </div>
+    `;
+
+    modal.classList.add('active');
+    modal.onclick = (ev) => { if (ev.target === modal) closeProfile(); };
+}
+
+function closeProfile() {
+    const modal = document.getElementById('profile-modal');
+    if (modal) modal.classList.remove('active');
+}
+

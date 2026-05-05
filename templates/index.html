@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GeoVivienda | Inteligencia Inmobiliaria</title>
+    <meta name="description" content="Analisis geoespacial de inmuebles en Bogota. Consulta distancias a transporte publico, estratos y precios por metro cuadrado.">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -150,8 +151,7 @@
                             <button type="button" class="toggle-btn" data-val="con-gimnasio">Gimnasio</button>
                             <button type="button" class="toggle-btn" data-val="zona-bbq">Zona BBQ</button>
                             <button type="button" class="toggle-btn" data-val="piscina">Piscina</button>
-                            <button type="button" class="toggle-btn" data-val="conjunto-cerrado">Conjunto
-                                Cerrado</button>
+                            <button type="button" class="toggle-btn" data-val="conjunto-cerrado">Conjunto Cerrado</button>
                         </div>
                     </div>
 
@@ -168,8 +168,7 @@
                 </form>
 
                 <div id="log-console" class="log-console">
-                    <div class="log-line info">GeoVivienda listo. Configure los filtros y presione Iniciar rastreo.
-                    </div>
+                    <div class="log-line info">GeoVivienda listo. Configure los filtros y presione Iniciar rastreo.</div>
                 </div>
             </div>
         </aside>
