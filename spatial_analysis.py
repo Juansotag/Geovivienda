@@ -64,6 +64,47 @@ def _calcular_estrato_promedio(gdf, estratos, col_estrato):
     return gdf
 
 
+_CAPAS_CACHE = None
+
+
+def _capas():
+    global _CAPAS_CACHE
+    if _CAPAS_CACHE is None:
+        _CAPAS_CACHE = _cargar_capas()
+    return _CAPAS_CACHE
+
+
+def enriquecer_inmueble(lat: float, lon: float) -> dict:
+    """Punto de entrada para un solo inmueble recien scrapeado: recibe lat/lon
+    y devuelve sus campos geoespaciales, sin tocar ningun CSV."""
+    sitp, tm, ciclo, estratos, col_estrato = _capas()
+    punto = gpd.GeoSeries([Point(lon, lat)], crs=CRS_WGS84).to_crs(CRS_METRICO).iloc[0]
+
+    dist_sitp = sitp.distance(punto).min()
+    dist_tm = tm.distance(punto).min()
+    dist_ciclo = ciclo.distance(punto).min()
+
+    buffer_geom = punto.buffer(200)
+    buffer_gdf = gpd.GeoDataFrame({'geometry': [buffer_geom]}, crs=CRS_METRICO)
+    interseccion = gpd.overlay(estratos, buffer_gdf, how='intersection')
+    interseccion = interseccion[interseccion[col_estrato].isin([1, 2, 3, 4, 5, 6])]
+
+    estrato_promedio = None
+    if not interseccion.empty:
+        interseccion = interseccion.copy()
+        interseccion['area'] = interseccion.geometry.area
+        total = interseccion['area'].sum()
+        if total > 0:
+            estrato_promedio = float(round((interseccion[col_estrato] * interseccion['area']).sum() / total, 2))
+
+    return {
+        "dist_sitp": float(round(dist_sitp, 1)),
+        "dist_tm": float(round(dist_tm, 1)),
+        "dist_ciclo": float(round(dist_ciclo, 1)),
+        "estrato_promedio_200m": estrato_promedio,
+    }
+
+
 def run_analysis(input_csv, output_csv, log_callback=print):
     """
     Punto de entrada reutilizable para el analisis espacial.

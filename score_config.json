@@ -1,0 +1,8 @@
+{
+  "presupuesto": 0.30,
+  "estrato": 0.20,
+  "habitaciones_banos": 0.15,
+  "transporte": 0.20,
+  "tipo_vivienda": 0.10,
+  "antiguedad_estado": 0.05
+}

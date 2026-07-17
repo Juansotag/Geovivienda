@@ -2,10 +2,13 @@ import os
 import threading
 import shutil
 import pandas as pd
+from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify, send_from_directory
 
 from extractor_links import extraer_links_fincaraiz
 from extractor_detalles import procesar_lista_links
+
+load_dotenv()
 
 app = Flask(__name__)
 

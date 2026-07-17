@@ -26,7 +26,7 @@
 | Acceso a datos | **psycopg2 + SQL crudo parametrizado**, sin ORM | Ver "Tech stack en profundidad" — SQLAlchemy es ceremonia de más para un esquema que ya está congelado |
 | LLM para reportes | **Claude (`claude-sonnet-5`) vía Anthropic SDK** | Balance de calidad/costo/velocidad para texto de asesoría |
 | PDF | **xhtml2pdf** | Puro Python, sin dependencias nativas — evita el infierno de GTK/Cairo de WeasyPrint en Windows |
-| Conversión de moneda | **Frankfurter API** (`api.frankfurter.app`) | Gratis, sin API key, tasas del BCE, confiable desde IPs de datacenter (a diferencia de scrapear Yahoo Finance) |
+| Conversión de moneda | **Frankfurter API v2** (`api.frankfurter.dev/v2`, no v1) | Gratis, sin API key, sí cubre COP (v1 no), confiable desde IPs de datacenter (a diferencia de scrapear Yahoo Finance) |
 | Portales para el jueves | **FincaRaíz** (ya existe) + **Metrocuadrado** (nuevo) | Houm, Ciencuadras, Lahaus y "proyectos" → backlog |
 | TTL de reportes | **15 días**, borrado automático vía APScheduler | Corre dentro del mismo proceso Flask, sin worker aparte |
 | Despliegue | **Railway, 3 piezas**: app + Selenium Grid + Postgres addon | Ver "Arquitectura final" |
@@ -137,15 +137,22 @@ página con texto y algunas tablas, sobra.
 de forma no oficial — funciona bien desde una IP residencial, pero las IPs de datacenter
 (como las de Railway) tienen más probabilidad de toparse con bloqueos o rate-limiting de
 Yahoo, justo el peor momento para que falle (en vivo, frente a Casa en Casa). Frankfurter es
-una API REST gratuita, sin key, respaldada por tasas oficiales del Banco Central Europeo,
-pensada para consumirse programáticamente:
+una API REST gratuita, sin key, pensada para consumirse programáticamente.
+
+**Ojo con la versión — hay una trampa real acá.** Frankfurter tiene dos APIs activas:
+`api.frankfurter.app` / `api.frankfurter.dev/v1` (la original, respaldada solo por el Banco
+Central Europeo, **30 monedas, sin COP**) y `api.frankfurter.dev/v2` (respaldada por 84 bancos
+centrales, con COP incluido). Es fácil terminar en la v1 por accidente — es la que aparece
+primero en resultados de búsqueda viejos — y ahí `COP` da 404 silenciosamente. La única que
+sirve para este proyecto es la **v2**, y con un formato de endpoint distinto (no es
+`/latest?from=X&to=Y` como la v1, es `/rate/{base}/{quote}`):
 ```
-GET https://api.frankfurter.app/latest?from=EUR&to=COP
+GET https://api.frankfurter.dev/v2/rate/EUR/COP
+→ {"date":"2026-07-17","base":"EUR","quote":"COP","rate":3712.66}
 ```
-Nota: Frankfurter no tiene EUR→COP directo en todos los casos de forma confiable para todas
-las monedas exóticas — para USD y EUR (las monedas que vas a ver en el 95% de los casos reales
-de Casa en Casa) funciona perfecto. Si en el formulario aparece una moneda rara sin tasa
-disponible, cae a un valor manual de respaldo (ver Fase 1, paso 9).
+Verificado en vivo contra la API real — funciona para EUR y USD (las monedas que vas a ver en
+el 95% de los casos reales de Casa en Casa). Si en el formulario aparece una moneda sin
+cobertura, cae a un valor manual de respaldo (ver Fase 1, paso 9).
 
 ### APScheduler (limpieza de reportes vencidos)
 
@@ -565,27 +572,28 @@ de un solo dígito hasta unos pocos miles, estrato entre 1 y 6).
 # fx.py
 import requests
 
-_FALLBACK_RATES = {"EUR": 4700, "USD": 4300}  # actualizar manualmente si Frankfurter falla
+_FALLBACK_RATES = {"EUR": 4700, "USD": 4300}  # actualizar manualmente si la API falla
 
 def convertir_a_cop(monto: float, moneda_origen: str) -> float:
     moneda_origen = moneda_origen.upper()
     try:
         resp = requests.get(
-            "https://api.frankfurter.app/latest",
-            params={"from": moneda_origen, "to": "COP"},
+            f"https://api.frankfurter.dev/v2/rate/{moneda_origen}/COP",
             timeout=5,
+            headers={"User-Agent": "Geovivienda/1.0"},
         )
         resp.raise_for_status()
-        tasa = resp.json()["rates"]["COP"]
+        tasa = resp.json()["rate"]
         return round(monto * tasa, 2)
-    except (requests.RequestException, KeyError):
+    except (requests.RequestException, KeyError, ValueError):
         tasa = _FALLBACK_RATES.get(moneda_origen)
         if tasa is None:
             raise ValueError(f"No hay tasa de respaldo para {moneda_origen}")
         return round(monto * tasa, 2)
 ```
-El diccionario `_FALLBACK_RATES` es tu red de seguridad para el día de la demo: si por lo que
-sea Frankfurter no responde justo en ese momento, la conversión sigue funcionando con una tasa
+Nota la **v2** en la URL — la v1 no cubre COP y falla en silencio (ver "Tech stack en
+profundidad"). `_FALLBACK_RATES` es tu red de seguridad para el día de la demo: si por lo que
+sea la API no responde justo en ese momento, la conversión sigue funcionando con una tasa
 fija que actualizas a mano la mañana del jueves.
 
 **Verificación:** `convertir_a_cop(2200, "EUR")` debe devolver un número cercano a
