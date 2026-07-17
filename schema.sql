@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS anuncios (
     habitaciones SMALLINT,
     banos SMALLINT,
     parqueaderos SMALLINT,
+    antiguedad TEXT,
+    piso_nro SMALLINT,
+    cantidad_pisos SMALLINT,
+    comodidades TEXT,
+    descripcion TEXT,
     latitud DOUBLE PRECISION,
     longitud DOUBLE PRECISION,
     dist_sitp REAL,
@@ -27,6 +32,13 @@ CREATE TABLE IF NOT EXISTS anuncios (
     primera_vez_visto TIMESTAMPTZ DEFAULT now(),
     ultima_verificacion TIMESTAMPTZ DEFAULT now()
 );
+
+-- Migracion idempotente por si la tabla ya existia sin estas columnas
+ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS antiguedad TEXT;
+ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS piso_nro SMALLINT;
+ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS cantidad_pisos SMALLINT;
+ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS comodidades TEXT;
+ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS descripcion TEXT;
 
 CREATE TABLE IF NOT EXISTS clientes (
     id BIGSERIAL PRIMARY KEY,

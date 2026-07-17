@@ -1217,6 +1217,11 @@ CREATE TABLE anuncios (
     habitaciones SMALLINT,
     banos SMALLINT,
     parqueaderos SMALLINT,
+    antiguedad TEXT,
+    piso_nro SMALLINT,
+    cantidad_pisos SMALLINT,
+    comodidades TEXT,
+    descripcion TEXT,
     latitud DOUBLE PRECISION,
     longitud DOUBLE PRECISION,
     dist_sitp REAL,
@@ -1228,6 +1233,9 @@ CREATE TABLE anuncios (
     primera_vez_visto TIMESTAMPTZ DEFAULT now(),
     ultima_verificacion TIMESTAMPTZ DEFAULT now()
 );
+-- antiguedad/piso_nro/cantidad_pisos/comodidades/descripcion se agregaron en el Paso 17
+-- al notar que ambos extractores ya devuelven estos campos pero el esquema original no
+-- tenia donde guardarlos (ver schema.sql para las ALTER TABLE idempotentes)
 
 CREATE TABLE clientes (
     id BIGSERIAL PRIMARY KEY,
