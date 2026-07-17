@@ -1,10 +1,12 @@
+import os
 import sys
 import subprocess
 
 # Módulo de funciones para extración de links
-from selenium import webdriver  
+from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from selenium.common.exceptions import WebDriverException
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -134,18 +136,32 @@ def construir_url_fincaraiz(operacion, tipos_inmueble, ubicacion="bogota/bogota-
         
     return url_completa
 
-def configurar_driver():
+def configurar_driver(reintentos: int = 3, espera_segundos: int = 5):
     """
-    Configura y retorna el driver de Selenium con opciones básicas.
+    Configura y retorna el driver de Selenium. Si la variable de entorno
+    SELENIUM_REMOTE_URL esta definida, se conecta a un Selenium Grid remoto
+    en vez de lanzar Chrome localmente (asi el mismo codigo sirve para
+    desarrollo local con un contenedor propio y para produccion en Railway).
     """
     opts = Options()
     opts.add_argument("--headless")
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1920,1080")
-    
-    driver = webdriver.Chrome(options=opts)
-    return driver
+
+    remote_url = os.environ.get("SELENIUM_REMOTE_URL")
+
+    for intento in range(1, reintentos + 1):
+        try:
+            if remote_url:
+                driver = webdriver.Remote(command_executor=remote_url, options=opts)
+            else:
+                driver = webdriver.Chrome(options=opts)
+            return driver
+        except WebDriverException:
+            if intento == reintentos:
+                raise
+            time.sleep(espera_segundos)
 
 def extraer_links_fincaraiz(paginas_a_extraer=2, operacion="venta", tipos_inmueble=["casa", "apartamento"], 
                             ubicacion="bogota/bogota-dc", habitaciones=None, banos=None, 

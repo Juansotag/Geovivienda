@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, WebDriverException
 from webdriver_manager.chrome import ChromeDriverManager
 import subprocess
 import sys
@@ -13,7 +13,11 @@ import os
 
 # Módulo de funciones para extraer detalles de FincaRaíz
 
-def configurar_driver():
+def configurar_driver(reintentos: int = 3, espera_segundos: int = 5):
+    """
+    Si SELENIUM_REMOTE_URL esta definida, conecta a un Selenium Grid remoto
+    en vez de lanzar Chrome localmente (mismo codigo para dev local y Railway).
+    """
     opts = Options()
     opts.add_argument("--headless")
     opts.add_argument("--disable-gpu")
@@ -22,10 +26,21 @@ def configurar_driver():
     opts.add_argument("--window-size=1920,1080")
     opts.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     opts.page_load_strategy = 'eager'
-    
-    driver = webdriver.Chrome(options=opts)
-    driver.set_page_load_timeout(15)
-    return driver
+
+    remote_url = os.environ.get("SELENIUM_REMOTE_URL")
+
+    for intento in range(1, reintentos + 1):
+        try:
+            if remote_url:
+                driver = webdriver.Remote(command_executor=remote_url, options=opts)
+            else:
+                driver = webdriver.Chrome(options=opts)
+            driver.set_page_load_timeout(15)
+            return driver
+        except WebDriverException:
+            if intento == reintentos:
+                raise
+            time.sleep(espera_segundos)
 
 def extraer_detalles_inmueble(html_source, url_referencia=""):
     """

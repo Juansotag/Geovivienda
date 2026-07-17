@@ -27,7 +27,7 @@
 | LLM para reportes | **Claude (`claude-sonnet-5`) vía Anthropic SDK** | Balance de calidad/costo/velocidad para texto de asesoría |
 | PDF | **xhtml2pdf** | Puro Python, sin dependencias nativas — evita el infierno de GTK/Cairo de WeasyPrint en Windows |
 | Conversión de moneda | **Frankfurter API v2** (`api.frankfurter.dev/v2`, no v1) | Gratis, sin API key, sí cubre COP (v1 no), confiable desde IPs de datacenter (a diferencia de scrapear Yahoo Finance) |
-| Portales para el jueves | **FincaRaíz** (ya existe) + **Metrocuadrado** (nuevo) | Houm, Ciencuadras, Lahaus y "proyectos" → backlog |
+| Portales para el jueves | **FincaRaíz** (ya existe) + **Metrocuadrado** (nuevo, incluye proyectos de vivienda nueva) | Houm, Ciencuadras, Lahaus → backlog |
 | TTL de reportes | **15 días**, borrado automático vía APScheduler | Corre dentro del mismo proceso Flask, sin worker aparte |
 | Despliegue | **Railway, 3 piezas**: app + Selenium Grid + Postgres addon | Ver "Arquitectura final" |
 | Servidor de aplicación | **Gunicorn, `--worker-class gthread --workers 2 --threads 4`** | Ver "Tech stack en profundidad" — necesario para que el polling no se bloquee mientras corre un scraping en background |
@@ -258,7 +258,7 @@ esperada en el demo es mínima. Quedaría en 2 piezas en vez de 3.
 |---|---|---|
 | Login | Mockup visual | Auth real con cuentas |
 | Ciudades | Selector completo (15 ciudades + área metro) | Solo Bogotá tiene scraper conectado |
-| Portales | FincaRaíz + Metrocuadrado | Houm, Ciencuadras, Lahaus, proyectos nuevos |
+| Portales | FincaRaíz + Metrocuadrado (incluye proyectos) | Houm, Ciencuadras, Lahaus, tipologías completas por proyecto |
 | Geo-enriquecimiento | Cálculo por-inmueble (como hoy, `gpd.overlay`) | Índice H3 precalculado por hexágono |
 | Dedup de anuncios | Sí, tabla maestra por URL + chequeo 404 | — |
 | Score | Heurístico ponderado y explicable (no ML) | Modelo ML real cuando haya datos de conversión (Y) |
@@ -646,25 +646,51 @@ Y en tu `.env` local: `SELENIUM_REMOTE_URL=http://localhost:4444/wd/hub`.
 **Verificación:** con el contenedor corriendo, `configurar_driver().get("https://example.com")`
 no debe lanzar excepción, y `driver.title` debe devolver `"Example Domain"`.
 
-#### Paso 11 — Muestras de HTML de Metrocuadrado
+#### Paso 11 — Muestras de HTML de Metrocuadrado ✅ analizadas
 
-Bajar manualmente (guardar página como HTML desde el navegador, igual que hiciste con el sitio
-de Casa en Casa) dos páginas:
-1. Resultados de una búsqueda de apartamentos en venta en Bogotá.
-2. La ficha completa de un anuncio individual.
+Se analizó el HTML real de `metrocuadrado.com/apartamentos/venta/bogota/`. Hallazgo clave:
+Metrocuadrado corre en **Next.js** y la página de resultados trae **el detalle completo de
+cada inmueble embebido como JSON** en el HTML (precio, área, habitaciones, baños, estrato,
+barrio, descripción, comodidades y **coordenadas propias** lat/lon) — no como FincaRaíz, que
+solo da URLs y obliga a visitar cada ficha. Confirmado con `requests.get()` plano que **no**
+funciona sin navegador (los datos cargan del lado del cliente), así que Selenium sigue siendo
+necesario, pero con **una sola carga por búsqueda**, sin scroll progresivo ni visitas
+individuales.
 
-Revisar el HTML crudo (no solo lo que se ve en pantalla) para confirmar si el listado ya viene
-con los datos en el HTML inicial (server-rendered) o si depende de JavaScript para cargar
-(en ese caso Selenium es indispensable; si es server-rendered, hasta podrías usar `requests` +
-BeautifulSoup sin necesidad de un navegador real para esa parte, más liviano).
+Dos tipos de resultado en la misma búsqueda: `/inmueble/...` (venta normal) y
+`/proyecto/...` (vivienda nueva) — mismos campos, más `mnombreproyecto` y `tipovivienda`.
+**Los proyectos SÍ entran al alcance del jueves** (no quedan en backlog): dado que Casa en
+Casa compra la mayoría de sus viviendas a través de proyectos, y técnicamente no cuesta nada
+extra incluirlos (mismo JSON, mismo pipeline). La limitación real: cada proyecto en los
+resultados de búsqueda representa **una sola tipología** (ej. "2 habitaciones desde $284.9M"),
+no el catálogo completo del proyecto — traer todas las tipologías de cada proyecto sí queda
+en el backlog (requeriría visitar la página del proyecto).
 
-#### Paso 12 — Construir los extractores de Metrocuadrado
+Dos campos de FincaRaíz sin equivalente confirmado en Metrocuadrado: `Administracion` (cuota
+mensual) y `Cantidad_Pisos` (total del edificio) — no aparecen en ningún registro revisado,
+quedan en `None` a propósito. Todo lo demás sí está, incluidas las fotos (patrón de URL
+`https://multimedia.metrocuadrado.com/{codigo}/{id_galeria}_p.jpg`, construible desde
+`mgaleriainmueble` sin visitar la ficha).
 
-Con las dos muestras de HTML del paso anterior, seguir la metodología ya documentada más abajo
-("Metodología reutilizable para construir un scraper nuevo"): pasarle el HTML a un agente de
-código para que identifique selectores y construya:
-- `extractor_metrocuadrado_links.py` — misma firma que `extraer_links_fincaraiz`.
-- `extractor_metrocuadrado_detalles.py` — misma firma que `extraer_detalles_inmueble`.
+#### Paso 12 — Construir los extractores de Metrocuadrado ✅ hecho
+
+`extractor_metrocuadrado_links.py`: carga la página de resultados con Selenium, espera ~3s
+la hidratación de Next.js, extrae y decodifica los fragmentos `self.__next_f.push(...)`, y
+parsea el array `initialResults.results` balanceando corchetes (no es JSON puro por sí solo,
+está incrustado en un string escapado). Cada registro completo se cachea en memoria
+(`_CACHE`, por URL) para que el extractor de detalles no tenga que volver a pedir nada.
+Filtros de presupuesto/habitaciones/baños/estrato se aplican **en Python después de traer los
+resultados**, no por parámetros de URL — no hay evidencia confirmada de la sintaxis de
+filtros por querystring de Metrocuadrado más allá de ciudad/tipo/operación en el path.
+
+`extractor_metrocuadrado_detalles.py`: no visita ninguna ficha — busca el registro ya cacheado
+por URL y lo normaliza a las mismas 21 llaves que usa FincaRaíz (`Precio_Venta`,
+`Habitaciones`, etc., ver Paso 14). Las comodidades (`featured`, arreglo tipo
+`"cercaAGimnasio:S"`) se convierten a texto legible separando camelCase y filtrando solo las
+marcadas con `S`.
+
+Probado end-to-end contra el HTML real: 65 inmuebles parseados (61 `/inmueble/` + 4
+`/proyecto/`), campos correctos en ambos tipos de registro.
 
 #### Paso 13 — Interfaz común multi-portal
 
@@ -1276,9 +1302,11 @@ después, con los portales del backlog:
 4. Unificar ambas funciones detrás de la interfaz común `buscar_portal` / `extraer_detalle`
    (paso 13 del plan de ejecución).
 5. Para portales de **proyectos nuevos** (Lahaus y similares) el HTML no representa un
-   inmueble sino un proyecto con **varias tipologías anidadas** — este caso necesita un
-   extractor distinto que devuelva una lista de inmuebles por proyecto, no uno solo. Queda
-   fuera del jueves; documentado aquí para no perderlo (backlog).
+   inmueble sino un proyecto con **varias tipologías anidadas**. En Metrocuadrado esto no
+   aplicó — el JSON de búsqueda ya trae los proyectos con la misma forma que un inmueble
+   normal (una tipología representativa), así que entraron al alcance del jueves sin extractor
+   aparte. Para portales donde sí haga falta un extractor de tipologías completas, documentado
+   aquí para no perderlo (backlog).
 
 ---
 
@@ -1443,7 +1471,10 @@ Las variables CSS de esta paleta ya están escritas en el paso 27 de la Fase 6
 ## 🔮 Backlog futuro (post-jueves)
 
 - Portales restantes: Houm, Ciencuadras, Lahaus.
-- Extractor especializado para **proyectos nuevos** (tipologías anidadas dentro de un mismo
+- Traer el catálogo completo de tipologías por proyecto en Metrocuadrado (hoy solo se ve una
+  tipología representativa por proyecto en los resultados de búsqueda; el catálogo completo
+  requeriría visitar la página de cada proyecto).
+- Extractor especializado para **proyectos nuevos** en otros portales (tipologías anidadas dentro de un mismo
   anuncio de proyecto).
 - Índice geográfico H3 completo (ver sección de arquitectura arriba) para todas las ciudades.
 - Expandir scraping a las 14 ciudades restantes + sus áreas metropolitanas.
