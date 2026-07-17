@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Clientes — Casa en Casa{% endblock %}
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+  <h1 style="margin:0;">Clientes</h1>
+  <a href="{{ url_for('cliente_nuevo') }}" class="btn btn-primary">+ Nuevo cliente</a>
+</div>
+
+<div class="card">
+  {% if clientes %}
+  <table>
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Origen</th>
+        <th>Presupuesto</th>
+        <th>Ciudad de interés</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in clientes %}
+      <tr>
+        <td>{{ c.nombre }}</td>
+        <td>{{ c.ciudad_residencia }}, {{ c.pais_residencia }}</td>
+        <td>${{ "{:,.0f}".format(c.presupuesto_min or 0) }} – ${{ "{:,.0f}".format(c.presupuesto_max or 0) }} COP</td>
+        <td>{{ (c.ciudades_interes or []) | join(', ') }}</td>
+        <td><a href="{{ url_for('cliente_detalle', cliente_id=c.id) }}" class="btn btn-secondary btn-sm">Ver</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>Todavía no hay clientes registrados. Crea el primero con "+ Nuevo cliente".</p>
+  {% endif %}
+</div>
+{% endblock %}

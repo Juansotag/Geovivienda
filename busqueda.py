@@ -4,6 +4,8 @@ import db
 from portales import buscar_portal, extraer_detalle
 from extractor_links import configurar_driver
 from spatial_analysis import enriquecer_inmueble
+from scoring import rankear_candidatos, top_n
+from reportes import crear_y_guardar_reporte
 
 
 def filtrar_urls_nuevas(urls: list[str]) -> list[str]:
@@ -160,3 +162,32 @@ def ejecutar_busqueda(cliente: dict, portales: list[str], cantidad: int, busqued
         if a and a["activo"]:
             resultados.append(a)
     return resultados
+
+
+def ejecutar_busqueda_completa(cliente: dict, portales: list[str], cantidad: int, busqueda_id: int, top: int = 5):
+    """Orquesta el flujo completo de un click en 'Buscar': scraping + dedup
+    (ejecutar_busqueda), scoring de todos los candidatos, guarda el ranking
+    en resultados_busqueda, y genera reportes con Claude solo para el top N
+    (generar un reporte por cada candidato saldria caro y lento sin
+    necesidad - el resto queda disponible on-demand, ver Paso 26)."""
+    try:
+        candidatos = ejecutar_busqueda(cliente, portales, cantidad, busqueda_id)
+        db.actualizar_busqueda_log(busqueda_id, f"{len(candidatos)} anuncios activos encontrados", "ok")
+
+        rankeados = rankear_candidatos(cliente, candidatos)
+        mejores = top_n(rankeados, top)
+        ids_top = {a["id"] for a in mejores}
+
+        for a in rankeados:
+            db.guardar_resultado_busqueda(busqueda_id, a["id"], a["score"], a["id"] in ids_top)
+
+        db.actualizar_busqueda_log(busqueda_id, f"Generando reportes para el top {len(mejores)}...", "info")
+        for a in mejores:
+            score = {"total": a["score"], "componentes": a["score_desglose"]}
+            crear_y_guardar_reporte(cliente, a, score)
+
+        db.actualizar_busqueda_log(busqueda_id, "Busqueda completada", "ok")
+        db.finalizar_busqueda(busqueda_id, "done")
+    except Exception as e:
+        db.actualizar_busqueda_log(busqueda_id, f"Error: {e}", "error")
+        db.finalizar_busqueda(busqueda_id, "error")

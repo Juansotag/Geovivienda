@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Casa en Casa — Match{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <img src="{{ url_for('static', filename='img/logo-casa-en-casa.png') }}" alt="Casa en Casa">
+      <nav>
+        <a href="{{ url_for('perfil') }}" class="{{ 'activo' if activo == 'perfil' else '' }}">Perfil</a>
+        <a href="{{ url_for('clientes') }}" class="{{ 'activo' if activo == 'clientes' else '' }}">Clientes</a>
+      </nav>
+    </aside>
+    <main>{% block content %}{% endblock %}</main>
+  </div>
+</body>
+</html>

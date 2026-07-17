@@ -31,6 +31,22 @@ def buscar_anuncio_por_url(url: str) -> dict | None:
         return cur.fetchone()
 
 
+def _preparar_datos(datos: dict) -> tuple[dict, list[str]]:
+    """Convierte valores list/dict a JSON (para columnas JSONB) y devuelve
+    tambien la lista de columnas que necesitan el cast ::jsonb en el SQL,
+    porque psycopg2 adaptaria una lista de Python a un array nativo de
+    Postgres por defecto, no a JSON."""
+    preparados = {}
+    columnas_jsonb = []
+    for k, v in datos.items():
+        if isinstance(v, (list, dict)):
+            preparados[k] = json.dumps(v)
+            columnas_jsonb.append(k)
+        else:
+            preparados[k] = v
+    return preparados, columnas_jsonb
+
+
 def insertar_anuncio(datos: dict) -> int:
     columnas = list(datos.keys())
     placeholders = [f"%({c})s" for c in columnas]
@@ -52,20 +68,33 @@ def marcar_inactivo(url: str):
 
 
 def insertar_cliente(datos: dict) -> int:
-    columnas = list(datos.keys())
-    placeholders = [f"%({c})s" for c in columnas]
+    preparados, columnas_jsonb = _preparar_datos(datos)
+    columnas = list(preparados.keys())
+    placeholders = [f"%({c})s::jsonb" if c in columnas_jsonb else f"%({c})s" for c in columnas]
     query = f"""
         INSERT INTO clientes ({', '.join(columnas)})
         VALUES ({', '.join(placeholders)}) RETURNING id
     """
     with get_cursor() as cur:
-        cur.execute(query, datos)
+        cur.execute(query, preparados)
         return cur.fetchone()["id"]
 
 
 def obtener_cliente(cliente_id: int) -> dict | None:
     with get_cursor() as cur:
         cur.execute("SELECT * FROM clientes WHERE id = %s", (cliente_id,))
+        return cur.fetchone()
+
+
+def listar_clientes() -> list[dict]:
+    with get_cursor() as cur:
+        cur.execute("SELECT * FROM clientes ORDER BY creado_en DESC")
+        return cur.fetchall()
+
+
+def buscar_anuncio_por_id(anuncio_id: int) -> dict | None:
+    with get_cursor() as cur:
+        cur.execute("SELECT * FROM anuncios WHERE id = %s", (anuncio_id,))
         return cur.fetchone()
 
 
@@ -133,6 +162,28 @@ def obtener_reporte(reporte_id: int) -> dict | None:
     with get_cursor() as cur:
         cur.execute("SELECT * FROM reportes WHERE id = %s", (reporte_id,))
         return cur.fetchone()
+
+
+def obtener_resultados_busqueda(busqueda_id: int) -> list[dict]:
+    """Anuncios de una busqueda con su score y el id del reporte mas
+    reciente (si ya se genero uno), ordenados de mejor a peor score."""
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            SELECT a.*, rb.score, rb.es_top,
+                   (SELECT r.id FROM reportes r
+                    WHERE r.anuncio_id = a.id AND r.cliente_id = (
+                        SELECT cliente_id FROM busquedas WHERE id = %s
+                    )
+                    ORDER BY r.generado_en DESC LIMIT 1) AS reporte_id
+            FROM resultados_busqueda rb
+            JOIN anuncios a ON a.id = rb.anuncio_id
+            WHERE rb.busqueda_id = %s
+            ORDER BY rb.score DESC
+            """,
+            (busqueda_id, busqueda_id),
+        )
+        return cur.fetchall()
 
 
 def limpiar_reportes_vencidos() -> int:

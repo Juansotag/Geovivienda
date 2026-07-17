@@ -1,156 +1,185 @@
 import os
 import threading
-import shutil
-import pandas as pd
-from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify, send_from_directory
 
-from extractor_links import extraer_links_fincaraiz
-from extractor_detalles import procesar_lista_links
+from dotenv import load_dotenv
+from flask import Flask, render_template, request, jsonify, redirect, url_for, Response
+
+import db
+import fx
+import scoring
+import reportes
+import busqueda
+from scheduler import iniciar_scheduler
 
 load_dotenv()
 
 app = Flask(__name__)
 
-BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
-CSV_RAW_PATH = os.path.join(BASE_DIR, 'dataset_fincaraiz.csv')
-CSV_PATH     = os.path.join(BASE_DIR, 'dataset_enriquecido.csv')
+CIUDADES = [
+    {"slug": "bogota", "nombre": "Bogotá", "activa": True},
+    {"slug": "medellin", "nombre": "Medellín", "activa": False},
+    {"slug": "cali", "nombre": "Cali", "activa": False},
+    {"slug": "barranquilla", "nombre": "Barranquilla", "activa": False},
+    {"slug": "bucaramanga", "nombre": "Bucaramanga", "activa": False},
+    {"slug": "santa-marta", "nombre": "Santa Marta", "activa": False},
+    {"slug": "tunja", "nombre": "Tunja", "activa": False},
+    {"slug": "popayan", "nombre": "Popayán", "activa": False},
+    {"slug": "villavicencio", "nombre": "Villavicencio", "activa": False},
+    {"slug": "ibague", "nombre": "Ibagué", "activa": False},
+    {"slug": "neiva", "nombre": "Neiva", "activa": False},
+    {"slug": "manizales", "nombre": "Manizales", "activa": False},
+    {"slug": "armenia", "nombre": "Armenia", "activa": False},
+    {"slug": "pereira", "nombre": "Pereira", "activa": False},
+    {"slug": "monteria", "nombre": "Montería", "activa": False},
+]
 
-job_state = {'thread': None, 'log': [], 'status': 'idle'}
 
-def push_log(msg, level='info'):
-    job_state['log'].append({'msg': msg, 'level': level})
-
-@app.route('/')
+@app.route("/")
 def index():
-    return render_template('index.html')
+    return redirect(url_for("login"))
 
-@app.route('/api/data')
-def get_data():
-    if not os.path.exists(CSV_PATH):
-        return jsonify([])
-    try:
-        df = pd.read_csv(CSV_PATH, sep=';', decimal=',', encoding='utf-8-sig')
-        for col in ['Area_Metros', 'Area_Construida', 'Area_Privada']:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').round(0).astype('Int64').astype(object).fillna('')
-        df = df.fillna('')
-        return jsonify(df.to_dict(orient='records'))
-    except Exception as e:
-        raise e
 
-@app.route('/api/status')
-def get_status():
-    since = int(request.args.get('since', 0))
-    return jsonify({
-        'status': job_state['status'],
-        'logs': job_state['log'][since:],
-        'total_logs': len(job_state['log'])
+@app.route("/login")
+def login():
+    return render_template("login.html")
+
+
+@app.route("/perfil")
+def perfil():
+    return render_template("perfil.html", activo="perfil")
+
+
+@app.route("/clientes")
+def clientes():
+    return render_template("clientes_lista.html", activo="clientes", clientes=db.listar_clientes())
+
+
+@app.route("/clientes/nuevo", methods=["GET", "POST"])
+def cliente_nuevo():
+    if request.method == "GET":
+        return render_template("cliente_form.html", activo="clientes", ciudades=CIUDADES)
+
+    moneda = request.form["ingreso_moneda"]
+    ingreso = float(request.form["ingreso_mensual"])
+    ahorro = float(request.form["ahorro_mensual"])
+
+    cliente_id = db.insertar_cliente({
+        "nombre": request.form["nombre"],
+        "pais_residencia": request.form["pais_residencia"],
+        "ciudad_residencia": request.form["ciudad_residencia"],
+        "ingreso_mensual": ingreso,
+        "ingreso_moneda": moneda,
+        "ingreso_mensual_cop": fx.convertir_a_cop(ingreso, moneda),
+        "ahorro_mensual_cop": fx.convertir_a_cop(ahorro, moneda),
+        "ciudades_interes": request.form.getlist("ciudades_interes") or ["bogota"],
+        "tipo_vivienda": request.form["tipo_vivienda"],
+        "estado_deseado": request.form["estado_deseado"],
+        "habitaciones_min": int(request.form["habitaciones_min"]),
+        "banos_min": int(request.form["banos_min"]),
+        "estrato_objetivo": int(request.form["estrato_objetivo"]),
+        "presupuesto_min": int(request.form["presupuesto_min"]),
+        "presupuesto_max": int(request.form["presupuesto_max"]),
     })
+    return redirect(url_for("cliente_detalle", cliente_id=cliente_id))
 
-@app.route('/api/geo/<path:filename>')
-def serve_geojson(filename):
-    return send_from_directory(os.path.join(app.root_path, 'static', 'geo'), filename, mimetype='application/json')
 
-@app.route('/api/delete_row', methods=['POST'])
-def delete_row():
-    url = request.json.get('url')
-    if not url or not os.path.exists(CSV_PATH):
-        return jsonify({'status': 'error'})
+@app.route("/clientes/<int:cliente_id>")
+def cliente_detalle(cliente_id):
+    cliente = db.obtener_cliente(cliente_id)
+    return render_template("cliente_detalle.html", activo="clientes", cliente=cliente)
+
+
+@app.route("/clientes/<int:cliente_id>/resultados")
+def cliente_resultados(cliente_id):
+    cliente = db.obtener_cliente(cliente_id)
+    busqueda_id = request.args.get("busqueda_id", type=int)
+    resultados = db.obtener_resultados_busqueda(busqueda_id) if busqueda_id else []
+    return render_template("resultados.html", activo="clientes", cliente=cliente, resultados=resultados)
+
+
+@app.route("/api/fx")
+def api_fx():
+    monto = request.args.get("monto", type=float)
+    moneda = request.args.get("moneda", default="EUR")
+    if monto is None:
+        return jsonify({"cop": None})
     try:
-        df = pd.read_csv(CSV_PATH, sep=';', decimal=',', encoding='utf-8-sig')
-        df[df['URL'] != url].to_csv(CSV_PATH, index=False, encoding='utf-8-sig', sep=';', decimal=',')
-        return jsonify({'status': 'ok'})
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)})
+        return jsonify({"cop": fx.convertir_a_cop(monto, moneda)})
+    except ValueError:
+        return jsonify({"cop": None})
 
-@app.route('/api/clear', methods=['POST'])
-def clear_all():
-    for p in [CSV_PATH, CSV_RAW_PATH]:
-        if os.path.exists(p):
-            os.remove(p)
-    return jsonify({'status': 'ok'})
 
-@app.route('/api/reset', methods=['POST'])
-def reset_job():
-    job_state.update({'thread': None, 'log': [], 'status': 'idle'})
-    return jsonify({'status': 'ok'})
+@app.route("/api/scrape", methods=["POST"])
+def api_scrape():
+    data = request.json
+    cliente_id = data["cliente_id"]
+    portales = data.get("portales") or ["fincaraiz", "metrocuadrado"]
+    cantidad = int(data.get("cantidad", 30))
 
-@app.route('/api/scrape', methods=['POST'])
-def scrape():
-    t = job_state.get('thread')
-    if t is not None and t.is_alive():
-        return jsonify({'status': 'warning', 'message': 'Ya hay un rastreo en curso.'}), 409
-    job_state['log'] = []
-    job_state['status'] = 'running'
-    thread = threading.Thread(target=run_scrape_job, args=(request.json,), daemon=True)
-    job_state['thread'] = thread
+    cliente = db.obtener_cliente(cliente_id)
+    if not cliente:
+        return jsonify({"status": "error", "message": "Cliente no encontrado"}), 404
+
+    busqueda_id = db.crear_busqueda(cliente_id, portales, cantidad)
+    thread = threading.Thread(
+        target=busqueda.ejecutar_busqueda_completa,
+        args=(cliente, portales, cantidad, busqueda_id),
+        daemon=True,
+    )
     thread.start()
-    return jsonify({'status': 'started'})
+    return jsonify({"status": "started", "busqueda_id": busqueda_id})
 
 
-def run_scrape_job(data):
-    try:
-        paginas      = int(data.get('paginas', 1))
-        comodidades  = data.get('comodidades', [])
-        con_ascensor = 'con-ascensor' in comodidades
-        con_balcon   = 'con-balcon' in comodidades
-        extras       = [c for c in comodidades if c not in {'con-ascensor', 'con-balcon'}]
-        parq_raw     = data.get('parqueaderos')
-        parqueaderos = int(parq_raw) if parq_raw else None
-        estratos     = [int(e) for e in data.get('estratos', []) if e]
-
-        push_log(f'Buscando links en FincaRaiz ({paginas} paginas)...', 'info')
-
-        links = extraer_links_fincaraiz(
-            paginas_a_extraer=paginas,
-            operacion=data.get('operacion', 'venta'),
-            tipos_inmueble=[data.get('tipo', 'apartamento')],
-            ubicacion=data.get('ubicacion', 'bogota/bogota-dc'),
-            habitaciones=data.get('habitaciones', '1-o-mas'),
-            banos=data.get('banos', '1-o-mas'),
-            con_balcon=con_balcon,
-            con_ascensor=con_ascensor,
-            extras=extras,
-            parqueaderos=parqueaderos,
-            estado=data.get('estado', 'usados'),
-            precio_min=int(float(data.get('precio_min', 0))),
-            precio_max=int(float(data.get('precio_max', 500000000))),
-            antiguedad='de-1-a-8-anios',
-            estratos=estratos
-        )
-
-        if not links:
-            push_log('No se encontraron resultados con estos filtros.', 'warn')
-            job_state['status'] = 'done'
-            return
-
-        lista = list(links)
-        push_log(f'{len(lista)} propiedades encontradas. Extrayendo detalles...', 'ok')
-
-        df = procesar_lista_links(lista, archivo_salida=CSV_RAW_PATH, log_callback=push_log)
-
-        if df.empty:
-            push_log('No se guardaron propiedades nuevas.', 'warn')
-            job_state['status'] = 'done'
-            return
-
-        push_log(f'Extraccion completada: {len(df)} inmuebles. Iniciando analisis espacial...', 'ok')
-
-        try:
-            from spatial_analysis import run_analysis
-            run_analysis(CSV_RAW_PATH, CSV_PATH, log_callback=push_log)
-        except Exception as e:
-            push_log(f'Analisis espacial fallo: {e}. Cargando datos sin enriquecer.', 'warn')
-            shutil.copy(CSV_RAW_PATH, CSV_PATH)
-
-        job_state['status'] = 'done'
-
-    except Exception as e:
-        push_log(f'Error en el rastreo: {e}', 'error')
-        job_state['status'] = 'error'
+@app.route("/api/status")
+def api_status():
+    busqueda_id = request.args.get("busqueda_id", type=int)
+    since = request.args.get("since", default=0, type=int)
+    b = db.obtener_busqueda(busqueda_id)
+    if not b:
+        return jsonify({"status": "error", "logs": [], "total_logs": 0})
+    logs = b["log"] or []
+    return jsonify({"status": b["status"], "logs": logs[since:], "total_logs": len(logs)})
 
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+@app.route("/api/reportes/generar", methods=["POST"])
+def api_generar_reporte():
+    data = request.json
+    cliente = db.obtener_cliente(data["cliente_id"])
+    if not cliente:
+        return jsonify({"status": "error", "message": "Cliente no encontrado"}), 404
+
+    anuncio = None
+    if data.get("anuncio_id"):
+        anuncio = db.buscar_anuncio_por_id(data["anuncio_id"])
+    elif data.get("url"):
+        anuncio = db.buscar_anuncio_por_url(data["url"])
+
+    if not anuncio:
+        return jsonify({
+            "status": "error",
+            "message": "No encontramos ese anuncio en la base — solo se puede generar reporte de anuncios que ya salieron en una búsqueda previa.",
+        }), 404
+
+    score = scoring.calcular_score(cliente, anuncio)
+    reporte_id = reportes.crear_y_guardar_reporte(cliente, anuncio, score)
+    return jsonify({"reporte_id": reporte_id})
+
+
+@app.route("/reportes/<int:reporte_id>/pdf")
+def descargar_reporte_pdf(reporte_id):
+    reporte = db.obtener_reporte(reporte_id)
+    if not reporte:
+        return "Reporte no encontrado", 404
+    pdf_bytes = reportes.html_a_pdf(reporte["contenido_html"])
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=reporte_{reporte_id}.pdf"},
+    )
+
+
+iniciar_scheduler()
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
