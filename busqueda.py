@@ -1,7 +1,10 @@
+import json
 import re
 import time
 
+import anthropic
 import requests
+from dotenv import load_dotenv
 
 import db
 from portales import buscar_portal, extraer_detalle
@@ -9,24 +12,146 @@ from extractor_links import configurar_driver
 from spatial_analysis import enriquecer_inmueble
 from scoring import rankear_candidatos_llm, top_n
 
+load_dotenv()
+_client = anthropic.Anthropic()
 
-# Sinonimos por comodidad predefinida del formulario, verificados contra el
-# texto REAL ya scrapeado de FincaRaiz y Metrocuadrado (no son una lista
-# teorica) - ambos portales redactan las mismas amenidades con palabras
-# distintas, asi que el filtro duro de comodidades hace match por keyword
-# contra el texto normalizado en anuncios.comodidades, no por igualdad exacta.
-SINONIMOS_COMODIDADES = {
-    "ascensor": ["ascensor"],
-    "balcon": ["balcon"],
-    "parqueadero": ["parqueadero", "garaje", "cochera", "bahia"],
-    "deposito": ["deposito", "bodega", "cuarto util"],
-    "vigilancia": ["vigilancia", "porteria", "recepcion", "citofono", "conjunto cerrado", "seguridad"],
-    "zonas verdes": ["zona verde", "zonas verdes"],
-    "gimnasio": ["gimnasio"],
-    "salon comunal": ["salon comunal", "salon social"],
-    "zona bbq": ["zona bbq", "zona de bbq", " bbq"],
-    "piscina": ["piscina"],
-}
+
+# Catalogo cerrado de comodidades DEL INMUEBLE (no del entorno/zona - eso
+# tiene tratamiento aparte). Aprobado por el usuario 2026-07-18. Un LLM
+# clasifica el texto libre de cada anuncio contra ESTE catalogo exacto
+# (ver normalizar_comodidades_llm) - asi "zona verde"/"zonas verdes"/
+# "patio"/"zona campestre" en el texto crudo de los portales convergen a
+# un solo valor canonico, en vez del match por keyword fragil que habia
+# antes (SINONIMOS_COMODIDADES, ahora reemplazado por esto).
+CATALOGO_COMODIDADES = [
+    # Ascensor y circulación vertical
+    "Ascensor", "Ascensor panorámico", "Ascensor de servicio", "Ascensor inteligente", "Rampa de acceso",
+    # Seguridad y acceso
+    "Vigilancia 24 horas", "Portería", "Recepción / Lobby", "Citófono", "Circuito cerrado de TV",
+    "Acceso con tarjeta o dispositivo", "Conjunto cerrado", "Control de acceso peatonal",
+    "Control de acceso vehicular", "Alarma de seguridad", "Detección de humo", "Puerta de seguridad",
+    "Cerca eléctrica", "Casetas de vigilancia",
+    # Parqueadero
+    "Garaje cubierto", "Parqueadero descubierto", "Parqueadero de visitantes", "Bahía de parqueo",
+    "Parqueadero para motos", "Bicicletero", "Estación de carga para vehículos eléctricos",
+    "Parqueadero para personas con movilidad reducida",
+    # Zonas comunes recreativas y deportivas
+    "Piscina", "Piscina climatizada", "Jacuzzi", "Sauna", "Turco (baño turco)", "Gimnasio",
+    "Cancha múltiple", "Cancha de fútbol", "Cancha de baloncesto", "Cancha de squash", "Cancha de tenis",
+    "Zona de golf / mini golf", "Sendero para trotar", "Zona de yoga", "Muro de escalada", "Piscina para niños",
+    # Zonas comunes sociales y de reunión
+    "Salón comunal", "Salón social", "Salón de eventos", "Zona BBQ", "Zona de asados", "Coworking",
+    "Sala de juntas", "Salón de juegos", "Zona de cine / cinema", "Terraza rooftop", "Zona lounge",
+    "Rooftop bar", "Biblioteca", "Sala de estudio", "Zona kids / ludoteca", "Guardería",
+    # Zonas infantiles y familiares
+    "Zona infantil", "Parque infantil", "Apto para niños", "Zona de juegos exteriores",
+    "Piscina infantil", "Sala de lactancia",
+    # Zonas verdes y exteriores comunes
+    "Zonas verdes", "Jardines", "Senderos peatonales", "Huerta comunitaria", "Zona de mascotas",
+    "Parque canino", "Terraza común", "Plazoleta",
+    # Interior - cocina
+    "Cocina integral", "Cocina abierta / americana", "Cocina cerrada", "Isla de cocina",
+    "Barra estilo americano", "Horno", "Lavaplatos incluido", "Nevera incluida", "Estufa incluida",
+    "Extractor de olores", "Despensa",
+    # Interior - baños
+    "Baño auxiliar", "Baño de servicio", "Baño en suite", "Ducha de hidromasaje",
+    "Sanitarios de bajo consumo", "Calentador de agua", "Ventana en baño",
+    # Interior - habitaciones y almacenamiento
+    "Walking closet", "Closets", "Estudio / cuarto de estudio", "Cuarto de servicio", "Cuarto útil",
+    "Depósito", "Bodega", "Vestier",
+    # Interior - acabados y confort
+    "Pisos en porcelanato", "Pisos en madera", "Pisos en baldosa", "Doble altura",
+    "Ventanales de piso a techo", "Vista panorámica", "Buena iluminación natural", "Chimenea",
+    "Aire acondicionado", "Calefacción", "Control térmico", "Ventilación cruzada",
+    "Insonorización / control de ruido", "Amoblado",
+    # Exterior privado de la unidad
+    "Balcón", "Terraza privada", "Patio", "Jardín privado", "Solarium",
+    # Zona de ropas
+    "Zona de lavandería", "Cuarto de lavado", "Patio de ropas",
+    # Servicios del edificio / conjunto
+    "Planta eléctrica", "Shut de basura", "Recolección de basuras", "Wifi en zonas comunes",
+    "Administración incluida", "Conserjería", "Servicio de mensajería", "Casa club",
+    # Sostenibilidad
+    "Paneles solares", "Energía solar", "Sistema de recolección de aguas lluvias",
+    "Certificación LEED / construcción sostenible",
+    # Mascotas y normas
+    "Se permiten mascotas", "Se permite fumar", "Apto para arriendo tipo Airbnb",
+    # Especiales / proyectos nuevos
+    "Sala de ventas", "Apartamento modelo", "Entrega inmediata", "Sobre planos",
+    "Financiación directa con constructora", "Subsidio de vivienda aplicable",
+]
+
+
+def normalizar_comodidades_llm(anuncios: list[dict]) -> dict[int, list[str]]:
+    """Le pide a Claude que clasifique el texto crudo de comodidades de cada
+    anuncio contra CATALOGO_COMODIDADES en UN SOLO llamado (batcheado, igual
+    que calcular_scores_llm) - asi "zona verde"/"zonas verdes"/"patio"/
+    "zona campestre" convergen al mismo valor canonico en vez de quedar
+    como strings distintos que el filtro duro nunca hace matchear entre si.
+
+    El LLM SOLO puede devolver valores que existen literalmente en el
+    catalogo - no inventa categorias nuevas (eso descontrolaria el
+    catalogo con el tiempo). Si nada del catalogo aplica, devuelve lista
+    vacia para ese anuncio, no null.
+
+    Devuelve {anuncio_id: [comodidades canonicas]}. Si la llamada falla
+    (API, parseo), devuelve {} - quien llama debe tratar eso como
+    "todavia no procesado", no como "no tiene comodidades"."""
+    if not anuncios:
+        return {}
+
+    catalogo_txt = "\n".join(f"- {c}" for c in CATALOGO_COMODIDADES)
+    anuncios_txt = "\n".join(
+        f"- id={a['id']}: {(a.get('comodidades') or 'sin texto de comodidades')[:400]}"
+        + (f" | descripción: {(a.get('descripcion') or '')[:200]}" if a.get("descripcion") else "")
+        for a in anuncios
+    )
+
+    prompt = f"""Eres un clasificador de comodidades inmobiliarias. Tienes un CATALOGO
+CERRADO de comodidades y el texto crudo (mal escrito, inconsistente, con
+sinonimos) que cada portal trae para cada anuncio. Tu trabajo es asignar a
+cada anuncio SOLO las comodidades del catalogo que efectivamente aplican
+segun su texto.
+
+CATALOGO CERRADO (usa EXACTAMENTE estos textos, no inventes variantes):
+{catalogo_txt}
+
+ANUNCIOS A CLASIFICAR:
+{anuncios_txt}
+
+Reglas:
+- Solo puedes usar valores que aparecen LITERALMENTE en el catalogo de arriba.
+- Si el texto menciona algo que no esta en el catalogo, ignoralo (no lo agregues).
+- Si dos formas distintas de decir lo mismo aparecen (ej. "zona verde" y "patio"
+  cuando claramente se refieren a lo mismo), usa el termino del catalogo mas cercano.
+- Si un anuncio no tiene comodidades reconocibles del catalogo, devuelve una lista vacia para el.
+
+Responde ÚNICAMENTE con un array JSON, sin texto adicional, con este formato exacto:
+[{{"id": 123, "comodidades": ["Ascensor", "Piscina"]}}, ...]
+"""
+
+    try:
+        respuesta = _client.messages.create(
+            model="claude-sonnet-5",
+            max_tokens=4000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        texto = "".join(b.text for b in respuesta.content if b.type == "text").strip()
+        if texto.startswith("```"):
+            texto = texto.split("```")[1]
+            if texto.lower().startswith("json"):
+                texto = texto[4:]
+        datos = json.loads(texto)
+        catalogo_set = set(CATALOGO_COMODIDADES)
+        resultado = {}
+        for item in datos:
+            # filtro de seguridad: descarta cualquier cosa que el LLM haya
+            # devuelto fuera del catalogo, por si alucino un termino nuevo
+            comodidades_validas = [c for c in (item.get("comodidades") or []) if c in catalogo_set]
+            resultado[int(item["id"])] = comodidades_validas
+        return resultado
+    except Exception:
+        return {}
 
 
 # Catalogo completo de valores de "antiguedad" que efectivamente producen
@@ -102,16 +227,19 @@ def _cumple_antiguedad(busqueda: dict, anuncio: dict) -> bool:
 
 
 def _cumple_comodidades_indispensables(busqueda: dict, anuncio: dict) -> bool:
+    """Match exacto contra comodidades_normalizadas (calculado por
+    normalizar_comodidades_llm), no keyword-matching sobre texto libre -
+    por eso el formulario solo deja elegir Indispensables del catalogo
+    cerrado, garantizando que lo que el cliente pide y lo que el anuncio
+    tiene esten en el mismo vocabulario exacto."""
     indispensables = busqueda.get("comodidades_indispensables") or []
     if not indispensables:
         return True
-    texto_anuncio = _sin_tildes(anuncio.get("comodidades") or "")
-    for comodidad in indispensables:
-        sinonimos = SINONIMOS_COMODIDADES.get(comodidad, [comodidad])
-        sinonimos_normalizados = [_sin_tildes(s) for s in sinonimos]
-        if not any(s in texto_anuncio for s in sinonimos_normalizados):
-            return False
-    return True
+    normalizadas = anuncio.get("comodidades_normalizadas")
+    if normalizadas is None:
+        return True  # todavia no se ha clasificado - no descartar por falta de dato
+    normalizadas_set = set(normalizadas)
+    return all(c in normalizadas_set for c in indispensables)
 
 
 def _cumple_filtros_duros(busqueda: dict, anuncio: dict) -> bool:
@@ -383,12 +511,31 @@ def ejecutar_busqueda(busqueda: dict, portales: list[str], cantidad: int, munici
         except Exception as e:
             db.actualizar_busqueda_log(busqueda_id, f"Error procesando {url}: {e}", "error")
 
-    resultados = []
-    descartados_duro = 0
+    candidatos_activos = []
     for url in todas_urls:
         a = db.buscar_anuncio_por_url(url)
-        if not a or not a["activo"]:
-            continue
+        if a and a["activo"]:
+            candidatos_activos.append(a)
+
+    # Estandarizar comodidades ANTES del filtro duro (no despues) - si se
+    # hiciera al momento de scorear, los anuncios ya habrian sido
+    # descartados por el filtro duro con datos sin normalizar, que es
+    # justo el problema que esto busca evitar. Solo se procesan los que
+    # aun no tienen comodidades_normalizadas (nuevos, o de antes de este
+    # feature) - los ya clasificados no se vuelven a mandar al LLM.
+    sin_normalizar = [a for a in candidatos_activos if a.get("comodidades_normalizadas") is None]
+    if sin_normalizar:
+        db.actualizar_busqueda_log(busqueda_id, f"{municipio_nombre}: estandarizando comodidades de {len(sin_normalizar)} anuncios...", "info")
+        normalizadas = normalizar_comodidades_llm(sin_normalizar)
+        for a in sin_normalizar:
+            lista = normalizadas.get(a["id"])
+            if lista is not None:
+                db.actualizar_anuncio(a["id"], {"comodidades_normalizadas": lista})
+                a["comodidades_normalizadas"] = lista
+
+    resultados = []
+    descartados_duro = 0
+    for a in candidatos_activos:
         if not _cumple_filtros_duros(busqueda, a):
             descartados_duro += 1
             continue

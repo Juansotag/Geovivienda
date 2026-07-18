@@ -3,16 +3,21 @@
 {% block content %}
 <div class="page-header">
   <h1>Inventario de Inmuebles</h1>
-  {% if anuncios %}
-  <div class="view-toggle">
-    <button class="view-toggle-btn active" id="btn-view-table" onclick="cambiarVista('table')" title="Vista de tabla" type="button">
-      <i data-lucide="list"></i>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <button type="button" class="btn btn-secondary btn-sm" onclick="estandarizarComodidades(this)" title="Clasifica el texto libre de comodidades de anuncios viejos contra el catálogo cerrado">
+      <i data-lucide="sparkles" style="width:14px; height:14px;"></i> Estandarizar comodidades
     </button>
-    <button class="view-toggle-btn" id="btn-view-grid" onclick="cambiarVista('grid')" title="Vista de tarjetas" type="button">
-      <i data-lucide="layout-grid"></i>
-    </button>
+    {% if anuncios %}
+    <div class="view-toggle">
+      <button class="view-toggle-btn active" id="btn-view-table" onclick="cambiarVista('table')" title="Vista de tabla" type="button">
+        <i data-lucide="list"></i>
+      </button>
+      <button class="view-toggle-btn" id="btn-view-grid" onclick="cambiarVista('grid')" title="Vista de tarjetas" type="button">
+        <i data-lucide="layout-grid"></i>
+      </button>
+    </div>
+    {% endif %}
   </div>
-  {% endif %}
 </div>
 
 <div class="card">

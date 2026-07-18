@@ -69,3 +69,23 @@ async function buscarAdministracion(anuncioId, boton) {
     if (window.lucide) lucide.createIcons();
   }
 }
+
+async function estandarizarComodidades(boton) {
+  boton.disabled = true;
+  const original = boton.innerHTML;
+  boton.innerHTML = 'Estandarizando...';
+  try {
+    const resp = await fetch('/inmuebles/estandarizar-comodidades', { method: 'POST' });
+    const data = await resp.json();
+    if (data.status === 'ok') {
+      alert(`Comodidades estandarizadas en ${data.procesados} anuncio(s).`);
+      if (data.procesados > 0) window.location.reload();
+    } else {
+      alert(data.message || 'No se pudo estandarizar.');
+    }
+  } finally {
+    boton.disabled = false;
+    boton.innerHTML = original;
+    if (window.lucide) lucide.createIcons();
+  }
+}

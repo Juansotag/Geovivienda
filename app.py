@@ -304,6 +304,27 @@ def anuncio_buscar_administracion(anuncio_id):
     return jsonify({"status": "ok", "administracion": valor})
 
 
+@app.route("/inmuebles/estandarizar-comodidades", methods=["POST"])
+def inmuebles_estandarizar_comodidades():
+    """Backfill: normaliza contra CATALOGO_COMODIDADES los anuncios que
+    existian antes del clasificador (los nuevos ya se normalizan solos
+    durante la busqueda, ver busqueda.ejecutar_busqueda)."""
+    total_procesados = 0
+    for _ in range(10):  # tope de seguridad: hasta 400 anuncios por click
+        pendientes = db.obtener_anuncios_sin_comodidades_normalizadas(limite=40)
+        if not pendientes:
+            break
+        normalizadas = busqueda.normalizar_comodidades_llm(pendientes)
+        if not normalizadas:
+            break  # la llamada al LLM fallo - no reintentar en loop
+        for a in pendientes:
+            lista = normalizadas.get(a["id"])
+            if lista is not None:
+                db.actualizar_anuncio(a["id"], {"comodidades_normalizadas": lista})
+                total_procesados += 1
+    return jsonify({"status": "ok", "procesados": total_procesados})
+
+
 @app.route("/clientes/<int:cliente_id>")
 def cliente_detalle(cliente_id):
     cliente = db.obtener_cliente(cliente_id)

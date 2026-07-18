@@ -381,11 +381,13 @@ def obtener_anuncio(anuncio_id: int) -> dict:
 
 
 def actualizar_anuncio(anuncio_id: int, datos: dict):
+    preparados, columnas_jsonb = _preparar_datos(datos)
     updates = []
-    preparados = {}
-    for c, v in datos.items():
-        updates.append(f"{c} = %({c})s")
-        preparados[c] = v
+    for c in preparados.keys():
+        if c in columnas_jsonb:
+            updates.append(f"{c} = %({c})s::jsonb")
+        else:
+            updates.append(f"{c} = %({c})s")
     query = f"""
         UPDATE anuncios
         SET {', '.join(updates)}
@@ -394,6 +396,23 @@ def actualizar_anuncio(anuncio_id: int, datos: dict):
     preparados["anuncio_id"] = anuncio_id
     with get_cursor() as cur:
         cur.execute(query, preparados)
+
+
+def obtener_anuncios_sin_comodidades_normalizadas(limite: int = 40) -> list[dict]:
+    """Para el backfill: anuncios que existian antes del clasificador de
+    comodidades o que por alguna razon nunca se procesaron. limite acota
+    el tamano del prompt de un solo llamado al LLM."""
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, comodidades, descripcion FROM anuncios
+            WHERE comodidades_normalizadas IS NULL AND comodidades IS NOT NULL AND comodidades <> ''
+            ORDER BY id
+            LIMIT %s
+            """,
+            (limite,),
+        )
+        return cur.fetchall()
 
 
 def obtener_busquedas_cliente(cliente_id: int) -> list[dict]:

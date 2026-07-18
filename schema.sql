@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS anuncios (
     piso_nro SMALLINT,
     cantidad_pisos SMALLINT,
     comodidades TEXT,
+    comodidades_normalizadas JSONB,       -- lista canonica del catalogo cerrado, calculada por LLM. NULL = aun no procesado
     descripcion TEXT,
     foto_url TEXT,                        -- solo Metrocuadrado la trae por ahora
     latitud DOUBLE PRECISION,
@@ -44,6 +45,12 @@ CREATE TABLE IF NOT EXISTS anuncios (
 ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS foto_url TEXT;
 ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS antiguedad_anios_min SMALLINT;
 ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS antiguedad_anios_max SMALLINT;
+ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS comodidades_normalizadas JSONB;
+-- NULL = todavia no se ha corrido el clasificador LLM contra este anuncio
+-- (distinto de '[]', que significa "se corrio y no encontro ninguna
+-- comodidad del catalogo") - la distincion permite saber a cuales
+-- anuncios les falta normalizar sin volver a procesar los que ya se
+-- normalizaron y dieron una lista vacia.
 
 -- Tabla de Clientes: Información personal y financiera
 CREATE TABLE IF NOT EXISTS clientes (
