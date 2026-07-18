@@ -32,7 +32,7 @@ CATALOGO_COMODIDADES = [
     "Control de acceso vehicular", "Alarma de seguridad", "Detección de humo", "Puerta de seguridad",
     "Cerca eléctrica", "Casetas de vigilancia",
     # Parqueadero
-    "Garaje cubierto", "Parqueadero descubierto", "Parqueadero de visitantes", "Bahía de parqueo",
+    "Parqueadero", "Garaje cubierto", "Parqueadero descubierto", "Parqueadero de visitantes", "Bahía de parqueo",
     "Parqueadero para motos", "Bicicletero", "Estación de carga para vehículos eléctricos",
     "Parqueadero para personas con movilidad reducida",
     # Zonas comunes recreativas y deportivas

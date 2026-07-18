@@ -413,6 +413,7 @@ def busqueda_nueva():
             clientes=clientes_lista,
             ciudades=CIUDADES,
             busqueda=None,
+            catalogo_comodidades=busqueda.CATALOGO_COMODIDADES,
         )
 
     # POST: Process search criteria
@@ -448,6 +449,7 @@ def busqueda_editar(busqueda_id):
             clientes=[],
             ciudades=CIUDADES,
             busqueda=busqueda_obj,
+            catalogo_comodidades=busqueda.CATALOGO_COMODIDADES,
         )
 
     datos = _parse_busqueda_form(request.form)
