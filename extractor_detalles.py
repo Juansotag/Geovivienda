@@ -67,6 +67,7 @@ def extraer_detalles_inmueble(html_source, url_referencia=""):
         "Comodidades": "",
         "Descripcion": None,
         "Codigo_FincaRaiz": None,
+        "Foto_URL": None,
         "Latitud": "",
         "Longitud": ""
     }
@@ -95,6 +96,13 @@ def extraer_detalles_inmueble(html_source, url_referencia=""):
                 return num_str
         return None
     
+    # 0. FOTO (best-effort via meta og:image, estandar en la mayoria de sitios
+    # para vista previa social - no verificado contra una pagina real de
+    # FincaRaiz todavia, pero si no existe simplemente queda en None)
+    og_image = soup.find("meta", property="og:image")
+    if og_image and og_image.get("content"):
+        detalles["Foto_URL"] = og_image["content"]
+
     # 1. PRECIO VENTA
     precio_tag = soup.find("p", class_="main-price")
     if precio_tag:

@@ -31,6 +31,8 @@
 
     <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 16px 0;">
 
+    <h4 style="font-size:11px; text-transform:uppercase; color:var(--color-text-muted); margin:16px 0 8px;">Características de la vivienda</h4>
+
     <div class="form-group">
       <label for="filter_tipo">Tipo de Inmueble</label>
       <select id="filter_tipo" onchange="applyFilters()">
@@ -38,6 +40,26 @@
         <option value="apartamento">Apartamento</option>
         <option value="casa">Casa</option>
         <option value="apartaestudio">Apartaestudio</option>
+        <option value="casa lote">Casa Lote</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="filter_estado">Estado</label>
+      <select id="filter_estado" onchange="applyFilters()">
+        <option value="">Todos</option>
+        <option value="usado">Usado</option>
+        <option value="nuevo">Nuevo</option>
+        <option value="proyecto">Proyecto</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="filter_portal">Portal</label>
+      <select id="filter_portal" onchange="applyFilters()">
+        <option value="">Todos</option>
+        <option value="fincaraiz">FincaRaíz</option>
+        <option value="metrocuadrado">Metrocuadrado</option>
       </select>
     </div>
 
@@ -55,6 +77,21 @@
     </div>
 
     <div class="form-group">
+      <label for="filter_habitaciones_min">Habitaciones mínimas</label>
+      <input type="number" id="filter_habitaciones_min" placeholder="Ej: 2" min="1" oninput="applyFilters()">
+    </div>
+
+    <div class="form-group">
+      <label for="filter_banos_min">Baños mínimos</label>
+      <input type="number" id="filter_banos_min" placeholder="Ej: 1" min="1" oninput="applyFilters()">
+    </div>
+
+    <div class="form-group">
+      <label for="filter_precio_min">Precio Mín (Millones)</label>
+      <input type="number" id="filter_precio_min" placeholder="Ej: 150" oninput="applyFilters()">
+    </div>
+
+    <div class="form-group">
       <label for="filter_precio_max">Precio Máx (Millones)</label>
       <input type="number" id="filter_precio_max" placeholder="Ej: 500" oninput="applyFilters()">
     </div>
@@ -62,6 +99,28 @@
     <div class="form-group">
       <label for="filter_area_min">Área Mín (m²)</label>
       <input type="number" id="filter_area_min" placeholder="Ej: 60" oninput="applyFilters()">
+    </div>
+
+    <div class="form-group">
+      <label for="filter_area_max">Área Máx (m²)</label>
+      <input type="number" id="filter_area_max" placeholder="Ej: 200" oninput="applyFilters()">
+    </div>
+
+    <h4 style="font-size:11px; text-transform:uppercase; color:var(--color-text-muted); margin:16px 0 8px;">Territorio y entorno</h4>
+
+    <div class="form-group">
+      <label for="filter_dist_tm_max">Máx. distancia a TransMilenio (m)</label>
+      <input type="number" id="filter_dist_tm_max" placeholder="Ej: 500" oninput="applyFilters()">
+    </div>
+
+    <div class="form-group">
+      <label for="filter_dist_sitp_max">Máx. distancia a SITP (m)</label>
+      <input type="number" id="filter_dist_sitp_max" placeholder="Ej: 500" oninput="applyFilters()">
+    </div>
+
+    <div class="form-group">
+      <label for="filter_dist_ciclo_max">Máx. distancia a ciclorruta (m)</label>
+      <input type="number" id="filter_dist_ciclo_max" placeholder="Ej: 500" oninput="applyFilters()">
     </div>
 
     <button class="btn btn-secondary btn-sm" style="width: 100%; margin-top: 10px;" onclick="resetFilters()">Reestablecer Filtros</button>
@@ -102,11 +161,16 @@
     {
       id: {{ a.id }},
       tipo_inmueble: {{ a.tipo_inmueble | tojson }},
+      estado: {{ a.estado | tojson }},
+      portal: {{ a.portal | tojson }},
       precio: {{ a.precio_venta or 0 }},
       area: {{ a.area_metros or 0 }},
       habitaciones: {{ a.habitaciones or 0 }},
       banos: {{ a.banos or 0 }},
       estrato: {{ a.estrato or 0 }},
+      dist_tm: {{ a.dist_tm if a.dist_tm is not none else 'null' }},
+      dist_sitp: {{ a.dist_sitp if a.dist_sitp is not none else 'null' }},
+      dist_ciclo: {{ a.dist_ciclo if a.dist_ciclo is not none else 'null' }},
       ubicacion: {{ a.ubicacion_texto | tojson }},
       lat: {{ a.latitud }},
       lng: {{ a.longitud }},
@@ -161,9 +225,18 @@
 
     const clientName = document.getElementById("filter_client").value;
     const filterTipo = document.getElementById("filter_tipo").value;
+    const filterEstado = document.getElementById("filter_estado").value;
+    const filterPortal = document.getElementById("filter_portal").value;
     const filterEstrato = document.getElementById("filter_estrato").value;
+    const filterHabsMin = parseInt(document.getElementById("filter_habitaciones_min").value) || null;
+    const filterBanosMin = parseInt(document.getElementById("filter_banos_min").value) || null;
+    const filterPrecioMin = parseFloat(document.getElementById("filter_precio_min").value) * 1000000 || null;
     const filterPrecioMax = parseFloat(document.getElementById("filter_precio_max").value) * 1000000 || null;
     const filterAreaMin = parseFloat(document.getElementById("filter_area_min").value) || null;
+    const filterAreaMax = parseFloat(document.getElementById("filter_area_max").value) || null;
+    const filterDistTmMax = parseFloat(document.getElementById("filter_dist_tm_max").value) || null;
+    const filterDistSitpMax = parseFloat(document.getElementById("filter_dist_sitp_max").value) || null;
+    const filterDistCicloMax = parseFloat(document.getElementById("filter_dist_ciclo_max").value) || null;
 
     // Show/Hide legend
     const legend = document.getElementById("map-legend");
@@ -174,11 +247,25 @@
     }
 
     anuncios.forEach(a => {
-      // Filtering logic
-      if (filterTipo && a.tipo_inmueble !== filterTipo) return;
+      // Filtering logic (comparaciones de texto insensibles a mayusculas,
+      // porque los portales devuelven "Apartamento"/"Usado" capitalizado)
+      const tipoLower = (a.tipo_inmueble || "").toLowerCase();
+      const estadoLower = (a.estado || "").toLowerCase();
+      const portalLower = (a.portal || "").toLowerCase();
+
+      if (filterTipo && tipoLower !== filterTipo) return;
+      if (filterEstado && estadoLower !== filterEstado) return;
+      if (filterPortal && portalLower !== filterPortal) return;
       if (filterEstrato && a.estrato.toString() !== filterEstrato) return;
+      if (filterHabsMin && a.habitaciones < filterHabsMin) return;
+      if (filterBanosMin && a.banos < filterBanosMin) return;
+      if (filterPrecioMin && a.precio < filterPrecioMin) return;
       if (filterPrecioMax && a.precio > filterPrecioMax) return;
       if (filterAreaMin && a.area < filterAreaMin) return;
+      if (filterAreaMax && a.area > filterAreaMax) return;
+      if (filterDistTmMax && (a.dist_tm === null || a.dist_tm > filterDistTmMax)) return;
+      if (filterDistSitpMax && (a.dist_sitp === null || a.dist_sitp > filterDistSitpMax)) return;
+      if (filterDistCicloMax && (a.dist_ciclo === null || a.dist_ciclo > filterDistCicloMax)) return;
 
       const color = getMarkerColor(a, clientName);
       const marker = L.marker([a.lat, a.lng], { icon: createMarkerIcon(color) });
@@ -219,9 +306,18 @@
   function resetFilters() {
     document.getElementById("filter_client").value = "";
     document.getElementById("filter_tipo").value = "";
+    document.getElementById("filter_estado").value = "";
+    document.getElementById("filter_portal").value = "";
     document.getElementById("filter_estrato").value = "";
+    document.getElementById("filter_habitaciones_min").value = "";
+    document.getElementById("filter_banos_min").value = "";
+    document.getElementById("filter_precio_min").value = "";
     document.getElementById("filter_precio_max").value = "";
     document.getElementById("filter_area_min").value = "";
+    document.getElementById("filter_area_max").value = "";
+    document.getElementById("filter_dist_tm_max").value = "";
+    document.getElementById("filter_dist_sitp_max").value = "";
+    document.getElementById("filter_dist_ciclo_max").value = "";
     renderMarkers();
   }
 

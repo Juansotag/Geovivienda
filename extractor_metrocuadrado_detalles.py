@@ -69,6 +69,7 @@ def extraer_detalles_inmueble(html_source: str = "", url_referencia: str = "") -
         "Comodidades": "",
         "Descripcion": None,
         "Codigo_FincaRaiz": None,
+        "Foto_URL": None,
         "Latitud": "",
         "Longitud": "",
     }
@@ -82,6 +83,12 @@ def extraer_detalles_inmueble(html_source: str = "", url_referencia: str = "") -
     barrio = r.get("mnombrecomunbarrio") or r.get("mbarrio") or ""
     ubicacion = ", ".join(p for p in [barrio, ciudad] if p)
     loc = r.get("localizacion") or {}
+
+    # Patron de URL confirmado: multimedia.metrocuadrado.com/{codigo}/{id_galeria}_p.jpg
+    codigo = r.get("midinmueble")
+    galeria = r.get("mgaleriainmueble") or []
+    primera_foto = galeria[0] if galeria else (r.get("data") or {}).get("mprimerafotoinmueble")
+    foto_url = f"https://multimedia.metrocuadrado.com/{codigo}/{primera_foto}_p.jpg" if codigo and primera_foto else None
 
     detalles.update({
         "Precio_Venta": r.get("mvalorventa"),
@@ -100,6 +107,7 @@ def extraer_detalles_inmueble(html_source: str = "", url_referencia: str = "") -
         "Comodidades": _comodidades_legibles(featured),
         "Descripcion": r.get("comment"),
         "Codigo_FincaRaiz": r.get("midinmueble"),
+        "Foto_URL": foto_url,
         "Latitud": loc.get("lat", ""),
         "Longitud": loc.get("lon", ""),
     })

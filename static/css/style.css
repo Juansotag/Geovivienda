@@ -387,11 +387,24 @@ textarea {
   border: none;
   text-decoration: none;
   line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* a:hover (color: var(--color-primary)) tiene mas especificidad CSS que
+   .btn-primary por si solo (elemento+pseudo-clase le gana a solo clase),
+   asi que el texto del boton cambiaba de color al pasar el mouse. Se fija
+   repitiendo el color explicitamente en :hover con el mismo selector
+   compuesto a.btn-X para igualar/superar esa especificidad. */
+.btn-primary,
+a.btn-primary,
+.btn-primary:hover,
+a.btn-primary:hover {
+  color: #FFFFFF;
 }
 
 .btn-primary {
   background-color: var(--color-primary);
-  color: #FFFFFF;
 }
 
 .btn-primary:hover {
@@ -399,9 +412,15 @@ textarea {
   box-shadow: 0 4px 8px rgba(24, 31, 89, 0.15);
 }
 
+.btn-accent,
+a.btn-accent,
+.btn-accent:hover,
+a.btn-accent:hover {
+  color: #1A1C1C;
+}
+
 .btn-accent {
   background-color: var(--color-accent);
-  color: #1A1C1C;
 }
 
 .btn-accent:hover {
@@ -409,9 +428,15 @@ textarea {
   box-shadow: 0 4px 8px rgba(243, 209, 67, 0.2);
 }
 
+.btn-secondary,
+a.btn-secondary,
+.btn-secondary:hover,
+a.btn-secondary:hover {
+  color: var(--color-primary);
+}
+
 .btn-secondary {
   background-color: #FFFFFF;
-  color: var(--color-primary);
   border: 1px solid var(--color-primary);
 }
 
@@ -419,13 +444,33 @@ textarea {
   background-color: rgba(24, 31, 89, 0.05);
 }
 
+.btn-danger,
+a.btn-danger,
+.btn-danger:hover,
+a.btn-danger:hover {
+  color: #FFFFFF;
+}
+
 .btn-danger {
   background-color: var(--color-danger);
-  color: #FFFFFF;
 }
 
 .btn-danger:hover {
   background-color: #A3282A;
+}
+
+/* Leaflet trae su propio CSS para <a> dentro de .leaflet-popup-content,
+   con mas especificidad que .btn-secondary/.btn-primary solos, y se carga
+   despues del nuestro - por eso los botones del tooltip del mapa salian
+   en el azul aguamarina default de Leaflet en vez del azul de la marca. */
+.leaflet-popup-content a.btn-secondary {
+  color: var(--color-primary) !important;
+  background-color: #FFFFFF !important;
+}
+
+.leaflet-popup-content a.btn-primary {
+  color: #FFFFFF !important;
+  background-color: var(--color-primary) !important;
 }
 
 .btn-sm {
@@ -689,4 +734,133 @@ textarea {
 
 .checkbox-label:hover .delete-tag-btn {
   display: inline-flex;
+}
+
+/* Toggle de vista tabla/tarjetas (Inmuebles) */
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-default);
+  overflow: hidden;
+}
+
+.view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  background-color: #FFFFFF;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  transition: all 0.2s ease;
+}
+
+.view-toggle-btn:hover {
+  background-color: #F3F3F3;
+}
+
+.view-toggle-btn.active {
+  background-color: var(--color-primary);
+  color: #FFFFFF;
+}
+
+.view-toggle-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Vista de tarjetas de inmuebles */
+.inmuebles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.inmueble-card {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-default);
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.inmueble-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.inmueble-card-foto {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background-color: #EEF0F5;
+  overflow: hidden;
+}
+
+.inmueble-card-foto img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.inmueble-card-foto-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-border);
+}
+
+.inmueble-card-foto-fallback svg {
+  width: 56px;
+  height: 56px;
+  stroke-width: 1.2px;
+}
+
+.inmueble-card-portal-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  background-color: rgba(255, 255, 255, 0.92);
+  color: var(--color-primary-container);
+  border-radius: var(--radius-sm);
+}
+
+.inmueble-card-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-grow: 1;
+}
+
+.inmueble-card-price {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.inmueble-card-location {
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.inmueble-card-specs {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.inmueble-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
 }

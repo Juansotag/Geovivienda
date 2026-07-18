@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS anuncios (
     cantidad_pisos SMALLINT,
     comodidades TEXT,
     descripcion TEXT,
+    foto_url TEXT,                        -- solo Metrocuadrado la trae por ahora
     latitud DOUBLE PRECISION,
     longitud DOUBLE PRECISION,
     h3_index TEXT REFERENCES hexagonos(h3_index), -- Conexión a datos geoespaciales
@@ -37,6 +38,8 @@ CREATE TABLE IF NOT EXISTS anuncios (
     primera_vez_visto TIMESTAMPTZ DEFAULT now(),
     ultima_verificacion TIMESTAMPTZ DEFAULT now()
 );
+
+ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS foto_url TEXT;
 
 -- Tabla de Clientes: Información personal y financiera
 CREATE TABLE IF NOT EXISTS clientes (

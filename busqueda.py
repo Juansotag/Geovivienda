@@ -114,6 +114,7 @@ def _normalizar_para_db(detalle: dict, portal: str) -> dict:
         "cantidad_pisos": detalle.get("Cantidad_Pisos"),
         "comodidades": detalle.get("Comodidades"),
         "descripcion": detalle.get("Descripcion"),
+        "foto_url": detalle.get("Foto_URL"),
         "latitud": detalle.get("Latitud") or None,
         "longitud": detalle.get("Longitud") or None,
     }

@@ -15,6 +15,10 @@ from scheduler import iniciar_scheduler
 load_dotenv()
 
 app = Flask(__name__)
+# Con debug=False, Jinja2 cachea las plantillas compiladas en memoria y no
+# detecta cambios en disco por si solo - sin esto hay que reiniciar el
+# proceso despues de cada edicion a un .html para ver el cambio reflejado.
+app.config["TEMPLATES_AUTO_RELOAD"] = True
 
 CIUDADES = [
     {"slug": "bogota", "nombre": "Bogotá", "activa": True},
@@ -36,8 +40,12 @@ CIUDADES = [
 
 
 # Cargar DIVIPOLA desde CSV
+# Ruta relativa al propio archivo app.py, no al directorio de trabajo desde
+# donde se lance "python app.py" - si no, esto se rompe segun desde donde
+# se arranque el proceso (nos paso justo eso).
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _divipola_data = {}
-csv_path = os.path.join("geodata", "DIVIPOLA-_Códigos_municipios_20260717.csv")
+csv_path = os.path.join(BASE_DIR, "geodata", "DIVIPOLA-_Códigos_municipios_20260717.csv")
 if os.path.exists(csv_path):
     with open(csv_path, mode="r", encoding="utf-8") as f:
         reader = csv.reader(f)
@@ -53,6 +61,8 @@ if os.path.exists(csv_path):
                     "nombre": name_mun_clean,
                     "codigo": cod_mun.strip()
                 })
+else:
+    print(f"AVISO: no se encontro el CSV de DIVIPOLA en {csv_path} - departamentos/municipios quedaran vacios.")
 
 # Ordenar departamentos y municipios
 for dept in _divipola_data:
@@ -344,47 +354,6 @@ def api_fx():
 
 
 
-
-
-@app.route("/api/scrape", methods=["POST"])
-def api_scrape():
-    data = request.json
-    cliente_id = data["cliente_id"]
-    portales = data.get("portales") or ["fincaraiz", "metrocuadrado"]
-    cantidad = int(data.get("cantidad", 30))
-
-    cliente = db.obtener_cliente(cliente_id)
-    if not cliente:
-        return jsonify({"status": "error", "message": "Cliente no encontrado"}), 404
-
-    busqueda_id = db.crear_busqueda({
-        "cliente_id": cliente_id,
-        "portales": portales,
-        "cantidad_solicitada": cantidad,
-        "status": "running",
-        "log": [],
-        "tipo_vivienda": "apartamento",
-        "estado_deseado": "usado",
-        "antiguedad_deseada": "0 a 5 años",
-        "zona_deseada": "urbano",
-        "habitaciones_min": 1,
-        "habitaciones_exactas": False,
-        "banos_min": 1,
-        "banos_exactos": False,
-        "estrato_objetivo": 3,
-        "presupuesto_min": 0,
-        "presupuesto_max": 9999999999,
-        "uso_previsto": "vivir",
-        "comodidades": [],
-        "pregunta_abierta": ""
-    })
-    thread = threading.Thread(
-        target=busqueda.ejecutar_busqueda_completa,
-        args=(busqueda_id,),
-        daemon=True,
-    )
-    thread.start()
-    return jsonify({"status": "started", "busqueda_id": busqueda_id})
 
 
 @app.route("/api/status")
