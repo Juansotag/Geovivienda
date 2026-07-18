@@ -372,6 +372,26 @@ def eliminar_busqueda(busqueda_id: int):
         cur.execute("DELETE FROM busquedas WHERE id = %s", (busqueda_id,))
 
 
+def actualizar_busqueda(busqueda_id: int, datos: dict):
+    """Actualiza los criterios de una busqueda existente (solo permitido en
+    estado 'pendiente', esa regla se aplica en la ruta de Flask, no aca)."""
+    preparados, columnas_jsonb = _preparar_datos(datos)
+    updates = []
+    for c in preparados.keys():
+        if c in columnas_jsonb:
+            updates.append(f"{c} = %({c})s::jsonb")
+        else:
+            updates.append(f"{c} = %({c})s")
+    query = f"""
+        UPDATE busquedas
+        SET {', '.join(updates)}
+        WHERE id = %(busqueda_id)s
+    """
+    preparados["busqueda_id"] = busqueda_id
+    with get_cursor() as cur:
+        cur.execute(query, preparados)
+
+
 def actualizar_busqueda_status(busqueda_id: int, status: str):
     with get_cursor() as cur:
         cur.execute(

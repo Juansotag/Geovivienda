@@ -66,6 +66,7 @@
             <div style="display: flex; gap: 8px; align-items: center;">
               {% if b.status == 'pendiente' %}
                 <a href="{{ url_for('busqueda_lanzar', busqueda_id=b.id) }}" class="btn btn-primary btn-sm" style="background-color: #28a745; border-color: #28a745; color: white;">Lanzar</a>
+                <a href="{{ url_for('busqueda_editar', busqueda_id=b.id) }}" class="btn btn-secondary btn-sm">Editar</a>
               {% else %}
                 <a href="{{ url_for('cliente_resultados', cliente_id=b.cliente_id, busqueda_id=b.id) }}" class="btn btn-secondary btn-sm">
                   {% if b.status == 'running' %}Progreso{% else %}Resultados{% endif %}

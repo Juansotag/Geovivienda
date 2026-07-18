@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Nueva Búsqueda — Casa en Casa{% endblock %}
+{% block title %}{{ 'Editar Búsqueda' if busqueda else 'Nueva Búsqueda' }} — Casa en Casa{% endblock %}
 {% block content %}
 <div class="page-header">
-  <h1>Nueva Búsqueda de Inmuebles</h1>
+  <h1>{{ 'Editar Búsqueda de Inmuebles' if busqueda else 'Nueva Búsqueda de Inmuebles' }}</h1>
   {% if cliente %}
     <a href="{{ url_for('cliente_detalle', cliente_id=cliente.id) }}" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:8px;"><i data-lucide="arrow-left" style="width:16px; height:16px;"></i> Volver a {{ cliente.nombre }}</a>
   {% else %}
@@ -10,7 +10,7 @@
   {% endif %}
 </div>
 
-<form class="card" method="post" action="" id="form-busqueda" onsubmit="return validarClienteAntesDeGuardar()">
+<form class="card" method="post" action="" id="form-busqueda" onsubmit="return validarFormulario()">
   {% if cliente %}
     <div style="background: rgba(24, 31, 89, 0.05); padding: 12px 16px; border-radius: var(--radius-default); margin-bottom: 20px;">
       <p style="margin:0; font-size:14px; font-weight:600; color:var(--color-primary);">Búsqueda asociada al cliente: <span style="font-weight:700;">{{ cliente.nombre }}</span></p>
@@ -29,58 +29,68 @@
   {% endif %}
 
   <h3>Criterios de Vivienda Deseada</h3>
-  
+
   <div class="form-grid">
     <div class="form-group">
       <label for="tipo_vivienda">Tipo de vivienda</label>
       <select id="tipo_vivienda" name="tipo_vivienda">
-        <option value="apartamento">Apartamento</option>
-        <option value="casa">Casa</option>
-        <option value="apartaestudio">Apartaestudio</option>
-        <option value="casa lote">Casa Lote</option>
+        <option value="apartamento" {% if busqueda and busqueda.tipo_vivienda == 'apartamento' %}selected{% endif %}>Apartamento</option>
+        <option value="casa" {% if busqueda and busqueda.tipo_vivienda == 'casa' %}selected{% endif %}>Casa</option>
+        <option value="apartaestudio" {% if busqueda and busqueda.tipo_vivienda == 'apartaestudio' %}selected{% endif %}>Apartaestudio</option>
+        <option value="casa lote" {% if busqueda and busqueda.tipo_vivienda == 'casa lote' %}selected{% endif %}>Casa Lote</option>
       </select>
     </div>
     <div class="form-group">
       <label for="estado_deseado">Estado del inmueble</label>
       <select id="estado_deseado" name="estado_deseado" onchange="verificarAntiguedadState()">
-        <option value="usado">Usado</option>
-        <option value="nuevo">Nuevo</option>
-        <option value="proyecto">Proyecto</option>
+        <option value="usado" {% if busqueda and busqueda.estado_deseado == 'usado' %}selected{% endif %}>Usado</option>
+        <option value="nuevo" {% if busqueda and busqueda.estado_deseado == 'nuevo' %}selected{% endif %}>Nuevo</option>
+        <option value="proyecto" {% if busqueda and busqueda.estado_deseado == 'proyecto' %}selected{% endif %}>Proyecto</option>
       </select>
     </div>
-    <div class="form-group">
-      <label for="antiguedad_deseada">Antigüedad deseada</label>
-      <select id="antiguedad_deseada" name="antiguedad_deseada">
-        <option value="0 a 5 años">0 a 5 años</option>
-        <option value="5 a 10 años">5 a 10 años</option>
-        <option value="10 a 20 años">10 a 20 años</option>
-        <option value="mas de 20 años">Más de 20 años</option>
-      </select>
+    <div class="form-group full-width">
+      <label>Antigüedad deseada (elige una o varias)</label>
+      <div class="checkbox-group" id="antiguedad-group">
+        {% set antiguedades = [('0 a 5 años', '0 a 5 años'), ('5 a 10 años', '5 a 10 años'), ('10 a 20 años', '10 a 20 años'), ('mas de 20 años', 'Más de 20 años')] %}
+        {% for val, label in antiguedades %}
+        <label class="checkbox-label {% if busqueda and val in (busqueda.antiguedad_deseada or []) %}checked{% endif %}">
+          <input type="checkbox" name="antiguedad_deseada" value="{{ val }}" onchange="toggleCheckboxClass(this)" {% if busqueda and val in (busqueda.antiguedad_deseada or []) %}checked{% endif %}>
+          <span>{{ label }}</span>
+        </label>
+        {% endfor %}
+      </div>
     </div>
     <div class="form-group">
       <label for="zona_deseada">Zona geográfica</label>
       <select id="zona_deseada" name="zona_deseada">
-        <option value="urbano">Urbana</option>
-        <option value="rural">Rural</option>
+        <option value="urbano" {% if busqueda and busqueda.zona_deseada == 'urbano' %}selected{% endif %}>Urbana</option>
+        <option value="rural" {% if busqueda and busqueda.zona_deseada == 'rural' %}selected{% endif %}>Rural</option>
       </select>
     </div>
-    <div class="form-group">
-      <label for="uso_previsto">Uso previsto</label>
-      <select id="uso_previsto" name="uso_previsto">
-        <option value="vivir">Para Vivir</option>
-        <option value="arrendar">Para Arrendar (Inversión)</option>
-        <option value="indeciso">Indeciso</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label for="estrato_objetivo">Estrato objetivo</label>
-      <select id="estrato_objetivo" name="estrato_objetivo">
-        {% for e in range(1, 7) %}
-        <option value="{{ e }}" {% if e == 3 %}selected{% endif %}>{{ e }}</option>
+    <div class="form-group full-width">
+      <label>Uso previsto (elige uno o varios)</label>
+      <div class="checkbox-group">
+        {% set usos = [('vivir', 'Para Vivir'), ('arrendar', 'Para Arrendar (Inversión)'), ('indeciso', 'Indeciso')] %}
+        {% for val, label in usos %}
+        <label class="checkbox-label {% if busqueda and val in (busqueda.uso_previsto or []) %}checked{% endif %}">
+          <input type="checkbox" name="uso_previsto" value="{{ val }}" onchange="toggleCheckboxClass(this)" {% if busqueda and val in (busqueda.uso_previsto or []) %}checked{% endif %}>
+          <span>{{ label }}</span>
+        </label>
         {% endfor %}
-      </select>
+      </div>
     </div>
-    
+    <div class="form-group full-width">
+      <label>Estrato objetivo (elige uno o varios)</label>
+      <div class="checkbox-group">
+        {% for e in range(1, 7) %}
+        <label class="checkbox-label {% if busqueda and e in (busqueda.estrato_objetivo or []) or (not busqueda and e == 3) %}checked{% endif %}">
+          <input type="checkbox" name="estrato_objetivo" value="{{ e }}" onchange="toggleCheckboxClass(this)" {% if busqueda and e in (busqueda.estrato_objetivo or []) or (not busqueda and e == 3) %}checked{% endif %}>
+          <span>{{ e }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
     <div class="form-group">
       <label>Habitaciones</label>
       <div class="toggle-btn-group" id="habs_buttons">
@@ -88,11 +98,11 @@
         <button type="button" class="toggle-btn" onclick="selectHabs({{ h }})" id="btn-habs-{{ h }}">{{ h }}+</button>
         {% endfor %}
       </div>
-      <input type="hidden" id="habitaciones_min" name="habitaciones_min" value="2">
-      <input type="hidden" id="habitaciones_exactas" name="habitaciones_exactas" value="false">
-      
+      <input type="hidden" id="habitaciones_min" name="habitaciones_min" value="{{ busqueda.habitaciones_min if busqueda else 2 }}">
+      <input type="hidden" id="habitaciones_exactas" name="habitaciones_exactas" value="{{ 'true' if busqueda and busqueda.habitaciones_exactas else 'false' }}">
+
       <label class="checkbox-label" style="display:inline-flex; align-items:center; margin-top:8px; padding:6px 12px; gap:8px; width:fit-content;">
-        <input type="checkbox" id="check_habs_exactas" onchange="toggleHabsExactas(this)">
+        <input type="checkbox" id="check_habs_exactas" onchange="toggleHabsExactas(this)" {% if busqueda and busqueda.habitaciones_exactas %}checked{% endif %}>
         Número exacto
       </label>
     </div>
@@ -104,45 +114,51 @@
         <button type="button" class="toggle-btn" onclick="selectBanos({{ b }})" id="btn-banos-{{ b }}">{{ b }}+</button>
         {% endfor %}
       </div>
-      <input type="hidden" id="banos_min" name="banos_min" value="1">
-      <input type="hidden" id="banos_exactos" name="banos_exactos" value="false">
-      
+      <input type="hidden" id="banos_min" name="banos_min" value="{{ busqueda.banos_min if busqueda else 1 }}">
+      <input type="hidden" id="banos_exactos" name="banos_exactos" value="{{ 'true' if busqueda and busqueda.banos_exactos else 'false' }}">
+
       <label class="checkbox-label" style="display:inline-flex; align-items:center; margin-top:8px; padding:6px 12px; gap:8px; width:fit-content;">
-        <input type="checkbox" id="check_banos_exactas" onchange="toggleBanosExactas(this)">
+        <input type="checkbox" id="check_banos_exactas" onchange="toggleBanosExactas(this)" {% if busqueda and busqueda.banos_exactos %}checked{% endif %}>
         Número exacto
       </label>
     </div>
 
     <div class="form-group">
       <label for="presupuesto_min">Presupuesto mínimo (COP)</label>
-      <input type="number" id="presupuesto_min" name="presupuesto_min" value="200000000">
+      <input type="number" id="presupuesto_min" name="presupuesto_min" value="{{ busqueda.presupuesto_min if busqueda else 200000000 }}">
     </div>
     <div class="form-group">
       <label for="presupuesto_max">Presupuesto máximo (COP)</label>
-      <input type="number" id="presupuesto_max" name="presupuesto_max" value="300000000">
+      <input type="number" id="presupuesto_max" name="presupuesto_max" value="{{ busqueda.presupuesto_max if busqueda else 300000000 }}">
     </div>
   </div>
 
   <hr style="border:0; border-top:1px solid var(--color-border); margin:20px 0;">
 
-  <h3>Ubicación de interés (DIVIPOLA)</h3>
+  <h3>Municipios de interés</h3>
+  <p style="color:var(--color-text-muted); font-size:13px; margin-top:-8px;">
+    Agrega uno o varios municipios en orden de prioridad. Si pides N inmuebles en varios municipios, se reparten equitativamente entre ellos (y si a alguno le faltan, se compensa con los demás).
+  </p>
   <div class="form-grid">
     <div class="form-group">
       <label for="departamento_select">Departamento</label>
-      <select id="departamento_select" onchange="actualizarMunicipios()">
+      <select id="departamento_select" onchange="actualizarMunicipiosDisponibles()">
         <option value="">Selecciona un departamento...</option>
       </select>
-      <input type="hidden" id="departamento_interes" name="departamento_interes" value="">
     </div>
     <div class="form-group">
       <label for="municipio_select">Municipio / Ciudad</label>
-      <select id="municipio_select" onchange="seleccionarMunicipio()">
+      <select id="municipio_select">
         <option value="">Selecciona un municipio...</option>
       </select>
-      <input type="hidden" id="municipio_interes" name="municipio_interes" value="">
-      <input type="hidden" id="municipio_codigo" name="municipio_codigo" value="">
     </div>
   </div>
+  <button type="button" class="btn btn-secondary btn-sm" onclick="agregarMunicipio()" style="margin-bottom:14px; display:inline-flex; align-items:center; gap:6px;">
+    <i data-lucide="plus" style="width:14px; height:14px;"></i> Agregar municipio a la lista
+  </button>
+  <div id="municipios-lista" style="display:flex; flex-direction:column; gap:8px; margin-bottom:8px;"></div>
+  <input type="hidden" id="municipios_json" name="municipios_json" value="[]">
+  <p id="municipios_error" style="display:none; color:var(--color-danger); font-size:13px; margin-bottom:16px;">Agrega al menos un municipio antes de guardar.</p>
 
   <hr style="border:0; border-top:1px solid var(--color-border); margin:20px 0;">
 
@@ -151,14 +167,14 @@
     <div class="checkbox-group" id="tags-container">
       {% set predefined_tags = ['ascensor', 'balcon', 'parqueadero', 'deposito', 'vigilancia', 'zonas verdes', 'gimnasio'] %}
       {% for tag in predefined_tags %}
-      <label class="checkbox-label">
-        <input type="checkbox" name="comodidades" value="{{ tag }}" onchange="toggleCheckboxClass(this)">
+      <label class="checkbox-label {% if busqueda and tag in (busqueda.comodidades or []) %}checked{% endif %}">
+        <input type="checkbox" name="comodidades" value="{{ tag }}" onchange="toggleCheckboxClass(this)" {% if busqueda and tag in (busqueda.comodidades or []) %}checked{% endif %}>
         <span>{{ tag | capitalize }}</span>
         <button type="button" class="delete-tag-btn" onclick="eliminarTag(this)">&times;</button>
       </label>
       {% endfor %}
     </div>
-    
+
     <div style="display: flex; gap: 8px; max-width: 450px;">
       <input type="text" id="nuevo_tag_input" placeholder="Escribe una comodidad (ej: jacuzzi, piscina) y presiona Enter..." onkeydown="handleTagInputKey(event)" style="flex-grow: 1;">
       <button type="button" class="btn btn-secondary btn-sm" onclick="addCustomTagBtn()">Agregar</button>
@@ -167,7 +183,7 @@
 
   <div class="form-group full-width" style="margin-top: 16px;">
     <label for="pregunta_abierta">¿Qué te gustaría que tuviera tu próxima vivienda y el entorno donde está ubicada?</label>
-    <textarea id="pregunta_abierta" name="pregunta_abierta" placeholder="Prefiero un sector residencial tranquilo, con acceso a parques y buena conectividad..." required></textarea>
+    <textarea id="pregunta_abierta" name="pregunta_abierta" placeholder="Prefiero un sector residencial tranquilo, con acceso a parques y buena conectividad..." required>{{ busqueda.pregunta_abierta if busqueda else '' }}</textarea>
   </div>
 
   <hr style="border:0; border-top:1px solid var(--color-border); margin:20px 0;">
@@ -175,28 +191,30 @@
   <h3>Configuración del Scraper</h3>
   <div style="display:flex; gap:20px; align-items:center; margin-bottom:20px;">
     <div class="checkbox-group" style="margin-bottom:0;">
-      <label class="checkbox-label checked">
-        <input type="checkbox" name="portales" value="fincaraiz" checked onchange="toggleCheckboxClass(this)"> FincaRaíz
+      <label class="checkbox-label {% if not busqueda or 'fincaraiz' in (busqueda.portales or []) %}checked{% endif %}">
+        <input type="checkbox" name="portales" value="fincaraiz" onchange="toggleCheckboxClass(this)" {% if not busqueda or 'fincaraiz' in (busqueda.portales or []) %}checked{% endif %}> FincaRaíz
       </label>
-      <label class="checkbox-label checked">
-        <input type="checkbox" name="portales" value="metrocuadrado" checked onchange="toggleCheckboxClass(this)"> Metrocuadrado
+      <label class="checkbox-label {% if not busqueda or 'metrocuadrado' in (busqueda.portales or []) %}checked{% endif %}">
+        <input type="checkbox" name="portales" value="metrocuadrado" onchange="toggleCheckboxClass(this)" {% if not busqueda or 'metrocuadrado' in (busqueda.portales or []) %}checked{% endif %}> Metrocuadrado
       </label>
     </div>
-    
+
     <div class="form-group" style="margin-bottom:0; max-width:200px; display:inline-flex;">
       <label for="cantidad" style="margin-bottom:4px; font-size:11px;">Cantidad de anuncios</label>
-      <input type="number" id="cantidad" name="cantidad" value="30" min="5" max="100" style="padding: 8px 12px;">
+      <input type="number" id="cantidad" name="cantidad" value="{{ busqueda.cantidad_solicitada if busqueda else 30 }}" min="5" max="100" style="padding: 8px 12px;">
     </div>
   </div>
 
   <div style="margin-top:30px;">
     <button type="submit" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:8px;">
-      <i data-lucide="save" style="width:18px; height:18px;"></i> Guardar Búsqueda
+      <i data-lucide="save" style="width:18px; height:18px;"></i> {{ 'Guardar cambios' if busqueda else 'Guardar Búsqueda' }}
     </button>
   </div>
 </form>
 
 <script>
+  const _busquedaExistente = {{ busqueda | tojson if busqueda else 'null' }};
+
   // --- Buscador de cliente por nombre o numero de identificacion ---
   const _clientesDisponibles = {{ clientes | tojson }};
 
@@ -244,13 +262,19 @@
     });
   }
 
-  function validarClienteAntesDeGuardar() {
+  function validarFormulario() {
     const clienteIdInput = document.getElementById("cliente_id");
     if (clienteIdInput && !clienteIdInput.value) {
       document.getElementById("cliente_error").style.display = "block";
       document.getElementById("cliente_search").focus();
       return false;
     }
+    if (_municipiosSeleccionados.length === 0) {
+      document.getElementById("municipios_error").style.display = "block";
+      document.getElementById("municipios-lista").scrollIntoView({ behavior: "smooth", block: "center" });
+      return false;
+    }
+    document.getElementById("municipios_json").value = JSON.stringify(_municipiosSeleccionados);
     return true;
   }
 
@@ -277,12 +301,17 @@
   // Verificar Antigüedad
   function verificarAntiguedadState() {
     const estado = document.getElementById("estado_deseado").value;
-    const antiguedadSelect = document.getElementById("antiguedad_deseada");
+    const grupo = document.getElementById("antiguedad-group");
+    const checkboxes = grupo.querySelectorAll('input[type=checkbox]');
     if (estado === "nuevo" || estado === "proyecto") {
-      antiguedadSelect.value = "0 a 5 años";
-      antiguedadSelect.disabled = true;
+      checkboxes.forEach(cb => {
+        const marcar = cb.value === "0 a 5 años";
+        cb.checked = marcar;
+        cb.disabled = true;
+        cb.parentElement.classList.toggle("checked", marcar);
+      });
     } else {
-      antiguedadSelect.disabled = false;
+      checkboxes.forEach(cb => { cb.disabled = false; });
     }
   }
 
@@ -300,7 +329,7 @@
   function renderHabsButtons() {
     const currentVal = parseInt(document.getElementById("habitaciones_min").value) || 2;
     const isExact = document.getElementById("habitaciones_exactas").value === "true";
-    
+
     for (let h = 1; h <= 6; h++) {
       const btn = document.getElementById(`btn-habs-${h}`);
       if (btn) {
@@ -328,7 +357,7 @@
   function renderBanosButtons() {
     const currentVal = parseInt(document.getElementById("banos_min").value) || 1;
     const isExact = document.getElementById("banos_exactos").value === "true";
-    
+
     for (let b = 1; b <= 6; b++) {
       const btn = document.getElementById(`btn-banos-${b}`);
       if (btn) {
@@ -360,7 +389,7 @@
   function populateDepartamentos() {
     const deptSelect = document.getElementById("departamento_select");
     deptSelect.innerHTML = '<option value="">Selecciona un departamento...</option>';
-    
+
     Object.keys(divipolaData).sort().forEach(dept => {
       const opt = document.createElement("option");
       opt.value = dept;
@@ -369,19 +398,12 @@
     });
   }
 
-  function actualizarMunicipios() {
+  function actualizarMunicipiosDisponibles() {
     const deptSelect = document.getElementById("departamento_select");
     const munSelect = document.getElementById("municipio_select");
-    const hiddenDept = document.getElementById("departamento_interes");
-    const hiddenMun = document.getElementById("municipio_interes");
-    const hiddenCod = document.getElementById("municipio_codigo");
-    
     const departamento = deptSelect.value;
-    hiddenDept.value = departamento;
 
     munSelect.innerHTML = '<option value="">Selecciona un municipio...</option>';
-    hiddenMun.value = "";
-    hiddenCod.value = "";
 
     if (departamento && divipolaData[departamento]) {
       divipolaData[departamento].forEach(m => {
@@ -394,14 +416,56 @@
     }
   }
 
-  function seleccionarMunicipio() {
-    const munSelect = document.getElementById("municipio_select");
-    const hiddenMun = document.getElementById("municipio_interes");
-    const hiddenCod = document.getElementById("municipio_codigo");
+  // --- Lista ordenable de municipios ---
+  let _municipiosSeleccionados = [];
 
-    const selectedOption = munSelect.options[munSelect.selectedIndex];
-    hiddenMun.value = munSelect.value;
-    hiddenCod.value = selectedOption ? (selectedOption.dataset.codigo || "") : "";
+  function agregarMunicipio() {
+    const deptSelect = document.getElementById("departamento_select");
+    const munSelect = document.getElementById("municipio_select");
+    const departamento = deptSelect.value;
+    const municipio = munSelect.value;
+    if (!departamento || !municipio) return;
+    const opt = munSelect.options[munSelect.selectedIndex];
+    const codigo = opt ? (opt.dataset.codigo || "") : "";
+
+    if (_municipiosSeleccionados.some(m => m.municipio === municipio && m.departamento === departamento)) return;
+
+    _municipiosSeleccionados.push({ departamento, municipio, codigo });
+    document.getElementById("municipios_error").style.display = "none";
+    renderMunicipiosLista();
+  }
+
+  function eliminarMunicipio(idx) {
+    _municipiosSeleccionados.splice(idx, 1);
+    renderMunicipiosLista();
+  }
+
+  function moverMunicipio(idx, delta) {
+    const nuevo = idx + delta;
+    if (nuevo < 0 || nuevo >= _municipiosSeleccionados.length) return;
+    const tmp = _municipiosSeleccionados[idx];
+    _municipiosSeleccionados[idx] = _municipiosSeleccionados[nuevo];
+    _municipiosSeleccionados[nuevo] = tmp;
+    renderMunicipiosLista();
+  }
+
+  function renderMunicipiosLista() {
+    const cont = document.getElementById("municipios-lista");
+    if (_municipiosSeleccionados.length === 0) {
+      cont.innerHTML = '<p style="color:var(--color-text-muted); font-size:13px; margin:0;">Todavía no has agregado ningún municipio.</p>';
+    } else {
+      cont.innerHTML = _municipiosSeleccionados.map((m, idx) => `
+        <div style="display:flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid var(--color-border); border-radius:var(--radius-default);">
+          <span style="font-weight:600; color:var(--color-primary); min-width:20px;">${idx + 1}.</span>
+          <span style="flex:1;">${m.municipio} <small style="color:var(--color-text-muted);">(${m.departamento})</small></span>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="moverMunicipio(${idx}, -1)" ${idx === 0 ? "disabled" : ""} title="Subir prioridad"><i data-lucide="chevron-up" style="width:14px; height:14px;"></i></button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="moverMunicipio(${idx}, 1)" ${idx === _municipiosSeleccionados.length - 1 ? "disabled" : ""} title="Bajar prioridad"><i data-lucide="chevron-down" style="width:14px; height:14px;"></i></button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="eliminarMunicipio(${idx})" title="Quitar"><i data-lucide="x" style="width:14px; height:14px;"></i></button>
+        </div>
+      `).join("");
+    }
+    document.getElementById("municipios_json").value = JSON.stringify(_municipiosSeleccionados);
+    if (window.lucide) lucide.createIcons();
   }
 
   // Dynamic tags
@@ -478,6 +542,18 @@
     renderBanosButtons();
     verificarAntiguedadState();
     cargarDivipola();
+
+    if (_busquedaExistente) {
+      _municipiosSeleccionados = _busquedaExistente.municipios || [];
+      renderMunicipiosLista();
+
+      const predefinidas = ['ascensor', 'balcon', 'parqueadero', 'deposito', 'vigilancia', 'zonas verdes', 'gimnasio'];
+      (_busquedaExistente.comodidades || []).forEach(c => {
+        if (!predefinidas.includes(c)) insertSingleTag(c);
+      });
+    } else {
+      renderMunicipiosLista();
+    }
   });
 </script>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>

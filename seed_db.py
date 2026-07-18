@@ -116,8 +116,9 @@ def main():
                     cliente_ids[0], json.dumps(["fincaraiz", "metrocuadrado"]), 30, "done",
                     json.dumps([{"msg": "Iniciando búsqueda...", "level": "info"}, {"msg": "12 inmuebles encontrados", "level": "ok"}]),
                     ahora - timedelta(minutes=15), ahora - timedelta(minutes=13),
-                    "Bogotá D.C.", "Bogotá", "11001", "apartamento", "usado", "0 a 5 años", "urbano",
-                    2, False, 1, False, 3, 200000000, 300000000, "vivir", json.dumps(["balcon", "ascensor"]),
+                    json.dumps([{"departamento": "Bogotá D.C.", "municipio": "Bogotá", "codigo": "11001"}]),
+                    "apartamento", "usado", json.dumps(["0 a 5 años"]), "urbano",
+                    2, False, 1, False, json.dumps([3]), 200000000, 300000000, json.dumps(["vivir"]), json.dumps(["balcon", "ascensor"]),
                     "Me gustaría un sector tranquilo, cerca de parques y con buena luz natural, con transporte cercano."
                 ),
                 # Búsqueda 2: María Camila - Casa en Medellín
@@ -125,8 +126,9 @@ def main():
                     cliente_ids[1], json.dumps(["metrocuadrado"]), 20, "done",
                     json.dumps([{"msg": "Conectando con Selenium Grid...", "level": "info"}, {"msg": "8 inmuebles encontrados", "level": "ok"}]),
                     ahora - timedelta(hours=2), ahora - timedelta(hours=1, minutes=58),
-                    "Antioquia", "Medellín", "05001", "casa", "nuevo", "0 a 5 años", "urbano",
-                    3, False, 2, False, 4, 400000000, 600000000, "arrendar", json.dumps(["parqueadero", "deposito", "vigilancia"]),
+                    json.dumps([{"departamento": "Antioquia", "municipio": "Medellín", "codigo": "05001"}]),
+                    "casa", "nuevo", json.dumps(["0 a 5 años"]), "urbano",
+                    3, False, 2, False, json.dumps([4]), 400000000, 600000000, json.dumps(["arrendar"]), json.dumps(["parqueadero", "deposito", "vigilancia"]),
                     "Busco un proyecto moderno que tenga alta demanda para arrendar rápido y buenas áreas comunes."
                 ),
                 # Búsqueda 3: Andrés Felipe - Casa en Soacha (Rural)
@@ -134,22 +136,23 @@ def main():
                     cliente_ids[2], json.dumps(["fincaraiz"]), 15, "running",
                     json.dumps([{"msg": "Cargando portal FincaRaiz...", "level": "info"}]),
                     ahora - timedelta(minutes=2), None,
-                    "Cundinamarca", "Soacha", "25754", "casa", "usado", "5 a 10 años", "rural",
-                    3, False, 3, False, 3, 250000000, 450000000, "indeciso", json.dumps(["parqueadero", "patio"]),
+                    json.dumps([{"departamento": "Cundinamarca", "municipio": "Soacha", "codigo": "25754"}]),
+                    "casa", "usado", json.dumps(["5 a 10 años"]), "rural",
+                    3, False, 3, False, json.dumps([3]), 250000000, 450000000, json.dumps(["indeciso"]), json.dumps(["parqueadero", "patio"]),
                     "Prefiero una casa lote o casa con patio para mi familia cuando visitemos Colombia."
                 )
             ]
-            
+
             busqueda_ids = []
             for b in busquedas:
                 cur.execute(
                     """
                     INSERT INTO busquedas (
                         cliente_id, portales, cantidad_solicitada, status, log, creada_en, terminada_en,
-                        departamento_interes, municipio_interes, municipio_codigo, tipo_vivienda, estado_deseado,
+                        municipios, tipo_vivienda, estado_deseado,
                         antiguedad_deseada, zona_deseada, habitaciones_min, habitaciones_exactas, banos_min, banos_exactos,
                         estrato_objetivo, presupuesto_min, presupuesto_max, uso_previsto, comodidades, pregunta_abierta
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id;
                     """,
                     b

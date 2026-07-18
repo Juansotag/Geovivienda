@@ -15,9 +15,6 @@
           <th>Nombre</th>
           <th>Residencia</th>
           <th>Ingreso Mensual</th>
-          <th>Tipo Vivienda</th>
-          <th>Estado</th>
-          <th>Uso Previsto</th>
           <th style="width: 220px;">Acciones</th>
         </tr>
       </thead>
@@ -31,13 +28,6 @@
             <div class="fx-hint" style="margin-top:2px;">
               ~${{ "{:,.0f}".format(c.ingreso_mensual_cop or 0) }} COP
             </div>
-          </td>
-          <td style="text-transform: capitalize;">{{ c.tipo_vivienda }}</td>
-          <td style="text-transform: capitalize;">{{ c.estado_deseado }}</td>
-          <td style="text-transform: capitalize;">
-            {% if c.uso_previsto == 'vivir' %}Vivir
-            {% elif c.uso_previsto == 'arrendar' %}Arrendar
-            {% else %}Indeciso{% endif %}
           </td>
           <td>
             <div style="display: flex; gap: 8px; align-items: center;">

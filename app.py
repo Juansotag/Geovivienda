@@ -1,5 +1,6 @@
 import os
 import csv
+import json
 import threading
 
 from dotenv import load_dotenv
@@ -265,11 +266,53 @@ def cliente_resultados(cliente_id):
     )
 
 
+def _parse_busqueda_form(form) -> dict:
+    """Compilado compartido entre crear y editar una busqueda: uso_previsto,
+    antiguedad_deseada y estrato_objetivo son multi-choice (getlist), y los
+    municipios llegan como JSON serializado por el picker ordenable del
+    formulario (lista de {"departamento","municipio","codigo"})."""
+    portales = form.getlist("portales") or ["fincaraiz", "metrocuadrado"]
+    cantidad = int(form.get("cantidad", 30))
+
+    comodidades = form.getlist("comodidades")
+    adicionales = form.get("comodidades_adicionales", "").strip()
+    if adicionales:
+        for tag in adicionales.split(","):
+            tag_clean = tag.strip().lower()
+            if tag_clean and tag_clean not in comodidades:
+                comodidades.append(tag_clean)
+
+    try:
+        municipios = json.loads(form.get("municipios_json") or "[]")
+    except (ValueError, TypeError):
+        municipios = []
+
+    return {
+        "portales": portales,
+        "cantidad_solicitada": cantidad,
+        "municipios": municipios,
+        "tipo_vivienda": form["tipo_vivienda"],
+        "estado_deseado": form["estado_deseado"],
+        "antiguedad_deseada": form.getlist("antiguedad_deseada"),
+        "zona_deseada": form["zona_deseada"],
+        "habitaciones_min": int(form["habitaciones_min"]),
+        "habitaciones_exactas": form.get("habitaciones_exactas") == "true",
+        "banos_min": int(form["banos_min"]),
+        "banos_exactos": form.get("banos_exactos") == "true",
+        "estrato_objetivo": [int(e) for e in form.getlist("estrato_objetivo")],
+        "presupuesto_min": int(form["presupuesto_min"]),
+        "presupuesto_max": int(form["presupuesto_max"]),
+        "uso_previsto": form.getlist("uso_previsto"),
+        "comodidades": comodidades,
+        "pregunta_abierta": form["pregunta_abierta"],
+    }
+
+
 @app.route("/busquedas/nueva", methods=["GET", "POST"])
 def busqueda_nueva():
     cliente_id = request.args.get("cliente_id", type=int)
     cliente = db.obtener_cliente(cliente_id) if cliente_id else None
-    
+
     if request.method == "GET":
         clientes_lista = db.listar_clientes() if not cliente else []
         return render_template(
@@ -277,48 +320,47 @@ def busqueda_nueva():
             activo="busquedas",
             cliente=cliente,
             clientes=clientes_lista,
-            ciudades=CIUDADES
+            ciudades=CIUDADES,
+            busqueda=None,
         )
 
     # POST: Process search criteria
     resolved_cliente_id = cliente["id"] if cliente else int(request.form["cliente_id"])
-    
-    portales = request.form.getlist("portales") or ["fincaraiz", "metrocuadrado"]
-    cantidad = int(request.form.get("cantidad", 30))
 
-    comodidades = request.form.getlist("comodidades")
-    adicionales = request.form.get("comodidades_adicionales", "").strip()
-    if adicionales:
-        for tag in adicionales.split(","):
-            tag_clean = tag.strip().lower()
-            if tag_clean and tag_clean not in comodidades:
-                comodidades.append(tag_clean)
-
-    busqueda_id = db.crear_busqueda({
+    datos = _parse_busqueda_form(request.form)
+    datos.update({
         "cliente_id": resolved_cliente_id,
-        "portales": portales,
-        "cantidad_solicitada": cantidad,
         "status": "pendiente",
         "log": [],
-        "departamento_interes": request.form.get("departamento_interes"),
-        "municipio_interes": request.form.get("municipio_interes"),
-        "municipio_codigo": request.form.get("municipio_codigo"),
-        "tipo_vivienda": request.form["tipo_vivienda"],
-        "estado_deseado": request.form["estado_deseado"],
-        "antiguedad_deseada": request.form.get("antiguedad_deseada", "0 a 5 años"),
-        "zona_deseada": request.form["zona_deseada"],
-        "habitaciones_min": int(request.form["habitaciones_min"]),
-        "habitaciones_exactas": request.form.get("habitaciones_exactas") == "true",
-        "banos_min": int(request.form["banos_min"]),
-        "banos_exactos": request.form.get("banos_exactos") == "true",
-        "estrato_objetivo": int(request.form["estrato_objetivo"]),
-        "presupuesto_min": int(request.form["presupuesto_min"]),
-        "presupuesto_max": int(request.form["presupuesto_max"]),
-        "uso_previsto": request.form["uso_previsto"],
-        "comodidades": comodidades,
-        "pregunta_abierta": request.form["pregunta_abierta"]
     })
+    db.crear_busqueda(datos)
 
+    return redirect(url_for("busquedas"))
+
+
+@app.route("/busquedas/<int:busqueda_id>/editar", methods=["GET", "POST"])
+def busqueda_editar(busqueda_id):
+    busqueda_obj = db.obtener_busqueda(busqueda_id)
+    if not busqueda_obj:
+        return "Búsqueda no encontrada", 404
+    if busqueda_obj["status"] != "pendiente":
+        # Solo se puede editar antes de lanzarla - una vez corriendo o
+        # terminada, los criterios ya quedaron fijados en los resultados.
+        return redirect(url_for("busquedas"))
+
+    if request.method == "GET":
+        cliente = db.obtener_cliente(busqueda_obj["cliente_id"])
+        return render_template(
+            "busqueda_form.html",
+            activo="busquedas",
+            cliente=cliente,
+            clientes=[],
+            ciudades=CIUDADES,
+            busqueda=busqueda_obj,
+        )
+
+    datos = _parse_busqueda_form(request.form)
+    db.actualizar_busqueda(busqueda_id, datos)
     return redirect(url_for("busquedas"))
 
 
@@ -403,9 +445,39 @@ def api_generar_reporte():
             "message": "No encontramos ese anuncio en la base — solo se puede generar reporte de anuncios que ya salieron en una búsqueda previa.",
         }), 404
 
-    score = scoring.calcular_score(cliente, anuncio)
-    reporte_id = reportes.crear_y_guardar_reporte(cliente, anuncio, score)
+    # La tabla clientes solo tiene datos personales/financieros - los
+    # criterios de vivienda (tipo, estrato, presupuesto, etc.) viven en la
+    # busqueda. Sin este merge el reporte y el score quedan sin criterios
+    # reales para comparar contra el anuncio.
+    criterios = cliente
+    if data.get("busqueda_id"):
+        busqueda_obj = db.obtener_busqueda(data["busqueda_id"])
+        if busqueda_obj:
+            criterios = {**cliente, **busqueda_obj, "id": cliente["id"]}
+
+    score = scoring.calcular_score(criterios, anuncio)
+    reporte_id = reportes.crear_y_guardar_reporte(criterios, anuncio, score)
     return jsonify({"reporte_id": reporte_id})
+
+
+@app.route("/reportes/<int:reporte_id>")
+def ver_reporte_html(reporte_id):
+    reporte = db.obtener_reporte(reporte_id)
+    if not reporte:
+        return "Reporte no encontrado", 404
+    return reporte["contenido_html"]
+
+
+@app.route("/reportes/<int:reporte_id>/html")
+def descargar_reporte_html(reporte_id):
+    reporte = db.obtener_reporte(reporte_id)
+    if not reporte:
+        return "Reporte no encontrado", 404
+    return Response(
+        reporte["contenido_html"],
+        mimetype="text/html",
+        headers={"Content-Disposition": f"attachment; filename=reporte_{reporte_id}.html"},
+    )
 
 
 @app.route("/reportes/<int:reporte_id>/pdf")

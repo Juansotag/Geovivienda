@@ -51,9 +51,15 @@ def _valor_o(v, default="no especificado"):
     return v if v not in (None, "") else default
 
 
+def _texto_lista(valores, vacio="no especificado") -> str:
+    if not valores:
+        return vacio
+    return ", ".join(str(v) for v in valores)
+
+
 def _armar_contexto(cliente: dict, anuncio: dict, score: dict) -> dict:
-    ciudades = cliente.get("ciudades_interes") or []
-    ciudades_txt = ", ".join(ciudades) if ciudades else "Bogotá"
+    municipios = cliente.get("municipios") or []
+    ciudades_txt = _texto_lista([m.get("municipio") for m in municipios], "Bogotá")
 
     return {
         "ciudad_residencia": _valor_o(cliente.get("ciudad_residencia")),
@@ -67,7 +73,7 @@ def _armar_contexto(cliente: dict, anuncio: dict, score: dict) -> dict:
         "ciudades_interes_txt": ciudades_txt,
         "presupuesto_min": cliente.get("presupuesto_min") or 0,
         "presupuesto_max": cliente.get("presupuesto_max") or 0,
-        "estrato_objetivo": _valor_o(cliente.get("estrato_objetivo")),
+        "estrato_objetivo": _texto_lista(cliente.get("estrato_objetivo")),
         "habitaciones_min": _valor_o(cliente.get("habitaciones_min"), 0),
         "precio_venta": anuncio.get("precio_venta") or 0,
         "area_metros": _valor_o(anuncio.get("area_metros")),

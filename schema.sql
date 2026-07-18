@@ -75,27 +75,58 @@ CREATE TABLE IF NOT EXISTS busquedas (
     log JSONB DEFAULT '[]'::jsonb,        -- logs de eventos del scraper
     
     -- Criterios de Vivienda (Mapeados desde clientes)
-    departamento_interes TEXT,
-    municipio_interes TEXT,
-    municipio_codigo TEXT,
+    municipios JSONB DEFAULT '[]'::jsonb, -- lista ordenada: [{"departamento":..,"municipio":..,"codigo":..}, ...]
     tipo_vivienda TEXT,
     estado_deseado TEXT,
-    antiguedad_deseada TEXT,
+    antiguedad_deseada JSONB DEFAULT '[]'::jsonb,  -- lista de strings (multi-choice)
     zona_deseada TEXT,
     habitaciones_min SMALLINT,
     habitaciones_exactas BOOLEAN DEFAULT FALSE,
     banos_min SMALLINT,
     banos_exactos BOOLEAN DEFAULT FALSE,
-    estrato_objetivo SMALLINT,
+    estrato_objetivo JSONB DEFAULT '[]'::jsonb,    -- lista de ints (multi-choice)
     presupuesto_min BIGINT,
     presupuesto_max BIGINT,
-    uso_previsto TEXT,
+    uso_previsto JSONB DEFAULT '[]'::jsonb,        -- lista de strings (multi-choice)
     comodidades JSONB,
     pregunta_abierta TEXT,
-    
+
     creada_en TIMESTAMPTZ DEFAULT now(),
     terminada_en TIMESTAMPTZ
 );
+
+-- Migracion desde el esquema anterior (columnas escalares -> JSONB). Segura de
+-- re-ejecutar: cada bloque solo actua si la columna todavia tiene el tipo viejo.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'busquedas' AND column_name = 'departamento_interes') THEN
+        ALTER TABLE busquedas ADD COLUMN IF NOT EXISTS municipios JSONB DEFAULT '[]'::jsonb;
+        UPDATE busquedas SET municipios = jsonb_build_array(
+            jsonb_build_object('departamento', departamento_interes, 'municipio', municipio_interes, 'codigo', municipio_codigo)
+        ) WHERE municipio_interes IS NOT NULL AND (municipios IS NULL OR municipios = '[]'::jsonb);
+        ALTER TABLE busquedas DROP COLUMN departamento_interes;
+        ALTER TABLE busquedas DROP COLUMN municipio_interes;
+        ALTER TABLE busquedas DROP COLUMN municipio_codigo;
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'busquedas' AND column_name = 'uso_previsto' AND data_type <> 'jsonb') THEN
+        ALTER TABLE busquedas ALTER COLUMN uso_previsto TYPE JSONB USING
+            CASE WHEN uso_previsto IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(uso_previsto) END;
+        ALTER TABLE busquedas ALTER COLUMN uso_previsto SET DEFAULT '[]'::jsonb;
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'busquedas' AND column_name = 'antiguedad_deseada' AND data_type <> 'jsonb') THEN
+        ALTER TABLE busquedas ALTER COLUMN antiguedad_deseada TYPE JSONB USING
+            CASE WHEN antiguedad_deseada IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(antiguedad_deseada) END;
+        ALTER TABLE busquedas ALTER COLUMN antiguedad_deseada SET DEFAULT '[]'::jsonb;
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'busquedas' AND column_name = 'estrato_objetivo' AND data_type <> 'jsonb') THEN
+        ALTER TABLE busquedas ALTER COLUMN estrato_objetivo TYPE JSONB USING
+            CASE WHEN estrato_objetivo IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(estrato_objetivo) END;
+        ALTER TABLE busquedas ALTER COLUMN estrato_objetivo SET DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
 
 -- Tabla de Resultados de Búsquedas (Matches)
 CREATE TABLE IF NOT EXISTS resultados_busqueda (

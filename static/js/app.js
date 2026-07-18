@@ -15,13 +15,13 @@ async function cancelarBusqueda(busquedaId, boton) {
 }
 
 // --- Reportes ---
-async function generarReporte(clienteId, anuncioId, boton) {
+async function generarReporte(clienteId, anuncioId, boton, busquedaId) {
   boton.disabled = true;
   boton.textContent = 'Generando...';
   const resp = await fetch('/api/reportes/generar', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cliente_id: clienteId, anuncio_id: anuncioId }),
+    body: JSON.stringify({ cliente_id: clienteId, anuncio_id: anuncioId, busqueda_id: busquedaId || null }),
   });
   const data = await resp.json();
   if (data.reporte_id) {
