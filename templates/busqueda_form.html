@@ -100,7 +100,7 @@
       <input type="hidden" id="habitaciones_min" name="habitaciones_min" value="{{ busqueda.habitaciones_min if busqueda else 2 }}">
       <input type="hidden" id="habitaciones_exactas" name="habitaciones_exactas" value="{{ 'true' if busqueda and busqueda.habitaciones_exactas else 'false' }}">
 
-      <label class="checkbox-label" style="display:inline-flex; align-items:center; margin-top:8px; padding:6px 12px; gap:8px; width:fit-content;">
+      <label class="checkbox-label {% if busqueda and busqueda.habitaciones_exactas %}checked{% endif %}" style="display:inline-flex; align-items:center; margin-top:8px; padding:6px 12px; gap:8px; width:fit-content;">
         <input type="checkbox" id="check_habs_exactas" onchange="toggleHabsExactas(this)" {% if busqueda and busqueda.habitaciones_exactas %}checked{% endif %}>
         Número exacto
       </label>
@@ -116,7 +116,7 @@
       <input type="hidden" id="banos_min" name="banos_min" value="{{ busqueda.banos_min if busqueda else 1 }}">
       <input type="hidden" id="banos_exactos" name="banos_exactos" value="{{ 'true' if busqueda and busqueda.banos_exactos else 'false' }}">
 
-      <label class="checkbox-label" style="display:inline-flex; align-items:center; margin-top:8px; padding:6px 12px; gap:8px; width:fit-content;">
+      <label class="checkbox-label {% if busqueda and busqueda.banos_exactos %}checked{% endif %}" style="display:inline-flex; align-items:center; margin-top:8px; padding:6px 12px; gap:8px; width:fit-content;">
         <input type="checkbox" id="check_banos_exactas" onchange="toggleBanosExactas(this)" {% if busqueda and busqueda.banos_exactos %}checked{% endif %}>
         Número exacto
       </label>
@@ -257,7 +257,7 @@
       <input type="number" id="cantidad" name="cantidad" value="{{ busqueda.cantidad_solicitada if busqueda else 30 }}" min="5" max="100" style="padding: 8px 12px;">
       <p style="font-size:11px; color:var(--color-text-muted); margin:4px 0 0;">El scraper suele traer más de lo pedido (así trae páginas completas de cada portal). Si necesitas exactamente esta cantidad, marca "Número exacto" abajo.</p>
       <input type="hidden" id="cantidad_exacta" name="cantidad_exacta" value="{{ 'true' if busqueda and busqueda.cantidad_exacta else 'false' }}">
-      <label class="checkbox-label" style="display:inline-flex; align-items:center; margin-top:8px; padding:6px 12px; gap:8px; width:fit-content;">
+      <label class="checkbox-label {% if busqueda and busqueda.cantidad_exacta %}checked{% endif %}" style="display:inline-flex; align-items:center; margin-top:8px; padding:6px 12px; gap:8px; width:fit-content;">
         <input type="checkbox" id="check_cantidad_exacta" onchange="toggleCantidadExacta(this)" {% if busqueda and busqueda.cantidad_exacta %}checked{% endif %}>
         Número exacto
       </label>
@@ -406,11 +406,13 @@
 
   function toggleHabsExactas(cb) {
     document.getElementById("habitaciones_exactas").value = cb.checked ? "true" : "false";
+    toggleCheckboxClass(cb);
     renderHabsButtons();
   }
 
   function toggleCantidadExacta(cb) {
     document.getElementById("cantidad_exacta").value = cb.checked ? "true" : "false";
+    toggleCheckboxClass(cb);
   }
 
   function renderHabsButtons() {
@@ -438,6 +440,7 @@
 
   function toggleBanosExactas(cb) {
     document.getElementById("banos_exactos").value = cb.checked ? "true" : "false";
+    toggleCheckboxClass(cb);
     renderBanosButtons();
   }
 
