@@ -19,9 +19,12 @@ SINONIMOS_COMODIDADES = {
     "balcon": ["balcon"],
     "parqueadero": ["parqueadero", "garaje", "cochera", "bahia"],
     "deposito": ["deposito", "bodega", "cuarto util"],
-    "vigilancia": ["vigilancia", "porteria", "recepcion", "citofono", "conjunto cerrado"],
+    "vigilancia": ["vigilancia", "porteria", "recepcion", "citofono", "conjunto cerrado", "seguridad"],
     "zonas verdes": ["zona verde", "zonas verdes"],
     "gimnasio": ["gimnasio"],
+    "salon comunal": ["salon comunal", "salon social"],
+    "zona bbq": ["zona bbq", "zona de bbq", " bbq"],
+    "piscina": ["piscina"],
 }
 
 

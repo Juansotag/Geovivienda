@@ -167,22 +167,33 @@
   <p style="color:var(--color-text-muted); font-size:13px; margin-top:-8px;">
     Arrastra cada comodidad a la columna que corresponda. <strong>Relevantes</strong> mejora el score que calcula la IA, sin descartar inmuebles. <strong>Indispensables</strong> es un filtro estricto: el inmueble debe tenerlas todas o no aparece en los resultados.
   </p>
-  {% set predefined_tags = ['ascensor', 'balcon', 'parqueadero', 'deposito', 'vigilancia', 'zonas verdes', 'gimnasio'] %}
+  {# Catalogo regularizado: verificado contra texto real ya scrapeado de FincaRaiz
+     y Metrocuadrado (ver SINONIMOS_COMODIDADES en busqueda.py) - cada portal
+     redacta estas mismas 10 amenidades con palabras distintas, pero las 10
+     aparecen en ambos con buena frecuencia. #}
+  {% set predefined_tags = [
+    ('ascensor', 'Ascensor'), ('balcon', 'Balcón'), ('parqueadero', 'Parqueadero'),
+    ('deposito', 'Depósito'), ('vigilancia', 'Vigilancia'), ('zonas verdes', 'Zonas verdes'),
+    ('gimnasio', 'Gimnasio'), ('salon comunal', 'Salón comunal'), ('zona bbq', 'Zona BBQ'),
+    ('piscina', 'Piscina')
+  ] %}
+  {% set predefined_values = predefined_tags | map('first') | list %}
   <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
     <div>
       <h4 style="font-size:13px; color:var(--color-text-muted); margin:0 0 8px;">Relevantes</h4>
       <div class="comodidades-dropzone" id="zona-relevantes" ondragover="permitirDropComodidad(event)" ondrop="soltarComodidad(event, 'relevantes')"
            style="min-height:64px; border:1.5px dashed var(--color-border); border-radius:var(--radius-default); padding:10px; display:flex; flex-wrap:wrap; gap:8px; align-content:flex-start;">
-        {% for tag in predefined_tags %}
-          {% if not busqueda or tag not in (busqueda.comodidades_indispensables or []) %}
+        {% for val, label in predefined_tags %}
+          {% if not busqueda or val not in (busqueda.comodidades_indispensables or []) %}
           <div class="comodidad-chip" draggable="true" ondragstart="arrastrarComodidad(event)"
                style="display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:rgba(24,31,89,0.08); border-radius:20px; font-size:13px; cursor:grab; user-select:none;">
-            <span>{{ tag | capitalize }}</span>
-            <input type="checkbox" name="comodidades_relevantes" value="{{ tag }}" checked style="display:none;">
+            <span>{{ label }}</span>
+            <button type="button" onclick="this.parentElement.remove()" style="border:none; background:none; cursor:pointer; color:var(--color-text-muted); font-size:14px; line-height:1;">&times;</button>
+            <input type="checkbox" name="comodidades_relevantes" value="{{ val }}" checked style="display:none;">
           </div>
           {% endif %}
         {% endfor %}
-        {% if busqueda %}{% for tag in (busqueda.comodidades_relevantes or []) if tag not in predefined_tags %}
+        {% if busqueda %}{% for tag in (busqueda.comodidades_relevantes or []) if tag not in predefined_values %}
         <div class="comodidad-chip" draggable="true" ondragstart="arrastrarComodidad(event)"
              style="display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:rgba(24,31,89,0.08); border-radius:20px; font-size:13px; cursor:grab; user-select:none;">
           <span>{{ tag | capitalize }}</span>
@@ -196,16 +207,17 @@
       <h4 style="font-size:13px; color:var(--color-danger); margin:0 0 8px;">Indispensables</h4>
       <div class="comodidades-dropzone" id="zona-indispensables" ondragover="permitirDropComodidad(event)" ondrop="soltarComodidad(event, 'indispensables')"
            style="min-height:64px; border:1.5px dashed var(--color-danger); border-radius:var(--radius-default); padding:10px; display:flex; flex-wrap:wrap; gap:8px; align-content:flex-start;">
-        {% for tag in predefined_tags %}
-          {% if busqueda and tag in (busqueda.comodidades_indispensables or []) %}
+        {% for val, label in predefined_tags %}
+          {% if busqueda and val in (busqueda.comodidades_indispensables or []) %}
           <div class="comodidad-chip" draggable="true" ondragstart="arrastrarComodidad(event)"
                style="display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:rgba(197,51,54,0.1); border-radius:20px; font-size:13px; cursor:grab; user-select:none;">
-            <span>{{ tag | capitalize }}</span>
-            <input type="checkbox" name="comodidades_indispensables" value="{{ tag }}" checked style="display:none;">
+            <span>{{ label }}</span>
+            <button type="button" onclick="this.parentElement.remove()" style="border:none; background:none; cursor:pointer; color:var(--color-text-muted); font-size:14px; line-height:1;">&times;</button>
+            <input type="checkbox" name="comodidades_indispensables" value="{{ val }}" checked style="display:none;">
           </div>
           {% endif %}
         {% endfor %}
-        {% if busqueda %}{% for tag in (busqueda.comodidades_indispensables or []) if tag not in predefined_tags %}
+        {% if busqueda %}{% for tag in (busqueda.comodidades_indispensables or []) if tag not in predefined_values %}
         <div class="comodidad-chip" draggable="true" ondragstart="arrastrarComodidad(event)"
              style="display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:rgba(197,51,54,0.1); border-radius:20px; font-size:13px; cursor:grab; user-select:none;">
           <span>{{ tag | capitalize }}</span>
