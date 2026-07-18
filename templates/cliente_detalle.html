@@ -1,33 +1,116 @@
 {% extends "base.html" %}
 {% block title %}{{ cliente.nombre }} — Casa en Casa{% endblock %}
 {% block content %}
-<h1>{{ cliente.nombre }}</h1>
+<div class="page-header">
+  <h1>Detalle del Cliente</h1>
+  <div style="display:flex; gap:10px;">
+    <a href="{{ url_for('cliente_editar', cliente_id=cliente.id) }}" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:8px;"><i data-lucide="edit-3" style="width:16px; height:16px;"></i> Editar perfil</a>
+    <a href="{{ url_for('clientes') }}" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:8px;"><i data-lucide="arrow-left" style="width:16px; height:16px;"></i> Volver</a>
+  </div>
+</div>
 
 <div class="card">
+  <h2>Datos del Cliente</h2>
   <div class="form-grid">
-    <div><strong>Origen:</strong> {{ cliente.ciudad_residencia }}, {{ cliente.pais_residencia }}</div>
-    <div><strong>Ingreso:</strong> {{ "{:,.0f}".format(cliente.ingreso_mensual_cop or 0) }} COP/mes</div>
-    <div><strong>Ahorro disponible:</strong> {{ "{:,.0f}".format(cliente.ahorro_mensual_cop or 0) }} COP/mes</div>
-    <div><strong>Busca:</strong> {{ cliente.tipo_vivienda }}, {{ cliente.estado_deseado }}</div>
-    <div><strong>Presupuesto:</strong> {{ "{:,.0f}".format(cliente.presupuesto_min or 0) }} – {{ "{:,.0f}".format(cliente.presupuesto_max or 0) }} COP</div>
-    <div><strong>Estrato objetivo:</strong> {{ cliente.estrato_objetivo }} · <strong>Mín. habitaciones:</strong> {{ cliente.habitaciones_min }}</div>
+    <div><strong>Nombre completo:</strong> {{ cliente.nombre }}</div>
+    <div><strong>Identificación:</strong> {{ cliente.tipo_identificacion or '—' }} ({{ cliente.numero_identificacion or '—' }})</div>
+    <div><strong>Residencia actual:</strong> {{ cliente.ciudad_residencia }}, {{ cliente.pais_residencia }}</div>
+    <div><strong>Ingreso mensual neto:</strong> {{ "{:,.2f}".format(cliente.ingreso_mensual or 0) }} {{ cliente.ingreso_moneda }} (~${{ "{:,.0f}".format(cliente.ingreso_mensual_cop or 0) }} COP)</div>
+    <div><strong>Ahorro disponible mensual:</strong> {{ "{:,.2f}".format(cliente.ahorro_mensual or 0) }} {{ cliente.ingreso_moneda }} (~${{ "{:,.0f}".format(cliente.ahorro_mensual_cop or 0) }} COP)</div>
   </div>
 </div>
 
-<div class="card">
-  <h3 style="margin-top:0;">Buscar inmuebles</h3>
-  <div class="checkbox-group" style="margin-bottom:14px;">
-    <label><input type="checkbox" id="portal-fincaraiz" checked> FincaRaíz</label>
-    <label><input type="checkbox" id="portal-metrocuadrado" checked> Metrocuadrado</label>
+<div class="card" style="margin-top: 24px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+    <h2 style="margin:0;">Búsquedas de Vivienda Configuradas</h2>
+    <a href="{{ url_for('busqueda_nueva', cliente_id=cliente.id) }}" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:8px;">
+      <i data-lucide="plus-circle" style="width:18px; height:18px;"></i> Configurar Nueva Búsqueda
+    </a>
   </div>
-  <div class="form-group" style="max-width:200px;">
-    <label for="cantidad">Cantidad de anuncios a traer</label>
-    <input type="number" id="cantidad" value="30" min="5" max="100">
-  </div>
-  <button class="btn btn-primary" onclick="iniciarBusqueda({{ cliente.id }})">Buscar</button>
 
-  <div id="log-busqueda" style="display:none; margin-top:16px;"></div>
+  {% if busquedas %}
+  <table>
+    <thead>
+      <tr>
+        <th>Criterios de Interés</th>
+        <th>Fecha</th>
+        <th>Portales</th>
+        <th>Estado</th>
+        <th>Acción</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in busquedas %}
+      <tr>
+        <td>
+          <div style="font-weight:600; text-transform:capitalize;">{{ b.tipo_vivienda }} en {{ b.municipio_interes or 'no especificado' }} ({{ b.departamento_interes or 'no especificado' }})</div>
+          <div style="font-size:12px; color:var(--color-text-muted); margin-top:2px;">
+            Presupuesto: ${{ "{:,.0f}".format(b.presupuesto_min or 0) }} – ${{ "{:,.0f}".format(b.presupuesto_max or 0) }} COP |
+            Estrato: {{ b.estrato_objetivo }} |
+            Zona: {{ b.zona_deseada | capitalize }}
+          </div>
+        </td>
+        <td>{{ b.creada_en.strftime('%d/%m/%Y %H:%M') if b.creada_en else '—' }}</td>
+        <td>
+          {% if b.portales %}
+            {% for p in b.portales %}
+              <span class="badge" style="background: rgba(24, 31, 89, 0.08); color: var(--color-primary); font-size:10px; margin-right:4px;">{{ p | capitalize }}</span>
+            {% endfor %}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td>
+          {% if b.status == 'done' %}
+            <span class="badge badge-alto" style="background:#23C55E; color:#FFF;">Completada ({{ b.encontrados }} encontrados)</span>
+          {% elif b.status == 'running' %}
+            <span class="badge badge-medio" style="background:#2F3670; color:#FFF; display:inline-flex; align-items:center; gap:4px;"><i data-lucide="loader" style="width:12px; height:12px; animation: spin 1.5s linear infinite;"></i> Ejecutando...</span>
+          {% elif b.status == 'error' %}
+            <span class="badge badge-bajo" style="background:#EF4444; color:#FFF;">Falló</span>
+          {% elif b.status == 'pendiente' %}
+            <span class="badge" style="background:#FFF3CD; color:#856404;">Pendiente</span>
+          {% else %}
+            <span class="badge" style="background:var(--color-border); color:var(--color-text-muted);">{{ b.status | capitalize }}</span>
+          {% endif %}
+        </td>
+        <td>
+          <div style="display:flex; gap:8px;">
+            {% if b.status == 'pendiente' %}
+              <a href="{{ url_for('busqueda_lanzar', busqueda_id=b.id) }}" class="btn btn-primary btn-sm" style="background-color: #28a745; border-color: #28a745; color: white; display:inline-flex; align-items:center; gap:4px;">
+                <i data-lucide="play" style="width:12px; height:12px;"></i> Lanzar
+              </a>
+            {% else %}
+              <a href="{{ url_for('cliente_resultados', cliente_id=cliente.id, busqueda_id=b.id) }}" class="btn btn-secondary btn-sm" style="display:inline-flex; align-items:center; gap:4px;">
+                {% if b.status == 'running' %}
+                  <i data-lucide="eye" style="width:12px; height:12px;"></i> Ver progreso
+                {% else %}
+                  <i data-lucide="list" style="width:12px; height:12px;"></i> Ver resultados
+                {% endif %}
+              </a>
+            {% endif %}
+            <a href="{{ url_for('busqueda_eliminar', busqueda_id=b.id) }}" class="btn btn-secondary btn-sm" style="color:var(--color-danger); border-color:rgba(197,51,54,0.2);" onclick="return confirm('¿Seguro que deseas eliminar esta búsqueda?')">
+              <i data-lucide="trash-2" style="width:12px; height:12px;"></i>
+            </a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="text-align:center; padding:40px 20px; color:var(--color-text-muted);">
+    <i data-lucide="search" style="width:48px; height:48px; stroke-width:1; margin-bottom:12px;"></i>
+    <p>Este cliente no tiene búsquedas de vivienda configuradas aún.</p>
+    <p style="font-size:13px; margin-top:8px;">Haz clic en el botón de arriba para configurar e iniciar la primera búsqueda.</p>
+  </div>
+  {% endif %}
 </div>
 
+<style>
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+</style>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 {% endblock %}

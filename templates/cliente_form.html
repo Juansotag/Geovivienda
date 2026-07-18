@@ -1,100 +1,119 @@
 {% extends "base.html" %}
-{% block title %}Nuevo cliente — Casa en Casa{% endblock %}
+{% block title %}{% if cliente %}Editar Cliente{% else %}Nuevo Cliente{% endif %} — Casa en Casa{% endblock %}
 {% block content %}
-<h1>Nuevo cliente</h1>
+<div class="page-header">
+  <h1>{% if cliente %}Editar Cliente{% else %}Nuevo Cliente{% endif %}</h1>
+  <a href="{{ url_for('clientes') }}" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:8px;"><i data-lucide="arrow-left" style="width:16px; height:16px;"></i> Volver</a>
+</div>
 
-<form class="card" method="post" action="{{ url_for('cliente_nuevo') }}">
-  <h3 style="margin-top:0;">Datos personales</h3>
+<form class="card" method="post" action="{% if cliente %}{{ url_for('cliente_editar', cliente_id=cliente.id) }}{% else %}{{ url_for('cliente_nuevo') }}{% endif %}">
+  <h3>Datos Personales</h3>
   <div class="form-grid">
     <div class="form-group">
       <label for="nombre">Nombre completo</label>
-      <input type="text" id="nombre" name="nombre" required placeholder="Juan Carlos Ramírez Pérez">
+      <input type="text" id="nombre" name="nombre" required placeholder="Ej: Juan Carlos Ramírez" value="{{ cliente.nombre if cliente else '' }}">
     </div>
     <div class="form-group">
-      <label for="pais_residencia">País donde vive</label>
-      <input type="text" id="pais_residencia" name="pais_residencia" required placeholder="España">
+      <label for="tipo_identificacion">Tipo de Identificación</label>
+      <select id="tipo_identificacion" name="tipo_identificacion" required>
+        <option value="Cédula de Ciudadanía" {% if cliente and cliente.tipo_identificacion == 'Cédula de Ciudadanía' %}selected{% endif %}>Cédula de Ciudadanía</option>
+        <option value="Cédula de Extranjería" {% if cliente and cliente.tipo_identificacion == 'Cédula de Extranjería' %}selected{% endif %}>Cédula de Extranjería</option>
+        <option value="Pasaporte" {% if cliente and cliente.tipo_identificacion == 'Pasaporte' %}selected{% endif %}>Pasaporte</option>
+        <option value="Otro" {% if cliente and cliente.tipo_identificacion == 'Otro' %}selected{% endif %}>Otro</option>
+      </select>
     </div>
     <div class="form-group">
-      <label for="ciudad_residencia">Ciudad donde vive</label>
-      <input type="text" id="ciudad_residencia" name="ciudad_residencia" required placeholder="Madrid">
+      <label for="numero_identificacion">Número de Identificación</label>
+      <input type="text" id="numero_identificacion" name="numero_identificacion" required placeholder="Ej: 1020304050" value="{{ cliente.numero_identificacion if cliente else '' }}">
+    </div>
+    <div class="form-group">
+      <label for="pais_residencia">País de residencia</label>
+      <select id="pais_residencia" name="pais_residencia" required>
+        <option value="España" {% if cliente and cliente.pais_residencia == 'España' %}selected{% endif %}>España</option>
+        <option value="Estados Unidos" {% if cliente and cliente.pais_residencia == 'Estados Unidos' %}selected{% endif %}>Estados Unidos</option>
+        <option value="Canadá" {% if cliente and cliente.pais_residencia == 'Canadá' %}selected{% endif %}>Canadá</option>
+        <option value="Reino Unido" {% if cliente and cliente.pais_residencia == 'Reino Unido' %}selected{% endif %}>Reino Unido</option>
+        <option value="Australia" {% if cliente and cliente.pais_residencia == 'Australia' %}selected{% endif %}>Australia</option>
+        <option value="Francia" {% if cliente and cliente.pais_residencia == 'Francia' %}selected{% endif %}>Francia</option>
+        <option value="Alemania" {% if cliente and cliente.pais_residencia == 'Alemania' %}selected{% endif %}>Alemania</option>
+        <option value="Chile" {% if cliente and cliente.pais_residencia == 'Chile' %}selected{% endif %}>Chile</option>
+        <option value="México" {% if cliente and cliente.pais_residencia == 'México' %}selected{% endif %}>México</option>
+        <option value="Panamá" {% if cliente and cliente.pais_residencia == 'Panamá' %}selected{% endif %}>Panamá</option>
+        <option value="Ecuador" {% if cliente and cliente.pais_residencia == 'Ecuador' %}selected{% endif %}>Ecuador</option>
+        <option value="Perú" {% if cliente and cliente.pais_residencia == 'Perú' %}selected{% endif %}>Perú</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="ciudad_residencia">Ciudad de residencia</label>
+      <input type="text" id="ciudad_residencia" name="ciudad_residencia" required placeholder="Ej: Madrid, Miami, Toronto" value="{{ cliente.ciudad_residencia if cliente else '' }}">
     </div>
   </div>
 
-  <h3>Capacidad financiera</h3>
+  <hr style="border:0; border-top:1px solid var(--color-border); margin:20px 0;">
+
+  <h3>Datos Financieros</h3>
   <div class="form-grid">
     <div class="form-group">
-      <label for="ingreso_mensual">Ingreso mensual</label>
-      <input type="number" id="ingreso_mensual" name="ingreso_mensual" required placeholder="2200" step="0.01">
+      <label for="ingreso_mensual">Ingreso neto mensual (Moneda de origen)</label>
+      <input type="number" id="ingreso_mensual" name="ingreso_mensual" required placeholder="2500" step="0.01" value="{{ cliente.ingreso_mensual if cliente else '' }}">
     </div>
     <div class="form-group">
-      <label for="ingreso_moneda">Moneda</label>
-      <select id="ingreso_moneda" name="ingreso_moneda">
-        <option value="EUR">EUR</option>
-        <option value="USD">USD</option>
+      <label for="ingreso_moneda">Moneda de origen</label>
+      <select id="ingreso_moneda" name="ingreso_moneda" required onchange="convertirValores()">
+        <option value="EUR" {% if cliente and cliente.ingreso_moneda == 'EUR' %}selected{% endif %}>EUR (Euro)</option>
+        <option value="USD" {% if cliente and cliente.ingreso_moneda == 'USD' %}selected{% endif %}>USD (Dólar estadounidense)</option>
+        <option value="CAD" {% if cliente and cliente.ingreso_moneda == 'CAD' %}selected{% endif %}>CAD (Dólar canadiense)</option>
+        <option value="GBP" {% if cliente and cliente.ingreso_moneda == 'GBP' %}selected{% endif %}>GBP (Libra esterlina)</option>
+        <option value="AUD" {% if cliente and cliente.ingreso_moneda == 'AUD' %}selected{% endif %}>AUD (Dólar australiano)</option>
       </select>
-      <span class="fx-hint" id="fx-hint">Equivale a — COP/mes</span>
+      <span class="fx-hint" id="fx-hint">
+        {% if cliente and cliente.ingreso_mensual_cop %}Equivale a ${{ "{:,.0f}".format(cliente.ingreso_mensual_cop) }} COP/mes{% else %}Equivale a — COP/mes{% endif %}
+      </span>
     </div>
     <div class="form-group">
-      <label for="ahorro_mensual">Ahorro disponible para cuota (mensual, en la misma moneda)</label>
-      <input type="number" id="ahorro_mensual" name="ahorro_mensual" required placeholder="300" step="0.01">
-      <span class="fx-hint" id="fx-hint-ahorro">Equivale a — COP/mes</span>
+      <label for="ahorro_mensual">Ahorro mensual disponible</label>
+      <input type="number" id="ahorro_mensual" name="ahorro_mensual" required placeholder="400" step="0.01" value="{{ cliente.ahorro_mensual if cliente else '' }}">
+      <span class="fx-hint" id="fx-hint-ahorro">
+        {% if cliente and cliente.ahorro_mensual_cop %}Equivale a ${{ "{:,.0f}".format(cliente.ahorro_mensual_cop) }} COP/mes{% else %}Equivale a — COP/mes{% endif %}
+      </span>
     </div>
   </div>
 
-  <h3>Qué está buscando</h3>
-  <div class="form-grid">
-    <div class="form-group">
-      <label for="tipo_vivienda">Tipo de vivienda</label>
-      <select id="tipo_vivienda" name="tipo_vivienda">
-        <option value="apartamento">Apartamento</option>
-        <option value="casa">Casa</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label for="estado_deseado">Usado o nuevo</label>
-      <select id="estado_deseado" name="estado_deseado">
-        <option value="usado">Usado</option>
-        <option value="nuevo">Nuevo (proyecto)</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label for="estrato_objetivo">Estrato objetivo</label>
-      <select id="estrato_objetivo" name="estrato_objetivo">
-        {% for e in range(1, 7) %}<option value="{{ e }}">{{ e }}</option>{% endfor %}
-      </select>
-    </div>
-    <div class="form-group">
-      <label for="habitaciones_min">Habitaciones mínimas</label>
-      <input type="number" id="habitaciones_min" name="habitaciones_min" value="2" min="1">
-    </div>
-    <div class="form-group">
-      <label for="banos_min">Baños mínimos</label>
-      <input type="number" id="banos_min" name="banos_min" value="1" min="1">
-    </div>
-    <div class="form-group">
-      <label for="presupuesto_min">Presupuesto mínimo (COP)</label>
-      <input type="number" id="presupuesto_min" name="presupuesto_min" value="200000000">
-    </div>
-    <div class="form-group">
-      <label for="presupuesto_max">Presupuesto máximo (COP)</label>
-      <input type="number" id="presupuesto_max" name="presupuesto_max" value="300000000">
-    </div>
-  </div>
-
-  <h3>Ciudades de interés</h3>
-  <div class="checkbox-group">
-    {% for ciudad in ciudades %}
-    <label>
-      <input type="checkbox" name="ciudades_interes" value="{{ ciudad.slug }}" {{ 'checked' if ciudad.slug == 'bogota' else '' }} {{ 'disabled' if not ciudad.activa else '' }}>
-      {{ ciudad.nombre }}{{ '' if ciudad.activa else ' (próximamente)' }}
-    </label>
-    {% endfor %}
-  </div>
-
-  <div style="margin-top:20px;">
-    <button type="submit" class="btn btn-primary">Guardar cliente</button>
+  <div style="margin-top:30px;">
+    <button type="submit" class="btn btn-primary">{% if cliente %}Guardar cambios{% else %}Crear cliente{% endif %}</button>
   </div>
 </form>
 
+<script>
+  function convertirValores() {
+    const moneda = document.getElementById("ingreso_moneda").value;
+    const ingreso = parseFloat(document.getElementById("ingreso_mensual").value) || 0;
+    const ahorro = parseFloat(document.getElementById("ahorro_mensual").value) || 0;
+
+    if (ingreso > 0) {
+      fetch(`/api/fx?monto=${ingreso}&moneda=${moneda}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.cop) {
+            document.getElementById("fx-hint").textContent = `Equivale a $${data.cop.toLocaleString('es-CO', {maximumFractionDigits:0})} COP/mes`;
+          }
+        });
+    }
+
+    if (ahorro > 0) {
+      fetch(`/api/fx?monto=${ahorro}&moneda=${moneda}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.cop) {
+            document.getElementById("fx-hint-ahorro").textContent = `Equivale a $${data.cop.toLocaleString('es-CO', {maximumFractionDigits:0})} COP/mes`;
+          }
+        });
+    }
+  }
+
+  // Bind conversion listeners
+  document.getElementById("ingreso_mensual").addEventListener("input", convertirValores);
+  document.getElementById("ahorro_mensual").addEventListener("input", convertirValores);
+</script>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 {% endblock %}

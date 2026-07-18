@@ -31,6 +31,24 @@ def buscar_anuncio_por_url(url: str) -> dict | None:
         return cur.fetchone()
 
 
+def obtener_hexagono(h3_index: str) -> dict | None:
+    with get_cursor() as cur:
+        cur.execute("SELECT * FROM hexagonos WHERE h3_index = %s", (h3_index,))
+        return cur.fetchone()
+
+
+def insertar_hexagono(datos: dict):
+    columnas = list(datos.keys())
+    placeholders = [f"%({c})s" for c in columnas]
+    query = f"""
+        INSERT INTO hexagonos ({', '.join(columnas)})
+        VALUES ({', '.join(placeholders)})
+        ON CONFLICT (h3_index) DO NOTHING
+    """
+    with get_cursor() as cur:
+        cur.execute(query, datos)
+
+
 def _preparar_datos(datos: dict) -> tuple[dict, list[str]]:
     """Convierte valores list/dict a JSON (para columnas JSONB) y devuelve
     tambien la lista de columnas que necesitan el cast ::jsonb en el SQL,
@@ -98,15 +116,16 @@ def buscar_anuncio_por_id(anuncio_id: int) -> dict | None:
         return cur.fetchone()
 
 
-def crear_busqueda(cliente_id: int, portales: list[str], cantidad: int) -> int:
+def crear_busqueda(datos: dict) -> int:
+    preparados, columnas_jsonb = _preparar_datos(datos)
+    columnas = list(preparados.keys())
+    placeholders = [f"%({c})s::jsonb" if c in columnas_jsonb else f"%({c})s" for c in columnas]
+    query = f"""
+        INSERT INTO busquedas ({', '.join(columnas)})
+        VALUES ({', '.join(placeholders)}) RETURNING id
+    """
     with get_cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO busquedas (cliente_id, portales, cantidad_solicitada, status, log)
-            VALUES (%s, %s, %s, 'running', '[]'::jsonb) RETURNING id
-            """,
-            (cliente_id, json.dumps(portales), cantidad),
-        )
+        cur.execute(query, preparados)
         return cur.fetchone()["id"]
 
 
@@ -170,7 +189,8 @@ def obtener_resultados_busqueda(busqueda_id: int) -> list[dict]:
     with get_cursor() as cur:
         cur.execute(
             """
-            SELECT a.*, rb.score, rb.es_top,
+            SELECT a.*, h.dist_sitp, h.dist_tm, h.dist_ciclo, h.estrato_promedio_200m,
+                   rb.score, rb.es_top,
                    (SELECT r.id FROM reportes r
                     WHERE r.anuncio_id = a.id AND r.cliente_id = (
                         SELECT cliente_id FROM busquedas WHERE id = %s
@@ -178,6 +198,7 @@ def obtener_resultados_busqueda(busqueda_id: int) -> list[dict]:
                     ORDER BY r.generado_en DESC LIMIT 1) AS reporte_id
             FROM resultados_busqueda rb
             JOIN anuncios a ON a.id = rb.anuncio_id
+            LEFT JOIN hexagonos h ON h.h3_index = a.h3_index
             WHERE rb.busqueda_id = %s
             ORDER BY rb.score DESC
             """,
@@ -190,3 +211,174 @@ def limpiar_reportes_vencidos() -> int:
     with get_cursor() as cur:
         cur.execute("DELETE FROM reportes WHERE expires_at < now()")
         return cur.rowcount
+
+
+def actualizar_cliente(cliente_id: int, datos: dict):
+    preparados, columnas_jsonb = _preparar_datos(datos)
+    updates = []
+    for c in preparados.keys():
+        if c in columnas_jsonb:
+            updates.append(f"{c} = %({c})s::jsonb")
+        else:
+            updates.append(f"{c} = %({c})s")
+    query = f"""
+        UPDATE clientes
+        SET {', '.join(updates)}
+        WHERE id = %(cliente_id)s
+    """
+    preparados["cliente_id"] = cliente_id
+    with get_cursor() as cur:
+        cur.execute(query, preparados)
+
+
+def eliminar_cliente(cliente_id: int):
+    with get_cursor() as cur:
+        cur.execute("DELETE FROM reportes WHERE cliente_id = %s", (cliente_id,))
+        cur.execute("DELETE FROM resultados_busqueda WHERE busqueda_id IN (SELECT id FROM busquedas WHERE cliente_id = %s)", (cliente_id,))
+        cur.execute("DELETE FROM busquedas WHERE cliente_id = %s", (cliente_id,))
+        cur.execute("DELETE FROM clientes WHERE id = %s", (cliente_id,))
+
+
+def eliminar_anuncio(anuncio_id: int):
+    with get_cursor() as cur:
+        cur.execute("DELETE FROM reportes WHERE anuncio_id = %s", (anuncio_id,))
+        cur.execute("DELETE FROM resultados_busqueda WHERE anuncio_id = %s", (anuncio_id,))
+        cur.execute("DELETE FROM anuncios WHERE id = %s", (anuncio_id,))
+
+
+def eliminar_busqueda(busqueda_id: int):
+    with get_cursor() as cur:
+        cur.execute("DELETE FROM resultados_busqueda WHERE busqueda_id = %s", (busqueda_id,))
+        cur.execute("DELETE FROM busquedas WHERE id = %s", (busqueda_id,))
+
+
+def obtener_perfil() -> dict:
+    with get_cursor() as cur:
+        cur.execute("SELECT * FROM perfil LIMIT 1")
+        perfil = cur.fetchone()
+        if not perfil:
+            cur.execute(
+                "INSERT INTO perfil (nombre, correo, cargo) VALUES (%s, %s, %s) RETURNING *",
+                ("Funcionario Casa en Casa", "funcionario@casaencasa-co.com", "Asesor de vivienda")
+            )
+            perfil = cur.fetchone()
+        return perfil
+
+
+def actualizar_perfil(nombre: str, correo: str, cargo: str):
+    with get_cursor() as cur:
+        cur.execute("SELECT id FROM perfil LIMIT 1")
+        row = cur.fetchone()
+        if row:
+            cur.execute(
+                "UPDATE perfil SET nombre = %s, correo = %s, cargo = %s WHERE id = %s",
+                (nombre, correo, cargo, row["id"])
+            )
+        else:
+            cur.execute(
+                "INSERT INTO perfil (nombre, correo, cargo) VALUES (%s, %s, %s)",
+                (nombre, correo, cargo)
+            )
+
+
+def obtener_todas_busquedas() -> list[dict]:
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            SELECT b.*, c.nombre AS cliente_nombre,
+                   (SELECT COUNT(*) FROM resultados_busqueda rb WHERE rb.busqueda_id = b.id) AS encontrados,
+                   (SELECT COUNT(*) FROM resultados_busqueda rb WHERE rb.busqueda_id = b.id AND rb.es_top = TRUE) AS tops,
+                   COALESCE(EXTRACT(EPOCH FROM (b.terminada_en - b.creada_en))::integer, 0) AS duracion_segundos
+            FROM busquedas b
+            JOIN clientes c ON c.id = b.cliente_id
+            ORDER BY b.creada_en DESC
+            """
+        )
+        return cur.fetchall()
+
+
+def obtener_todos_anuncios_con_scores() -> list[dict]:
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            SELECT a.*, h.dist_sitp, h.dist_tm, h.dist_ciclo, h.estrato_promedio_200m,
+                   jsonb_agg(
+                       jsonb_build_object(
+                           'cliente_nombre', c.nombre,
+                           'score', rb.score
+                       )
+                   ) AS compatibilidades
+            FROM anuncios a
+            LEFT JOIN hexagonos h ON h.h3_index = a.h3_index
+            JOIN resultados_busqueda rb ON rb.anuncio_id = a.id
+            JOIN busquedas b ON b.id = rb.busqueda_id
+            JOIN clientes c ON c.id = b.cliente_id
+            GROUP BY a.id, h.h3_index, h.dist_sitp, h.dist_tm, h.dist_ciclo, h.estrato_promedio_200m
+            ORDER BY a.primera_vez_visto DESC
+            """
+        )
+        return cur.fetchall()
+
+
+def obtener_anuncio(anuncio_id: int) -> dict:
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            SELECT a.*, h.dist_sitp, h.dist_tm, h.dist_ciclo, h.estrato_promedio_200m
+            FROM anuncios a
+            LEFT JOIN hexagonos h ON h.h3_index = a.h3_index
+            WHERE a.id = %s
+            """,
+            (anuncio_id,)
+        )
+        return cur.fetchone()
+
+
+def actualizar_anuncio(anuncio_id: int, datos: dict):
+    updates = []
+    preparados = {}
+    for c, v in datos.items():
+        updates.append(f"{c} = %({c})s")
+        preparados[c] = v
+    query = f"""
+        UPDATE anuncios
+        SET {', '.join(updates)}
+        WHERE id = %(anuncio_id)s
+    """
+    preparados["anuncio_id"] = anuncio_id
+    with get_cursor() as cur:
+        cur.execute(query, preparados)
+
+
+def obtener_busquedas_cliente(cliente_id: int) -> list[dict]:
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            SELECT b.*,
+                   (SELECT COUNT(*) FROM resultados_busqueda rb WHERE rb.busqueda_id = b.id) AS encontrados,
+                   (SELECT COUNT(*) FROM resultados_busqueda rb WHERE rb.busqueda_id = b.id AND rb.es_top = TRUE) AS tops,
+                   COALESCE(EXTRACT(EPOCH FROM (b.terminada_en - b.creada_en))::integer, 0) AS duracion_segundos
+            FROM busquedas b
+            WHERE b.cliente_id = %s
+            ORDER BY b.creada_en DESC
+            """,
+            (cliente_id,)
+        )
+        return cur.fetchall()
+
+
+def eliminar_busqueda(busqueda_id: int):
+    with get_cursor() as cur:
+        cur.execute("DELETE FROM busquedas WHERE id = %s", (busqueda_id,))
+
+
+def actualizar_busqueda_status(busqueda_id: int, status: str):
+    with get_cursor() as cur:
+        cur.execute(
+            "UPDATE busquedas SET status = %s, terminada_en = NULL WHERE id = %s",
+            (status, busqueda_id),
+        )
+
+
+
+

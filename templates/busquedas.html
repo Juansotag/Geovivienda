@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Historial de Búsquedas — Casa en Casa{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Historial de Búsquedas</h1>
+  <a href="{{ url_for('busqueda_nueva') }}" class="btn btn-primary">Nueva Búsqueda</a>
+</div>
+
+<div class="card">
+  {% if busquedas %}
+  <div class="table-responsive">
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Cliente</th>
+          <th>Plataformas</th>
+          <th>Cantidad Solicitada</th>
+          <th>Encontrados</th>
+          <th>Informes Top</th>
+          <th>Duración</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in busquedas %}
+        <tr>
+          <td>{{ b.creada_en.strftime('%d/%m/%Y %H:%M') if b.creada_en else '—' }}</td>
+          <td style="font-weight: 600;">{{ b.cliente_nombre }}</td>
+          <td>
+            {% for p in (b.portales or []) %}
+              <span style="font-size: 11px; font-weight:600; padding: 2px 6px; background:#E2E4E9; border-radius: var(--radius-sm); margin-right:4px;">{{ p | capitalize }}</span>
+            {% endfor %}
+          </td>
+          <td>{{ b.cantidad_solicitada }}</td>
+          <td>{{ b.encontrados }}</td>
+          <td>{{ b.tops }}</td>
+          <td>
+            {% if b.duracion_segundos > 60 %}
+              {{ (b.duracion_segundos // 60) }}m {{ (b.duracion_segundos % 60) }}s
+            {% elif b.duracion_segundos > 0 %}
+              {{ b.duracion_segundos }}s
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td>
+            {% if b.status == 'done' %}
+              <span class="badge" style="background-color: #D4EDDA; color: #155724;">Completado</span>
+            {% elif b.status == 'running' %}
+              <span class="badge" style="background-color: #CCE5FF; color: #004085;">Corriendo...</span>
+            {% elif b.status == 'error' %}
+              <span class="badge" style="background-color: #F8D7DA; color: #721C24;">Falló</span>
+            {% elif b.status == 'pendiente' %}
+              <span class="badge" style="background-color: #FFF3CD; color: #856404;">Pendiente</span>
+            {% else %}
+              <span class="badge" style="background-color: #E2E4E9; color: var(--color-text);">{{ b.status | capitalize }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              {% if b.status == 'pendiente' %}
+                <a href="{{ url_for('busqueda_lanzar', busqueda_id=b.id) }}" class="btn btn-primary btn-sm" style="background-color: #28a745; border-color: #28a745; color: white;">Lanzar</a>
+              {% else %}
+                <a href="{{ url_for('cliente_resultados', cliente_id=b.cliente_id, busqueda_id=b.id) }}" class="btn btn-secondary btn-sm">
+                  {% if b.status == 'running' %}Progreso{% else %}Resultados{% endif %}
+                </a>
+              {% endif %}
+              <a href="{{ url_for('busqueda_eliminar', busqueda_id=b.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('¿Seguro que deseas eliminar esta búsqueda?')">Eliminar</a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p style="color: var(--color-text-muted); text-align: center; padding: 20px 0;">Aún no se han ejecutado búsquedas históricas.</p>
+  {% endif %}
+</div>
+{% endblock %}

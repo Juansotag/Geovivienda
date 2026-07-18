@@ -1,37 +1,60 @@
 {% extends "base.html" %}
 {% block title %}Clientes — Casa en Casa{% endblock %}
 {% block content %}
-<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-  <h1 style="margin:0;">Clientes</h1>
+<div class="page-header">
+  <h1>Clientes</h1>
   <a href="{{ url_for('cliente_nuevo') }}" class="btn btn-primary">+ Nuevo cliente</a>
 </div>
 
 <div class="card">
   {% if clientes %}
-  <table>
-    <thead>
-      <tr>
-        <th>Nombre</th>
-        <th>Origen</th>
-        <th>Presupuesto</th>
-        <th>Ciudad de interés</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for c in clientes %}
-      <tr>
-        <td>{{ c.nombre }}</td>
-        <td>{{ c.ciudad_residencia }}, {{ c.pais_residencia }}</td>
-        <td>${{ "{:,.0f}".format(c.presupuesto_min or 0) }} – ${{ "{:,.0f}".format(c.presupuesto_max or 0) }} COP</td>
-        <td>{{ (c.ciudades_interes or []) | join(', ') }}</td>
-        <td><a href="{{ url_for('cliente_detalle', cliente_id=c.id) }}" class="btn btn-secondary btn-sm">Ver</a></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-responsive">
+    <table>
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Residencia</th>
+          <th>Ingreso Mensual</th>
+          <th>Tipo Vivienda</th>
+          <th>Estado</th>
+          <th>Uso Previsto</th>
+          <th style="width: 220px;">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in clientes %}
+        <tr>
+          <td style="font-weight: 600;">{{ c.nombre }}</td>
+          <td>{{ c.ciudad_residencia }}, {{ c.pais_residencia }}</td>
+          <td>
+            {{ "{:,.2f}".format(c.ingreso_mensual or 0) }} {{ c.ingreso_moneda }}
+            <div class="fx-hint" style="margin-top:2px;">
+              ~${{ "{:,.0f}".format(c.ingreso_mensual_cop or 0) }} COP
+            </div>
+          </td>
+          <td style="text-transform: capitalize;">{{ c.tipo_vivienda }}</td>
+          <td style="text-transform: capitalize;">{{ c.estado_deseado }}</td>
+          <td style="text-transform: capitalize;">
+            {% if c.uso_previsto == 'vivir' %}Vivir
+            {% elif c.uso_previsto == 'arrendar' %}Arrendar
+            {% else %}Indeciso{% endif %}
+          </td>
+          <td>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <a href="{{ url_for('cliente_detalle', cliente_id=c.id) }}" class="btn btn-secondary btn-sm">Ver</a>
+              <a href="{{ url_for('cliente_editar', cliente_id=c.id) }}" class="btn btn-secondary btn-sm">Editar</a>
+              <form action="{{ url_for('cliente_eliminar', cliente_id=c.id) }}" method="post" onsubmit="return confirm('¿Seguro que deseas eliminar este cliente?');" style="margin: 0; display: inline-flex;">
+                <button type="submit" class="btn btn-danger btn-sm">Eliminar</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% else %}
-  <p>Todavía no hay clientes registrados. Crea el primero con "+ Nuevo cliente".</p>
+  <p style="color: var(--color-text-muted); text-align: center; padding: 20px 0;">Todavía no hay clientes registrados. Crea el primero con "+ Nuevo cliente".</p>
   {% endif %}
 </div>
 {% endblock %}

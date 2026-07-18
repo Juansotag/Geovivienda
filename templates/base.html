@@ -5,17 +5,52 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Casa en Casa — Match{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
   <div class="layout">
     <aside class="sidebar">
-      <img src="{{ url_for('static', filename='img/logo-casa-en-casa.png') }}" alt="Casa en Casa">
+      <div class="sidebar-logo">
+        <img src="{{ url_for('static', filename='img/logo-casa-en-casa.png') }}" alt="Casa en Casa">
+      </div>
+      
+      <!-- Targeta de Perfil del Funcionario -->
+      <div class="profile-card">
+        <div class="profile-name">{{ perfil.nombre }}</div>
+        <div class="profile-email">{{ perfil.correo }}</div>
+        <div class="profile-role">{{ perfil.cargo }}</div>
+        <a href="{{ url_for('perfil') }}" class="profile-edit-btn" title="Editar Perfil"><i data-lucide="edit-3"></i></a>
+      </div>
+
+      <!-- Navegación del Workspace -->
       <nav>
-        <a href="{{ url_for('perfil') }}" class="{{ 'activo' if activo == 'perfil' else '' }}">Perfil</a>
-        <a href="{{ url_for('clientes') }}" class="{{ 'activo' if activo == 'clientes' else '' }}">Clientes</a>
+        <a href="{{ url_for('clientes') }}" class="{{ 'activo' if activo == 'clientes' else '' }}">
+          <i data-lucide="users"></i> Clientes
+        </a>
+        <a href="{{ url_for('busquedas') }}" class="{{ 'activo' if activo == 'busquedas' else '' }}">
+          <i data-lucide="search"></i> Búsquedas
+        </a>
+        <a href="{{ url_for('inmuebles') }}" class="{{ 'activo' if activo == 'inmuebles' else '' }}">
+          <i data-lucide="home"></i> Inmuebles
+        </a>
+        <a href="{{ url_for('mapa') }}" class="{{ 'activo' if activo == 'mapa' else '' }}">
+          <i data-lucide="map"></i> Mapa
+        </a>
       </nav>
+
+      <div style="flex-grow: 1;"></div>
+
+      <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 16px 0;">
+      <a href="{{ url_for('logout') }}" style="color: #FF8A8A; font-weight: 600; display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: var(--radius-default); transition: background-color 0.2s ease; text-decoration: none;" onmouseover="this.style.backgroundColor='rgba(255,255,255,0.05)'" onmouseout="this.style.backgroundColor='transparent'">
+        <i data-lucide="log-out" style="width: 18px; height: 18px;"></i> Cerrar sesión
+      </a>
     </aside>
-    <main>{% block content %}{% endblock %}</main>
+    <main>
+      {% block content %}{% endblock %}
+    </main>
   </div>
+  <script>
+    lucide.createIcons();
+  </script>
 </body>
 </html>

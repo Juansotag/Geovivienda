@@ -29,11 +29,20 @@ def _score_estrato(cliente: dict, anuncio: dict) -> float:
     return max(0.0, 1 - abs(objetivo - real) / 3)
 
 
-def _score_habitaciones_banos(cliente: dict, anuncio: dict) -> float:
-    hab_min = cliente.get("habitaciones_min") or 0
-    banos_min = cliente.get("banos_min") or 0
-    hab_ok = (anuncio.get("habitaciones") or 0) >= hab_min
-    banos_ok = (anuncio.get("banos") or 0) >= banos_min
+def _score_habitaciones_banos(criterios: dict, anuncio: dict) -> float:
+    hab_min = criterios.get("habitaciones_min") or 0
+    banos_min = criterios.get("banos_min") or 0
+    
+    if criterios.get("habitaciones_exactas"):
+        hab_ok = (anuncio.get("habitaciones") or 0) == hab_min
+    else:
+        hab_ok = (anuncio.get("habitaciones") or 0) >= hab_min
+        
+    if criterios.get("banos_exactos"):
+        banos_ok = (anuncio.get("banos") or 0) == banos_min
+    else:
+        banos_ok = (anuncio.get("banos") or 0) >= banos_min
+        
     return (hab_ok + banos_ok) / 2
 
 

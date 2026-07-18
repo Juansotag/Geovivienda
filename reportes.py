@@ -1,6 +1,7 @@
 from io import BytesIO
 
 import anthropic
+import markdown
 from dotenv import load_dotenv
 from xhtml2pdf import pisa
 
@@ -114,12 +115,13 @@ def crear_y_guardar_reporte(cliente: dict, anuncio: dict, score: dict) -> int:
 
 
 def _envolver_en_html(texto: str, cliente: dict, anuncio: dict, score: dict) -> str:
-    parrafos = "".join(f"<p>{linea}</p>" for linea in texto.split("\n") if linea.strip())
+    html_contenido = markdown.markdown(texto)
     return f"""
-    <html><body style="font-family: Montserrat, sans-serif; color: #2F3670; max-width: 700px;">
+    <html><head><meta charset="utf-8"></head>
+    <body style="font-family: Montserrat, sans-serif; color: #2F3670; max-width: 700px;">
       <h1 style="color:#2F3670;">Reporte de vivienda — {cliente.get('nombre', '')}</h1>
       <p><strong>Score:</strong> {score['total']:.2f} / 1.0</p>
-      {parrafos}
+      {html_contenido}
       <p><a href="{anuncio.get('url', '')}">Ver anuncio original</a></p>
     </body></html>
     """

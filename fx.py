@@ -1,6 +1,25 @@
 import requests
 
-_FALLBACK_RATES = {"EUR": 4700, "USD": 4300}  # actualizar manualmente si la API falla
+_FALLBACK_RATES = {
+    "EUR": 4600.0,
+    "USD": 4200.0,
+    "CAD": 3100.0,
+    "AUD": 2800.0,
+    "NZD": 2600.0,
+    "GBP": 5400.0,
+    "MXN": 230.0,
+    "BRL": 760.0,
+    "PEN": 1120.0,
+    "CLP": 4.5,
+    "ARS": 4.8,
+    "JPY": 27.0,
+    "KRW": 3.1,
+    "CNY": 580.0,
+    "AED": 1140.0,
+    "QAR": 1150.0,
+    "KWD": 13700.0,
+    "SAR": 1120.0
+}  # Tasas fijas razonables de respaldo a COP si la API no cubre la moneda o falla
 
 
 def convertir_a_cop(monto: float, moneda_origen: str) -> float:

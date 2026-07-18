@@ -1,15 +1,24 @@
 {% extends "base.html" %}
-{% block title %}Mi perfil — Casa en Casa{% endblock %}
+{% block title %}Mi Perfil — Casa en Casa{% endblock %}
 {% block content %}
-<h1>Mi perfil</h1>
-<div class="card" style="max-width:400px;">
-  <div class="form-group">
-    <label>Nombre</label>
-    <input type="text" value="Funcionario Casa en Casa" disabled>
-  </div>
-  <div class="form-group">
-    <label>Cargo</label>
-    <input type="text" value="Asesor de vivienda" disabled>
-  </div>
+<div class="page-header">
+  <h1>Mi Perfil</h1>
+  <a href="{{ url_for('clientes') }}" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:8px;"><i data-lucide="arrow-left" style="width:16px; height:16px;"></i> Volver</a>
 </div>
+
+<form class="card" method="post" action="{{ url_for('perfil') }}" style="max-width: 500px;">
+  <div class="form-group">
+    <label for="nombre">Nombre Completo</label>
+    <input type="text" id="nombre" name="nombre" value="{{ perfil.nombre }}" required placeholder="Funcionario Casa en Casa">
+  </div>
+  <div class="form-group">
+    <label for="correo">Correo Electrónico</label>
+    <input type="email" id="correo" name="correo" value="{{ perfil.correo }}" required placeholder="funcionario@casaencasa-co.com">
+  </div>
+  <div class="form-group">
+    <label for="cargo">Cargo / Puesto</label>
+    <input type="text" id="cargo" name="cargo" value="{{ perfil.cargo }}" required placeholder="Asesor de vivienda">
+  </div>
+  <button type="submit" class="btn btn-primary" style="margin-top: 12px;">Guardar Cambios</button>
+</form>
 {% endblock %}

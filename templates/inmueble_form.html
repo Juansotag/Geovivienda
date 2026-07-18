@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Editar Inmueble — Casa en Casa{% endblock %}
+{% block content %}
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+<div class="page-header">
+  <h1>Editar Inmueble</h1>
+  <a href="{{ url_for('inmuebles') }}" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:8px;"><i data-lucide="arrow-left" style="width:16px; height:16px;"></i> Volver</a>
+</div>
+
+<form class="card" method="post" action="{{ url_for('anuncio_editar', anuncio_id=anuncio.id) }}">
+  <h3>Características del Inmueble</h3>
+  <div class="form-grid">
+    <div class="form-group">
+      <label for="tipo_inmueble">Tipo de Inmueble</label>
+      <select id="tipo_inmueble" name="tipo_inmueble" required>
+        <option value="apartamento" {% if anuncio.tipo_inmueble == 'apartamento' %}selected{% endif %}>Apartamento</option>
+        <option value="casa" {% if anuncio.tipo_inmueble == 'casa' %}selected{% endif %}>Casa</option>
+        <option value="apartaestudio" {% if anuncio.tipo_inmueble == 'apartaestudio' %}selected{% endif %}>Apartaestudio</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="estado">Estado del Inmueble</label>
+      <select id="estado" name="estado" required>
+        <option value="usado" {% if anuncio.estado == 'usado' %}selected{% endif %}>Usado</option>
+        <option value="nuevo/proyecto" {% if anuncio.estado == 'nuevo/proyecto' %}selected{% endif %}>Nuevo / Proyecto</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="precio_venta">Precio de Venta (COP)</label>
+      <input type="number" id="precio_venta" name="precio_venta" required value="{{ anuncio.precio_venta or 0 }}">
+    </div>
+    <div class="form-group">
+      <label for="administracion">Administración (COP)</label>
+      <input type="number" id="administracion" name="administracion" value="{{ anuncio.administracion or 0 }}">
+    </div>
+    <div class="form-group">
+      <label for="estrato">Estrato</label>
+      <select id="estrato" name="estrato" required>
+        {% for e in range(1, 7) %}
+        <option value="{{ e }}" {% if anuncio.estrato == e %}selected{% endif %}>{{ e }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="area_metros">Área (m²)</label>
+      <input type="number" id="area_metros" name="area_metros" required step="0.1" value="{{ anuncio.area_metros or 0 }}">
+    </div>
+    <div class="form-group">
+      <label for="habitaciones">Habitaciones</label>
+      <input type="number" id="habitaciones" name="habitaciones" required value="{{ anuncio.habitaciones or 0 }}">
+    </div>
+    <div class="form-group">
+      <label for="banos">Baños</label>
+      <input type="number" id="banos" name="banos" required value="{{ anuncio.banos or 0 }}">
+    </div>
+    <div class="form-group">
+      <label for="parqueaderos">Parqueaderos</label>
+      <input type="number" id="parqueaderos" name="parqueaderos" value="{{ anuncio.parqueaderos or 0 }}">
+    </div>
+    <div class="form-group">
+      <label for="antiguedad">Antigüedad</label>
+      <input type="text" id="antiguedad" name="antiguedad" placeholder="Ej: 3 a 5 años, Sobre planos" value="{{ anuncio.antiguedad or '' }}">
+    </div>
+  </div>
+
+  <hr style="border:0; border-top:1px solid var(--color-border); margin:20px 0;">
+
+  <h3>Localización Geográfica</h3>
+  <div class="form-group" style="margin-bottom: 12px;">
+    <label for="ubicacion_texto">Dirección / Ubicación (Texto)</label>
+    <input type="text" id="ubicacion_texto" name="ubicacion_texto" required placeholder="Ej: Calle 140 # 12-34, Bogotá" value="{{ anuncio.ubicacion_texto or '' }}">
+  </div>
+
+  <div class="form-grid">
+    <div class="form-group">
+      <label for="latitud">Latitud</label>
+      <input type="number" id="latitud" name="latitud" required step="0.000001" value="{{ anuncio.latitud or 4.65 }}">
+    </div>
+    <div class="form-group">
+      <label for="longitud">Longitud</label>
+      <input type="number" id="longitud" name="longitud" required step="0.000001" value="{{ anuncio.longitud or -74.08 }}">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>Ubicación en el mapa (Haz clic o arrastra el marcador para ajustar)</label>
+    <div id="edit-map" style="height: 300px; width: 100%; border-radius: 8px; border: 1px solid var(--color-border);"></div>
+  </div>
+
+  <hr style="border:0; border-top:1px solid var(--color-border); margin:20px 0;">
+
+  <div class="form-group">
+    <label for="comodidades">Comodidades (Separadas por comas)</label>
+    <textarea id="comodidades" name="comodidades" placeholder="balcon, ascensor, parqueadero..." style="min-height:80px;">{{ anuncio.comodidades or '' }}</textarea>
+  </div>
+
+  <div class="form-group">
+    <label for="descripcion">Descripción Completa del Anuncio</label>
+    <textarea id="descripcion" name="descripcion" placeholder="Hermoso apartamento..." style="min-height:120px;">{{ anuncio.descripcion or '' }}</textarea>
+  </div>
+
+  <div style="margin-top:20px;">
+    <button type="submit" class="btn btn-primary">Guardar cambios</button>
+  </div>
+</form>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<script>
+  const initLat = parseFloat(document.getElementById("latitud").value) || 4.65;
+  const initLng = parseFloat(document.getElementById("longitud").value) || -74.08;
+
+  // Initialize Map
+  const map = L.map('edit-map').setView([initLat, initLng], 14);
+
+  // Add Voyager tiles
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; contributors &copy; CARTO',
+    maxZoom: 20
+  }).addTo(map);
+
+  // Add draggable Marker
+  const marker = L.marker([initLat, initLng], { draggable: true }).addTo(map);
+
+  // Function to update input fields when marker moves
+  function updateCoords(lat, lng) {
+    document.getElementById("latitud").value = lat.toFixed(6);
+    document.getElementById("longitud").value = lng.toFixed(6);
+  }
+
+  // Handle marker drag end event
+  marker.on('dragend', function (e) {
+    const latlng = marker.getLatLng();
+    updateCoords(latlng.lat, latlng.lng);
+  });
+
+  // Handle click on map to reposition marker
+  map.on('click', function (e) {
+    marker.setLatLng(e.latlng);
+    updateCoords(e.latlng.lat, e.latlng.lng);
+  });
+</script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% endblock %}

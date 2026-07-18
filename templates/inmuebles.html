@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Inventario de Inmuebles — Casa en Casa{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Inventario de Inmuebles</h1>
+</div>
+
+<div class="card">
+  {% if anuncios %}
+  <div class="table-responsive">
+    <table>
+      <thead>
+        <tr>
+          <th>Portal</th>
+          <th>Tipo / Estado</th>
+          <th>Uso / Precio</th>
+          <th>Ubicación / Área</th>
+          <th>Características</th>
+          <th>Compatibilidad por Cliente</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in anuncios %}
+        <tr>
+          <td>
+            <span style="font-size: 11px; font-weight:600; padding: 2px 6px; background:#E2E4E9; border-radius: var(--radius-sm); color: var(--color-primary-container);">
+              {{ a.portal | capitalize }}
+            </span>
+            <div class="fx-hint" style="margin-top:2px;">
+              <a href="{{ a.url }}" target="_blank" style="font-size:11px; color: var(--color-text-muted);">Ver original &nearr;</a>
+            </div>
+          </td>
+          <td>
+            <span style="font-weight:600; text-transform:capitalize;">{{ a.tipo_inmueble }}</span>
+            <div style="font-size:12px; color:var(--color-text-muted); text-transform:capitalize;">
+              {{ a.estado }}
+            </div>
+          </td>
+          <td>
+            <span style="font-weight:600; color:var(--color-primary);">
+              ${{ "{:,.0f}".format(a.precio_venta or 0) }} COP
+            </span>
+            <div style="font-size:12px; color:var(--color-text-muted); text-transform:capitalize;">
+              {{ a.operacion }}
+            </div>
+          </td>
+          <td>
+            {{ a.ubicacion_texto }}
+            <div class="fx-hint" style="margin-top:2px;">
+              {{ a.area_metros }} m²
+            </div>
+          </td>
+          <td>
+            <div style="font-size: 13px;">{{ a.habitaciones }} Habs</div>
+            <div style="font-size: 13px;">{{ a.banos }} Baños</div>
+          </td>
+          <td>
+            <div class="compatibility-list">
+              {% for comp in a.compatibilidades %}
+                {% if comp.cliente_nombre and comp.score is not none %}
+                  <div class="compatibility-item">
+                    <span class="client-name">{{ comp.cliente_nombre }}</span>
+                    {% if comp.score >= 0.75 %}
+                      <span class="badge badge-alto" style="padding: 2px 8px; font-size:10px;">{{ "%.2f"|format(comp.score) }}</span>
+                    {% elif comp.score >= 0.4 %}
+                      <span class="badge badge-medio" style="padding: 2px 8px; font-size:10px;">{{ "%.2f"|format(comp.score) }}</span>
+                    {% else %}
+                      <span class="badge badge-bajo" style="padding: 2px 8px; font-size:10px;">{{ "%.2f"|format(comp.score) }}</span>
+                    {% endif %}
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </td>
+          <td>
+            <div style="display: flex; gap: 6px; align-items: center; justify-content: flex-start; flex-wrap: nowrap;">
+              <a href="{{ url_for('mapa', focus_id=a.id) }}" class="btn btn-secondary btn-sm" style="padding: 6px 10px;">Ver en mapa</a>
+              <a href="{{ url_for('anuncio_editar', anuncio_id=a.id) }}" class="btn btn-secondary btn-sm" style="padding: 6px 10px;">Editar</a>
+              <form action="{{ url_for('anuncio_eliminar', anuncio_id=a.id) }}" method="post" onsubmit="return confirm('¿Seguro que deseas eliminar este inmueble del inventario?');" style="margin: 0; display: inline-flex;">
+                <button type="submit" class="btn btn-danger btn-sm" style="padding: 6px 10px;">Eliminar</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p style="color: var(--color-text-muted); text-align: center; padding: 20px 0;">No se han guardado inmuebles en el inventario aún.</p>
+  {% endif %}
+</div>
+{% endblock %}

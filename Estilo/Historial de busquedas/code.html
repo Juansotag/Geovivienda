@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Geovivienda - Historial de Búsquedas</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed": "#ffdad7",
+                        "surface": "#f9f9f9",
+                        "surface-tint": "#535a96",
+                        "on-secondary-container": "#735f00",
+                        "on-primary-fixed-variant": "#3b427c",
+                        "tertiary-container": "#7d0011",
+                        "secondary-fixed": "#ffe16f",
+                        "on-error": "#ffffff",
+                        "primary-fixed-dim": "#bdc2ff",
+                        "inverse-on-surface": "#f1f1f1",
+                        "on-error-container": "#93000a",
+                        "on-primary-fixed": "#0c144f",
+                        "surface-container": "#eeeeee",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "surface-container-highest": "#e2e2e2",
+                        "border-subtle": "#E2E4E9",
+                        "on-primary-container": "#9aa1e3",
+                        "secondary": "#705d00",
+                        "on-tertiary": "#ffffff",
+                        "secondary-fixed-dim": "#e6c437",
+                        "inverse-surface": "#2f3131",
+                        "on-tertiary-fixed-variant": "#910617",
+                        "primary-container": "#2f3670",
+                        "on-surface": "#1a1c1c",
+                        "surface-variant": "#e2e2e2",
+                        "surface-dim": "#dadada",
+                        "primary-fixed": "#dfe0ff",
+                        "on-secondary-fixed": "#221b00",
+                        "surface-container-low": "#f3f3f3",
+                        "on-secondary-fixed-variant": "#544600",
+                        "inverse-primary": "#bdc2ff",
+                        "on-surface-variant": "#464650",
+                        "surface-white": "#FFFFFF",
+                        "text-primary": "#1A1D35",
+                        "on-tertiary-fixed": "#410005",
+                        "outline-variant": "#c7c5d1",
+                        "primary": "#181f59",
+                        "surface-bright": "#f9f9f9",
+                        "tertiary": "#540008",
+                        "on-tertiary-container": "#ff7f7a",
+                        "error": "#ba1a1a",
+                        "on-secondary": "#ffffff",
+                        "secondary-container": "#fddb4c",
+                        "outline": "#767681",
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed-dim": "#ffb3ae",
+                        "background": "#f9f9f9",
+                        "surface-container-high": "#e8e8e8",
+                        "on-background": "#1a1c1c"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-lg": "2rem",
+                        "gutter-grid": "1.5rem",
+                        "container-max": "1440px",
+                        "stack-md": "1rem",
+                        "stack-sm": "0.5rem",
+                        "margin-page": "2rem"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Montserrat"],
+                        "headline-lg": ["Montserrat"],
+                        "title-lg": ["Montserrat"],
+                        "label-sm": ["Montserrat"],
+                        "label-md": ["Montserrat"],
+                        "body-lg": ["Montserrat"],
+                        "display-lg": ["Montserrat"],
+                        "title-md": ["Montserrat"],
+                        "headline-lg-mobile": ["Montserrat"],
+                        "body-md": ["Montserrat"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "600" }],
+                        "title-lg": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "500" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "display-lg": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "title-md": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    },
+                    "boxShadow": {
+                        "soft": "0px 4px 12px rgba(0, 0, 0, 0.04)",
+                        "soft-hover": "0px 4px 12px rgba(0, 0, 0, 0.08)"
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Montserrat', sans-serif; background-color: #f9f9f9; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .icon-fill { font-variation-settings: 'FILL' 1; }
+    </style>
+</head>
+<body class="bg-background text-on-background flex h-screen overflow-hidden">
+<!-- SideNavBar -->
+<nav class="fixed left-0 top-0 h-full w-[280px] bg-primary dark:bg-primary flex flex-col py-8 z-20">
+<!-- Brand/Profile Area -->
+<div class="px-6 mb-8 flex flex-col items-center">
+<div class="w-16 h-16 rounded-full overflow-hidden mb-4 border-2 border-surface-white/20">
+<img alt="User profile picture" class="w-full h-full object-cover" data-alt="A professional headshot of a corporate employee in a bright, modern office setting. The lighting is soft and flattering, creating a high-key, optimistic mood suitable for a real estate dashboard profile picture. The color palette features neutral tones with subtle hints of navy blue in the background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCdov6fkXdqzE1Gu_4-es-Hguk7-eHYAFyZePWi3jwo9mrhpWvKy41ENTmCMdODJzXM8mtbhoLP8qaTFrpz72pa46yzw5Py929vyMdiS62PH_KeFF-Pur3DlgERDEm002qVnlf1J7rXMOPwbmxmkdg6ww_gMUmrdi2GinNiWydE7t1uRr2DVjrn1orCf8KFRtIUHWWD_oMor4IIJy8jurXFyIJGv9rizQiblwghVE06bWOmqpMtw6vvOA"/>
+</div>
+<h2 class="font-headline-md text-headline-md font-bold text-surface-white text-center">Employee Name</h2>
+<p class="font-body-md text-body-md text-surface-white opacity-80 text-center">employee@geovivienda.com • Role</p>
+</div>
+<!-- CTA Button -->
+<div class="px-4 mb-8">
+<button class="w-full bg-secondary-container text-on-secondary-container hover:bg-secondary-fixed-dim transition-colors rounded-lg py-3 flex items-center justify-center gap-2 font-title-md text-title-md">
+<span class="material-symbols-outlined">add</span>
+                Nuevo Registro
+            </button>
+</div>
+<!-- Navigation Tabs -->
+<ul class="flex-1 flex flex-col gap-1 w-full font-body-md text-body-md">
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-surface-white opacity-80 hover:bg-primary-container hover:opacity-100 transition-all" href="#">
+<span class="material-symbols-outlined">group</span>
+                    Clientes
+                </a>
+</li>
+<li>
+<!-- Active Tab -->
+<a class="flex items-center gap-3 px-4 py-3 text-secondary-fixed border-l-4 border-secondary-fixed bg-primary-container scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined icon-fill">search</span>
+                    Búsquedas
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-surface-white opacity-80 hover:bg-primary-container hover:opacity-100 transition-all" href="#">
+<span class="material-symbols-outlined">domain</span>
+                    Inmuebles
+                </a>
+</li>
+</ul>
+<!-- Footer Tabs -->
+<ul class="mt-auto flex flex-col gap-1 w-full font-body-md text-body-md border-t border-surface-white/10 pt-4">
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-surface-white opacity-80 hover:bg-primary-container hover:opacity-100 transition-all" href="#">
+<span class="material-symbols-outlined">settings</span>
+                    Configuración
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-surface-white opacity-80 hover:bg-primary-container hover:opacity-100 transition-all" href="#">
+<span class="material-symbols-outlined">logout</span>
+                    Cerrar Sesión
+                </a>
+</li>
+</ul>
+</nav>
+<!-- Main Content Wrapper -->
+<div class="flex-1 flex flex-col ml-[280px] w-[calc(100%-280px)] h-full">
+<!-- TopNavBar -->
+<header class="docked full-width top-0 bg-surface dark:bg-surface-dim border-b border-border-subtle dark:border-outline-variant flex justify-between items-center h-16 px-gutter-grid shrink-0 z-10">
+<!-- Brand -->
+<div class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">
+                Geovivienda Workspace
+            </div>
+<!-- Trailing Actions -->
+<div class="flex items-center gap-4">
+<div class="relative">
+<input class="pl-10 pr-4 py-2 bg-surface-container-low border border-border-subtle rounded-full focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary font-body-md text-body-md text-on-surface w-64 transition-all" placeholder="Search..." type="text"/>
+<span class="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-lg">search</span>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container-high">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container-high">
+<span class="material-symbols-outlined">help</span>
+</button>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 overflow-y-auto p-margin-page">
+<div class="max-w-container-max mx-auto space-y-stack-lg">
+<!-- Page Header & Action -->
+<div class="flex justify-between items-end">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-text-primary mb-2">Historial de Búsquedas por Cliente</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Manage and track property searches across platforms.</p>
+</div>
+<button class="bg-primary text-surface-white hover:bg-primary-container hover:text-surface-white transition-colors rounded-lg px-6 py-3 flex items-center gap-2 font-title-md text-title-md shadow-sm">
+<span class="material-symbols-outlined">add</span>
+                        Nueva Búsqueda
+                    </button>
+</div>
+<!-- Stats Overview Bento (Optional contextual enhancement) -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter-grid">
+<div class="bg-surface-white rounded-xl p-6 border border-border-subtle shadow-soft flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-primary-fixed-dim/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">history</span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wide">Total Searches</p>
+<p class="font-headline-md text-headline-md text-text-primary">1,248</p>
+</div>
+</div>
+<div class="bg-surface-white rounded-xl p-6 border border-border-subtle shadow-soft flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-secondary-fixed/20 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">sync</span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wide">In Progress</p>
+<p class="font-headline-md text-headline-md text-text-primary">12</p>
+</div>
+</div>
+<div class="bg-surface-white rounded-xl p-6 border border-border-subtle shadow-soft flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-tertiary-fixed/40 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined">done_all</span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wide">Completed Today</p>
+<p class="font-headline-md text-headline-md text-text-primary">45</p>
+</div>
+</div>
+</div>
+<!-- Data Table Card -->
+<div class="bg-surface-white rounded-xl border border-border-subtle shadow-soft overflow-hidden">
+<!-- Table Filters (Simplified) -->
+<div class="p-6 border-b border-border-subtle flex justify-between items-center bg-surface-bright">
+<div class="flex gap-4">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-2.5 text-outline text-sm">filter_list</span>
+<select class="pl-9 pr-8 py-2 bg-surface-white border border-border-subtle rounded-md font-body-md text-body-md text-on-surface focus:border-primary focus:ring-0 appearance-none">
+<option>All Statuses</option>
+<option>Completed</option>
+<option>In Progress</option>
+</select>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors flex items-center gap-2 font-label-md text-label-md uppercase">
+<span class="material-symbols-outlined text-sm">download</span> Export
+                        </button>
+</div>
+<!-- Table -->
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-border-subtle font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">
+<th class="p-4 pl-6 font-semibold">Client Name</th>
+<th class="p-4 font-semibold">Platforms</th>
+<th class="p-4 font-semibold text-center">Req / Found</th>
+<th class="p-4 font-semibold text-center">Top Selected</th>
+<th class="p-4 font-semibold">Duration</th>
+<th class="p-4 pr-6 font-semibold">Status</th>
+</tr>
+</thead>
+<tbody class="font-body-md text-body-md text-on-surface divide-y divide-border-subtle">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low transition-colors group h-14">
+<td class="p-4 pl-6 font-medium text-text-primary">Inversiones Andinas S.A.</td>
+<td class="p-4 text-on-surface-variant">Finca Raíz, MetroCuadrado</td>
+<td class="p-4 text-center">
+<span class="bg-surface-variant px-2 py-1 rounded-md text-xs font-medium">3 / 142</span>
+</td>
+<td class="p-4 text-center text-primary font-semibold">12</td>
+<td class="p-4 text-on-surface-variant">45 mins</td>
+<td class="p-4 pr-6">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                                            Completed
+                                        </span>
+</td>
+</tr>
+<!-- Row 2 (Zebra) -->
+<tr class="bg-surface-bright hover:bg-surface-container-low transition-colors group h-14">
+<td class="p-4 pl-6 font-medium text-text-primary">Carlos Mendez Restrepo</td>
+<td class="p-4 text-on-surface-variant">CienCuadras</td>
+<td class="p-4 text-center">
+<span class="bg-surface-variant px-2 py-1 rounded-md text-xs font-medium">1 / 45</span>
+</td>
+<td class="p-4 text-center text-primary font-semibold">5</td>
+<td class="p-4 text-on-surface-variant">--</td>
+<td class="p-4 pr-6">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary text-primary font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>
+                                            In Progress
+                                        </span>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-low transition-colors group h-14">
+<td class="p-4 pl-6 font-medium text-text-primary">Constructora Horizonte</td>
+<td class="p-4 text-on-surface-variant">Finca Raíz, Properati</td>
+<td class="p-4 text-center">
+<span class="bg-surface-variant px-2 py-1 rounded-md text-xs font-medium">5 / 310</span>
+</td>
+<td class="p-4 text-center text-primary font-semibold">24</td>
+<td class="p-4 text-on-surface-variant">1h 15m</td>
+<td class="p-4 pr-6">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                                            Completed
+                                        </span>
+</td>
+</tr>
+<!-- Row 4 (Zebra) -->
+<tr class="bg-surface-bright hover:bg-surface-container-low transition-colors group h-14">
+<td class="p-4 pl-6 font-medium text-text-primary">Familia Gomez Osorio</td>
+<td class="p-4 text-on-surface-variant">MetroCuadrado</td>
+<td class="p-4 text-center">
+<span class="bg-surface-variant px-2 py-1 rounded-md text-xs font-medium">2 / 89</span>
+</td>
+<td class="p-4 text-center text-primary font-semibold">8</td>
+<td class="p-4 text-on-surface-variant">22 mins</td>
+<td class="p-4 pr-6">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                                            Completed
+                                        </span>
+</td>
+</tr>
+<!-- Row 5 -->
+<tr class="hover:bg-surface-container-low transition-colors group h-14">
+<td class="p-4 pl-6 font-medium text-text-primary">Logistica del Norte S.A.S</td>
+<td class="p-4 text-on-surface-variant">Bodegas Colombia</td>
+<td class="p-4 text-center">
+<span class="bg-surface-variant px-2 py-1 rounded-md text-xs font-medium">1 / 12</span>
+</td>
+<td class="p-4 text-center text-primary font-semibold">3</td>
+<td class="p-4 text-on-surface-variant">--</td>
+<td class="p-4 pr-6">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-tertiary-fixed text-tertiary font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[12px]">error</span>
+                                            Failed
+                                        </span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination (Simple) -->
+<div class="p-4 border-t border-border-subtle flex justify-between items-center bg-surface-white font-body-md text-body-md text-on-surface-variant">
+<span>Showing 1 to 5 of 1,248 entries</span>
+<div class="flex gap-2">
+<button class="p-1 rounded hover:bg-surface-container-high disabled:opacity-50" disabled=""><span class="material-symbols-outlined">chevron_left</span></button>
+<button class="p-1 rounded hover:bg-surface-container-high"><span class="material-symbols-outlined">chevron_right</span></button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>
