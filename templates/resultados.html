@@ -1,27 +1,67 @@
 {% extends "base.html" %}
 {% block title %}Resultados — Casa en Casa{% endblock %}
 {% block content %}
-<h1>Resultados de búsqueda</h1>
+<div class="page-header">
+  <h1>Resultados de búsqueda</h1>
+  {% if resultados %}
+  <div class="view-toggle">
+    <button class="view-toggle-btn active" id="btn-view-table" onclick="cambiarVistaResultados('table')" title="Vista de tabla" type="button">
+      <i data-lucide="list"></i>
+    </button>
+    <button class="view-toggle-btn" id="btn-view-grid" onclick="cambiarVistaResultados('grid')" title="Vista de tarjetas" type="button">
+      <i data-lucide="layout-grid"></i>
+    </button>
+  </div>
+  {% endif %}
+</div>
 <p><a href="{{ url_for('cliente_detalle', cliente_id=cliente.id) }}" style="display:inline-flex; align-items:center; gap:6px;"><i data-lucide="arrow-left" style="width:16px; height:16px;"></i> Volver a {{ cliente.nombre }}</a></p>
 
 <div class="card">
   {% if resultados %}
-  <div class="table-responsive">
+  {% set portales_unicos = resultados | map(attribute='portal') | unique | list %}
+  {% set tipos_unicos = resultados | map(attribute='tipo_inmueble') | unique | list %}
+  <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+    <div class="form-group" style="margin-bottom:0;">
+      <label for="filtro-portal" style="font-size:11px;">Portal</label>
+      <select id="filtro-portal" onchange="aplicarFiltrosResultados()">
+        <option value="">Todos</option>
+        {% for p in portales_unicos %}<option value="{{ p }}">{{ p | capitalize }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label for="filtro-tipo" style="font-size:11px;">Tipo</label>
+      <select id="filtro-tipo" onchange="aplicarFiltrosResultados()">
+        <option value="">Todos</option>
+        {% for t in tipos_unicos %}<option value="{{ t }}">{{ t | capitalize }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label for="filtro-score" style="font-size:11px;">Score mínimo</label>
+      <select id="filtro-score" onchange="aplicarFiltrosResultados()">
+        <option value="0">Todos</option>
+        <option value="0.75">Alto (≥ 0.75)</option>
+        <option value="0.4">Medio (≥ 0.4)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="table-responsive" id="resultados-table-wrapper">
     <table>
       <thead>
         <tr>
-          <th>Score</th>
+          <th class="th-ordenable" onclick="ordenarResultados('score')" style="cursor:pointer;">Score <i data-lucide="chevrons-up-down" style="width:12px; height:12px; vertical-align:middle;"></i></th>
           <th>Portal</th>
           <th>Tipo / Estado</th>
-          <th>Uso / Precio</th>
-          <th>Ubicación / Área</th>
+          <th class="th-ordenable" onclick="ordenarResultados('precio')" style="cursor:pointer;">Uso / Precio <i data-lucide="chevrons-up-down" style="width:12px; height:12px; vertical-align:middle;"></i></th>
+          <th class="th-ordenable" onclick="ordenarResultados('area')" style="cursor:pointer;">Ubicación / Área <i data-lucide="chevrons-up-down" style="width:12px; height:12px; vertical-align:middle;"></i></th>
           <th>Características</th>
           <th>Acciones</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="resultados-tbody">
         {% for r in resultados %}
-        <tr>
+        <tr class="resultado-fila" data-id="{{ r.id }}" data-portal="{{ r.portal }}" data-tipo="{{ r.tipo_inmueble }}"
+            data-score="{{ r.score or 0 }}" data-precio="{{ r.precio_venta or 0 }}" data-area="{{ r.area_metros or 0 }}">
           <td>
             {% if r.score >= 0.75 %}<span class="badge badge-alto">{{ "%.2f"|format(r.score) }}</span>
             {% elif r.score >= 0.4 %}<span class="badge badge-medio">{{ "%.2f"|format(r.score) }}</span>
@@ -76,6 +116,47 @@
       </tbody>
     </table>
   </div>
+
+  <div class="inmuebles-grid" id="resultados-grid" style="display:none;">
+    {% for r in resultados %}
+    <div class="inmueble-card resultado-tarjeta" data-id="{{ r.id }}" data-portal="{{ r.portal }}" data-tipo="{{ r.tipo_inmueble }}"
+         data-score="{{ r.score or 0 }}" data-precio="{{ r.precio_venta or 0 }}" data-area="{{ r.area_metros or 0 }}">
+      <div class="inmueble-card-foto">
+        {% if r.foto_url %}
+        <img src="{{ r.foto_url }}" alt="{{ r.tipo_inmueble }}" loading="lazy"
+             onerror="this.remove(); this.parentElement.querySelector('.inmueble-card-foto-fallback').style.display='flex';">
+        {% endif %}
+        <div class="inmueble-card-foto-fallback" style="{{ 'display:none;' if r.foto_url else '' }}">
+          {% if r.tipo_inmueble and 'casa' in r.tipo_inmueble|lower %}
+            <i data-lucide="home"></i>
+          {% else %}
+            <i data-lucide="building-2"></i>
+          {% endif %}
+        </div>
+        <span class="inmueble-card-portal-badge">{{ r.portal | capitalize }}</span>
+      </div>
+      <div class="inmueble-card-body">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="inmueble-card-price">${{ "{:,.0f}".format(r.precio_venta or 0) }} COP</div>
+          {% if r.score >= 0.75 %}<span class="badge badge-alto">{{ "%.2f"|format(r.score) }}</span>
+          {% elif r.score >= 0.4 %}<span class="badge badge-medio">{{ "%.2f"|format(r.score) }}</span>
+          {% else %}<span class="badge badge-bajo">{{ "%.2f"|format(r.score) }}</span>{% endif %}
+        </div>
+        <div class="inmueble-card-location">{{ r.ubicacion_texto or "Ubicación no especificada" }}</div>
+        <div class="inmueble-card-specs">{{ r.habitaciones or "—" }} hab · {{ r.banos or "—" }} baños · {{ r.area_metros or "—" }} m² · Estrato {{ r.estrato or "—" }}</div>
+        <div class="inmueble-card-actions">
+          <a href="{{ r.url }}" target="_blank" class="btn btn-secondary btn-sm">Anuncio</a>
+          {% if r.reporte_id %}
+            <a href="{{ url_for('ver_reporte_html', reporte_id=r.reporte_id) }}" target="_blank" class="btn btn-secondary btn-sm">Ver reporte</a>
+            <a href="{{ url_for('descargar_reporte_pdf', reporte_id=r.reporte_id) }}" class="btn btn-secondary btn-sm">PDF</a>
+          {% else %}
+            <button class="btn btn-primary btn-sm" onclick="generarReporte({{ cliente.id }}, {{ r.id }}, this, {{ busqueda_id }})">Generar reporte</button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
   {% else %}
     {% if status == 'running' %}
     <div style="text-align:center; padding:20px; color:var(--color-text-muted);">
@@ -121,6 +202,66 @@
 </style>
 
 <script>
+  // --- Vista tabla/tarjeta ---
+  function cambiarVistaResultados(vista) {
+    const tabla = document.getElementById("resultados-table-wrapper");
+    const grid = document.getElementById("resultados-grid");
+    const btnTabla = document.getElementById("btn-view-table");
+    const btnGrid = document.getElementById("btn-view-grid");
+    if (!tabla || !grid) return;
+
+    if (vista === "grid") {
+      tabla.style.display = "none";
+      grid.style.display = "grid";
+      btnTabla.classList.remove("active");
+      btnGrid.classList.add("active");
+    } else {
+      tabla.style.display = "";
+      grid.style.display = "none";
+      btnTabla.classList.add("active");
+      btnGrid.classList.remove("active");
+    }
+    localStorage.setItem("resultados_vista", vista);
+  }
+
+  // --- Filtros (aplican a tabla y tarjetas por igual) ---
+  function aplicarFiltrosResultados() {
+    const portal = document.getElementById("filtro-portal").value;
+    const tipo = document.getElementById("filtro-tipo").value;
+    const scoreMin = parseFloat(document.getElementById("filtro-score").value) || 0;
+
+    document.querySelectorAll(".resultado-fila, .resultado-tarjeta").forEach(el => {
+      const coincide = (!portal || el.dataset.portal === portal)
+        && (!tipo || el.dataset.tipo === tipo)
+        && (parseFloat(el.dataset.score) || 0) >= scoreMin;
+      el.style.display = coincide ? "" : "none";
+    });
+  }
+
+  // --- Orden (solo tabla - las columnas relevantes son numericas) ---
+  let _ordenActual = { campo: null, asc: true };
+
+  function ordenarResultados(campo) {
+    const tbody = document.getElementById("resultados-tbody");
+    const filas = Array.from(tbody.querySelectorAll(".resultado-fila"));
+
+    _ordenActual.asc = (_ordenActual.campo === campo) ? !_ordenActual.asc : false;
+    _ordenActual.campo = campo;
+
+    filas.sort((a, b) => {
+      const va = parseFloat(a.dataset[campo]) || 0;
+      const vb = parseFloat(b.dataset[campo]) || 0;
+      return _ordenActual.asc ? va - vb : vb - va;
+    });
+
+    filas.forEach(f => tbody.appendChild(f));
+  }
+
+  window.addEventListener("DOMContentLoaded", () => {
+    const guardada = localStorage.getItem("resultados_vista");
+    if (guardada === "grid") cambiarVistaResultados("grid");
+  });
+
   const busquedaId = {{ busqueda_id if busqueda_id else 'null' }};
   const currentStatus = "{{ status if status else '' }}";
   

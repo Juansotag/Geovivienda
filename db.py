@@ -26,8 +26,20 @@ def get_cursor():
 
 
 def buscar_anuncio_por_url(url: str) -> dict | None:
+    """Incluye el join con hexagonos (dist_tm/dist_sitp/dist_ciclo/estrato_promedio_200m)
+    porque esta es la funcion que arma la lista de candidatos para el scoring
+    LLM (ver busqueda.py) - sin el join, el LLM quedaba ciego al contexto
+    geoespacial de cada anuncio durante una busqueda real."""
     with get_cursor() as cur:
-        cur.execute("SELECT * FROM anuncios WHERE url = %s", (url,))
+        cur.execute(
+            """
+            SELECT a.*, h.dist_sitp, h.dist_tm, h.dist_ciclo, h.estrato_promedio_200m
+            FROM anuncios a
+            LEFT JOIN hexagonos h ON h.h3_index = a.h3_index
+            WHERE a.url = %s
+            """,
+            (url,),
+        )
         return cur.fetchone()
 
 
@@ -111,8 +123,19 @@ def listar_clientes() -> list[dict]:
 
 
 def buscar_anuncio_por_id(anuncio_id: int) -> dict | None:
+    """Misma razon que buscar_anuncio_por_url: esta funcion alimenta al
+    generador de reportes (ver reportes.py PROMPT_TEMPLATE, seccion
+    ENTORNO), que necesita dist_tm/dist_sitp/dist_ciclo/estrato_promedio_200m."""
     with get_cursor() as cur:
-        cur.execute("SELECT * FROM anuncios WHERE id = %s", (anuncio_id,))
+        cur.execute(
+            """
+            SELECT a.*, h.dist_sitp, h.dist_tm, h.dist_ciclo, h.estrato_promedio_200m
+            FROM anuncios a
+            LEFT JOIN hexagonos h ON h.h3_index = a.h3_index
+            WHERE a.id = %s
+            """,
+            (anuncio_id,),
+        )
         return cur.fetchone()
 
 

@@ -48,17 +48,16 @@
         <option value="proyecto" {% if busqueda and busqueda.estado_deseado == 'proyecto' %}selected{% endif %}>Proyecto</option>
       </select>
     </div>
-    <div class="form-group full-width">
-      <label>Antigüedad deseada (elige una o varias)</label>
-      <div class="checkbox-group" id="antiguedad-group">
-        {% set antiguedades = [('0 a 5 años', '0 a 5 años'), ('5 a 10 años', '5 a 10 años'), ('10 a 20 años', '10 a 20 años'), ('mas de 20 años', 'Más de 20 años')] %}
-        {% for val, label in antiguedades %}
-        <label class="checkbox-label {% if busqueda and val in (busqueda.antiguedad_deseada or []) %}checked{% endif %}">
-          <input type="checkbox" name="antiguedad_deseada" value="{{ val }}" onchange="toggleCheckboxClass(this)" {% if busqueda and val in (busqueda.antiguedad_deseada or []) %}checked{% endif %}>
-          <span>{{ label }}</span>
-        </label>
-        {% endfor %}
-      </div>
+    <div class="form-group">
+      <label for="antiguedad_anios_min">Antigüedad mínima (años)</label>
+      <input type="number" id="antiguedad_anios_min" name="antiguedad_anios_min" min="0" placeholder="Sin límite"
+             value="{{ busqueda.antiguedad_anios_min if busqueda and busqueda.antiguedad_anios_min is not none else '' }}">
+    </div>
+    <div class="form-group">
+      <label for="antiguedad_anios_max">Antigüedad máxima (años)</label>
+      <input type="number" id="antiguedad_anios_max" name="antiguedad_anios_max" min="0" placeholder="Sin límite"
+             value="{{ busqueda.antiguedad_anios_max if busqueda and busqueda.antiguedad_anios_max is not none else '' }}">
+      <p style="font-size:11px; color:var(--color-text-muted); margin:4px 0 0;">Es un filtro estricto: solo se muestran inmuebles cuya antigüedad quede dentro del rango. Deja vacío para no limitar.</p>
     </div>
     <div class="form-group">
       <label for="zona_deseada">Zona geográfica</label>
@@ -67,7 +66,7 @@
         <option value="rural" {% if busqueda and busqueda.zona_deseada == 'rural' %}selected{% endif %}>Rural</option>
       </select>
     </div>
-    <div class="form-group full-width">
+    <div class="form-group">
       <label>Uso previsto (elige uno o varios)</label>
       <div class="checkbox-group">
         {% set usos = [('vivir', 'Para Vivir'), ('arrendar', 'Para Arrendar (Inversión)'), ('indeciso', 'Indeciso')] %}
@@ -79,7 +78,7 @@
         {% endfor %}
       </div>
     </div>
-    <div class="form-group full-width">
+    <div class="form-group">
       <label>Estrato objetivo (elige uno o varios)</label>
       <div class="checkbox-group">
         {% for e in range(1, 7) %}
@@ -124,12 +123,14 @@
     </div>
 
     <div class="form-group">
-      <label for="presupuesto_min">Presupuesto mínimo (COP)</label>
-      <input type="number" id="presupuesto_min" name="presupuesto_min" value="{{ busqueda.presupuesto_min if busqueda else 200000000 }}">
+      <label for="presupuesto_min_display">Presupuesto mínimo (COP)</label>
+      <input type="text" inputmode="numeric" id="presupuesto_min_display" placeholder="200.000.000" oninput="formatearPresupuesto(this, 'presupuesto_min')">
+      <input type="hidden" id="presupuesto_min" name="presupuesto_min" value="{{ busqueda.presupuesto_min if busqueda else 200000000 }}">
     </div>
     <div class="form-group">
-      <label for="presupuesto_max">Presupuesto máximo (COP)</label>
-      <input type="number" id="presupuesto_max" name="presupuesto_max" value="{{ busqueda.presupuesto_max if busqueda else 300000000 }}">
+      <label for="presupuesto_max_display">Presupuesto máximo (COP)</label>
+      <input type="text" inputmode="numeric" id="presupuesto_max_display" placeholder="300.000.000" oninput="formatearPresupuesto(this, 'presupuesto_max')">
+      <input type="hidden" id="presupuesto_max" name="presupuesto_max" value="{{ busqueda.presupuesto_max if busqueda else 300000000 }}">
     </div>
   </div>
 
@@ -162,23 +163,63 @@
 
   <hr style="border:0; border-top:1px solid var(--color-border); margin:20px 0;">
 
-  <h3>Comodidades deseadas</h3>
-  <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
-    <div class="checkbox-group" id="tags-container">
-      {% set predefined_tags = ['ascensor', 'balcon', 'parqueadero', 'deposito', 'vigilancia', 'zonas verdes', 'gimnasio'] %}
-      {% for tag in predefined_tags %}
-      <label class="checkbox-label {% if busqueda and tag in (busqueda.comodidades or []) %}checked{% endif %}">
-        <input type="checkbox" name="comodidades" value="{{ tag }}" onchange="toggleCheckboxClass(this)" {% if busqueda and tag in (busqueda.comodidades or []) %}checked{% endif %}>
-        <span>{{ tag | capitalize }}</span>
-        <button type="button" class="delete-tag-btn" onclick="eliminarTag(this)">&times;</button>
-      </label>
-      {% endfor %}
+  <h3>Comodidades</h3>
+  <p style="color:var(--color-text-muted); font-size:13px; margin-top:-8px;">
+    Arrastra cada comodidad a la columna que corresponda. <strong>Relevantes</strong> mejora el score que calcula la IA, sin descartar inmuebles. <strong>Indispensables</strong> es un filtro estricto: el inmueble debe tenerlas todas o no aparece en los resultados.
+  </p>
+  {% set predefined_tags = ['ascensor', 'balcon', 'parqueadero', 'deposito', 'vigilancia', 'zonas verdes', 'gimnasio'] %}
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+    <div>
+      <h4 style="font-size:13px; color:var(--color-text-muted); margin:0 0 8px;">Relevantes</h4>
+      <div class="comodidades-dropzone" id="zona-relevantes" ondragover="permitirDropComodidad(event)" ondrop="soltarComodidad(event, 'relevantes')"
+           style="min-height:64px; border:1.5px dashed var(--color-border); border-radius:var(--radius-default); padding:10px; display:flex; flex-wrap:wrap; gap:8px; align-content:flex-start;">
+        {% for tag in predefined_tags %}
+          {% if not busqueda or tag not in (busqueda.comodidades_indispensables or []) %}
+          <div class="comodidad-chip" draggable="true" ondragstart="arrastrarComodidad(event)"
+               style="display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:rgba(24,31,89,0.08); border-radius:20px; font-size:13px; cursor:grab; user-select:none;">
+            <span>{{ tag | capitalize }}</span>
+            <input type="checkbox" name="comodidades_relevantes" value="{{ tag }}" checked style="display:none;">
+          </div>
+          {% endif %}
+        {% endfor %}
+        {% if busqueda %}{% for tag in (busqueda.comodidades_relevantes or []) if tag not in predefined_tags %}
+        <div class="comodidad-chip" draggable="true" ondragstart="arrastrarComodidad(event)"
+             style="display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:rgba(24,31,89,0.08); border-radius:20px; font-size:13px; cursor:grab; user-select:none;">
+          <span>{{ tag | capitalize }}</span>
+          <button type="button" onclick="this.parentElement.remove()" style="border:none; background:none; cursor:pointer; color:var(--color-text-muted); font-size:14px; line-height:1;">&times;</button>
+          <input type="checkbox" name="comodidades_relevantes" value="{{ tag }}" checked style="display:none;">
+        </div>
+        {% endfor %}{% endif %}
+      </div>
     </div>
+    <div>
+      <h4 style="font-size:13px; color:var(--color-danger); margin:0 0 8px;">Indispensables</h4>
+      <div class="comodidades-dropzone" id="zona-indispensables" ondragover="permitirDropComodidad(event)" ondrop="soltarComodidad(event, 'indispensables')"
+           style="min-height:64px; border:1.5px dashed var(--color-danger); border-radius:var(--radius-default); padding:10px; display:flex; flex-wrap:wrap; gap:8px; align-content:flex-start;">
+        {% for tag in predefined_tags %}
+          {% if busqueda and tag in (busqueda.comodidades_indispensables or []) %}
+          <div class="comodidad-chip" draggable="true" ondragstart="arrastrarComodidad(event)"
+               style="display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:rgba(197,51,54,0.1); border-radius:20px; font-size:13px; cursor:grab; user-select:none;">
+            <span>{{ tag | capitalize }}</span>
+            <input type="checkbox" name="comodidades_indispensables" value="{{ tag }}" checked style="display:none;">
+          </div>
+          {% endif %}
+        {% endfor %}
+        {% if busqueda %}{% for tag in (busqueda.comodidades_indispensables or []) if tag not in predefined_tags %}
+        <div class="comodidad-chip" draggable="true" ondragstart="arrastrarComodidad(event)"
+             style="display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:rgba(197,51,54,0.1); border-radius:20px; font-size:13px; cursor:grab; user-select:none;">
+          <span>{{ tag | capitalize }}</span>
+          <button type="button" onclick="this.parentElement.remove()" style="border:none; background:none; cursor:pointer; color:var(--color-text-muted); font-size:14px; line-height:1;">&times;</button>
+          <input type="checkbox" name="comodidades_indispensables" value="{{ tag }}" checked style="display:none;">
+        </div>
+        {% endfor %}{% endif %}
+      </div>
+    </div>
+  </div>
 
-    <div style="display: flex; gap: 8px; max-width: 450px;">
-      <input type="text" id="nuevo_tag_input" placeholder="Escribe una comodidad (ej: jacuzzi, piscina) y presiona Enter..." onkeydown="handleTagInputKey(event)" style="flex-grow: 1;">
-      <button type="button" class="btn btn-secondary btn-sm" onclick="addCustomTagBtn()">Agregar</button>
-    </div>
+  <div style="display: flex; gap: 8px; max-width: 450px; margin-bottom: 20px;">
+    <input type="text" id="nuevo_tag_input" placeholder="Escribe una comodidad (ej: jacuzzi, piscina) y presiona Enter..." onkeydown="handleTagInputKey(event)" style="flex-grow: 1;">
+    <button type="button" class="btn btn-secondary btn-sm" onclick="addCustomTagBtn()">Agregar a Relevantes</button>
   </div>
 
   <div class="form-group full-width" style="margin-top: 16px;">
@@ -290,6 +331,28 @@
     }
   });
 
+  // Separadores de miles para presupuesto (los precios en Colombia se
+  // manejan en cientos de millones - sin separador es casi ilegible)
+  function formatearMiles(valor) {
+    const soloDigitos = String(valor).replace(/\D/g, "");
+    if (!soloDigitos) return "";
+    return Number(soloDigitos).toLocaleString("es-CO");
+  }
+
+  function formatearPresupuesto(input, hiddenId) {
+    const soloDigitos = input.value.replace(/\D/g, "");
+    document.getElementById(hiddenId).value = soloDigitos || "0";
+    input.value = formatearMiles(soloDigitos);
+  }
+
+  function inicializarPresupuestos() {
+    ["presupuesto_min", "presupuesto_max"].forEach(id => {
+      const hidden = document.getElementById(id);
+      const display = document.getElementById(id + "_display");
+      if (hidden && display) display.value = formatearMiles(hidden.value);
+    });
+  }
+
   function toggleCheckboxClass(input) {
     if (input.checked) {
       input.parentElement.classList.add('checked');
@@ -298,20 +361,22 @@
     }
   }
 
-  // Verificar Antigüedad
+  // Verificar Antigüedad - un inmueble "nuevo"/"proyecto" es por definicion
+  // reciente, asi que se fija el rango en 0-5 anios y se bloquean los campos.
   function verificarAntiguedadState() {
     const estado = document.getElementById("estado_deseado").value;
-    const grupo = document.getElementById("antiguedad-group");
-    const checkboxes = grupo.querySelectorAll('input[type=checkbox]');
+    const min = document.getElementById("antiguedad_anios_min");
+    const max = document.getElementById("antiguedad_anios_max");
     if (estado === "nuevo" || estado === "proyecto") {
-      checkboxes.forEach(cb => {
-        const marcar = cb.value === "0 a 5 años";
-        cb.checked = marcar;
-        cb.disabled = true;
-        cb.parentElement.classList.toggle("checked", marcar);
-      });
+      min.value = "0";
+      max.value = "5";
+      // readOnly (no disabled): un input disabled no se envia con el form,
+      // y este rango si debe llegar al servidor como filtro duro real.
+      min.readOnly = true;
+      max.readOnly = true;
     } else {
-      checkboxes.forEach(cb => { cb.disabled = false; });
+      min.readOnly = false;
+      max.readOnly = false;
     }
   }
 
@@ -468,7 +533,30 @@
     if (window.lucide) lucide.createIcons();
   }
 
-  // Dynamic tags
+  // --- Comodidades: arrastrar entre Relevantes/Indispensables ---
+  let _chipComodidadArrastrado = null;
+
+  function arrastrarComodidad(e) {
+    _chipComodidadArrastrado = e.target;
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function permitirDropComodidad(e) {
+    e.preventDefault();
+  }
+
+  function soltarComodidad(e, destino) {
+    e.preventDefault();
+    if (!_chipComodidadArrastrado) return;
+    const zona = document.getElementById(destino === "indispensables" ? "zona-indispensables" : "zona-relevantes");
+    const checkbox = _chipComodidadArrastrado.querySelector("input[type=checkbox]");
+    const nuevoName = destino === "indispensables" ? "comodidades_indispensables" : "comodidades_relevantes";
+    checkbox.name = nuevoName;
+    _chipComodidadArrastrado.style.background = destino === "indispensables" ? "rgba(197,51,54,0.1)" : "rgba(24,31,89,0.08)";
+    zona.appendChild(_chipComodidadArrastrado);
+    _chipComodidadArrastrado = null;
+  }
+
   function handleTagInputKey(e) {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -485,75 +573,58 @@
     const text = input.value.trim();
     if (!text) return;
 
-    const tags = text.split(",");
-    tags.forEach(tag => {
+    text.split(",").forEach(tag => {
       const val = tag.trim().toLowerCase();
-      if (!val) return;
-      insertSingleTag(val);
+      if (val) crearChipComodidad(val, "relevantes");
     });
     input.value = "";
   }
 
-  function insertSingleTag(val) {
-    const container = document.getElementById("tags-container");
-    const existing = container.querySelector(`input[value="${val}"]`);
-    if (existing) {
-      if (!existing.checked) {
-        existing.checked = true;
-        existing.parentElement.classList.add("checked");
-      }
-      return;
-    }
+  function crearChipComodidad(val, destino) {
+    const zonaId = destino === "indispensables" ? "zona-indispensables" : "zona-relevantes";
+    const zona = document.getElementById(zonaId);
+    if (zona.querySelector(`input[value="${val}"]`)) return; // ya existe en alguna de las dos zonas
 
-    const label = document.createElement("label");
-    label.className = "checkbox-label checked";
-    label.style.position = "relative";
-    label.style.paddingRight = "28px";
-
-    const chk = document.createElement("input");
-    chk.type = "checkbox";
-    chk.name = "comodidades";
-    chk.value = val;
-    chk.checked = true;
-    chk.onchange = function() { toggleCheckboxClass(this); };
+    const chip = document.createElement("div");
+    chip.className = "comodidad-chip";
+    chip.draggable = true;
+    chip.ondragstart = arrastrarComodidad;
+    chip.style.cssText = "display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:20px; font-size:13px; cursor:grab; user-select:none; background:" +
+      (destino === "indispensables" ? "rgba(197,51,54,0.1)" : "rgba(24,31,89,0.08)") + ";";
 
     const span = document.createElement("span");
     span.textContent = val.charAt(0).toUpperCase() + val.slice(1);
 
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "delete-tag-btn";
+    btn.style.cssText = "border:none; background:none; cursor:pointer; color:var(--color-text-muted); font-size:14px; line-height:1;";
     btn.innerHTML = "&times;";
-    btn.onclick = function() { eliminarTag(this); };
+    btn.onclick = function() { chip.remove(); };
 
-    label.appendChild(chk);
-    label.appendChild(span);
-    label.appendChild(btn);
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.name = destino === "indispensables" ? "comodidades_indispensables" : "comodidades_relevantes";
+    chk.value = val;
+    chk.checked = true;
+    chk.style.display = "none";
 
-    container.appendChild(label);
-  }
-
-  function eliminarTag(btn) {
-    btn.parentElement.remove();
+    chip.appendChild(span);
+    chip.appendChild(btn);
+    chip.appendChild(chk);
+    zona.appendChild(chip);
   }
 
   window.addEventListener("DOMContentLoaded", () => {
     renderHabsButtons();
     renderBanosButtons();
     verificarAntiguedadState();
+    inicializarPresupuestos();
     cargarDivipola();
 
     if (_busquedaExistente) {
       _municipiosSeleccionados = _busquedaExistente.municipios || [];
-      renderMunicipiosLista();
-
-      const predefinidas = ['ascensor', 'balcon', 'parqueadero', 'deposito', 'vigilancia', 'zonas verdes', 'gimnasio'];
-      (_busquedaExistente.comodidades || []).forEach(c => {
-        if (!predefinidas.includes(c)) insertSingleTag(c);
-      });
-    } else {
-      renderMunicipiosLista();
     }
+    renderMunicipiosLista();
   });
 </script>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>

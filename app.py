@@ -266,21 +266,21 @@ def cliente_resultados(cliente_id):
     )
 
 
+def _int_opcional(valor):
+    valor = (valor or "").strip()
+    return int(valor) if valor else None
+
+
 def _parse_busqueda_form(form) -> dict:
-    """Compilado compartido entre crear y editar una busqueda: uso_previsto,
-    antiguedad_deseada y estrato_objetivo son multi-choice (getlist), y los
-    municipios llegan como JSON serializado por el picker ordenable del
-    formulario (lista de {"departamento","municipio","codigo"})."""
+    """Compilado compartido entre crear y editar una busqueda: uso_previsto
+    y estrato_objetivo son multi-choice (getlist); antiguedad es un rango
+    numerico de anios (min/max, cualquiera puede quedar vacio = sin limite);
+    comodidades se reparten en dos listas segun la columna donde el
+    funcionario las haya dejado en el picker de arrastrar-y-soltar
+    (relevantes pesan en el score del LLM, indispensables son filtro duro);
+    los municipios llegan como JSON serializado por el picker ordenable."""
     portales = form.getlist("portales") or ["fincaraiz", "metrocuadrado"]
     cantidad = int(form.get("cantidad", 30))
-
-    comodidades = form.getlist("comodidades")
-    adicionales = form.get("comodidades_adicionales", "").strip()
-    if adicionales:
-        for tag in adicionales.split(","):
-            tag_clean = tag.strip().lower()
-            if tag_clean and tag_clean not in comodidades:
-                comodidades.append(tag_clean)
 
     try:
         municipios = json.loads(form.get("municipios_json") or "[]")
@@ -293,7 +293,8 @@ def _parse_busqueda_form(form) -> dict:
         "municipios": municipios,
         "tipo_vivienda": form["tipo_vivienda"],
         "estado_deseado": form["estado_deseado"],
-        "antiguedad_deseada": form.getlist("antiguedad_deseada"),
+        "antiguedad_anios_min": _int_opcional(form.get("antiguedad_anios_min")),
+        "antiguedad_anios_max": _int_opcional(form.get("antiguedad_anios_max")),
         "zona_deseada": form["zona_deseada"],
         "habitaciones_min": int(form["habitaciones_min"]),
         "habitaciones_exactas": form.get("habitaciones_exactas") == "true",
@@ -303,7 +304,8 @@ def _parse_busqueda_form(form) -> dict:
         "presupuesto_min": int(form["presupuesto_min"]),
         "presupuesto_max": int(form["presupuesto_max"]),
         "uso_previsto": form.getlist("uso_previsto"),
-        "comodidades": comodidades,
+        "comodidades_relevantes": form.getlist("comodidades_relevantes"),
+        "comodidades_indispensables": form.getlist("comodidades_indispensables"),
         "pregunta_abierta": form["pregunta_abierta"],
     }
 

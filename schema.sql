@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS anuncios (
     banos SMALLINT,
     parqueaderos SMALLINT,
     antiguedad TEXT,
+    antiguedad_anios_min SMALLINT,        -- parseado de 'antiguedad' - ver busqueda.py _parsear_antiguedad
+    antiguedad_anios_max SMALLINT,        -- NULL = sin limite superior ("mas de N anios")
     piso_nro SMALLINT,
     cantidad_pisos SMALLINT,
     comodidades TEXT,
@@ -40,6 +42,8 @@ CREATE TABLE IF NOT EXISTS anuncios (
 );
 
 ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS foto_url TEXT;
+ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS antiguedad_anios_min SMALLINT;
+ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS antiguedad_anios_max SMALLINT;
 
 -- Tabla de Clientes: Información personal y financiera
 CREATE TABLE IF NOT EXISTS clientes (
@@ -78,7 +82,8 @@ CREATE TABLE IF NOT EXISTS busquedas (
     municipios JSONB DEFAULT '[]'::jsonb, -- lista ordenada: [{"departamento":..,"municipio":..,"codigo":..}, ...]
     tipo_vivienda TEXT,
     estado_deseado TEXT,
-    antiguedad_deseada JSONB DEFAULT '[]'::jsonb,  -- lista de strings (multi-choice)
+    antiguedad_anios_min SMALLINT,        -- rango duro de antiguedad (anios), NULL = sin limite
+    antiguedad_anios_max SMALLINT,
     zona_deseada TEXT,
     habitaciones_min SMALLINT,
     habitaciones_exactas BOOLEAN DEFAULT FALSE,
@@ -88,7 +93,8 @@ CREATE TABLE IF NOT EXISTS busquedas (
     presupuesto_min BIGINT,
     presupuesto_max BIGINT,
     uso_previsto JSONB DEFAULT '[]'::jsonb,        -- lista de strings (multi-choice)
-    comodidades JSONB,
+    comodidades_relevantes JSONB DEFAULT '[]'::jsonb,      -- pesan en el score del LLM, no filtran
+    comodidades_indispensables JSONB DEFAULT '[]'::jsonb,  -- filtro duro: el anuncio debe tenerlas TODAS
     pregunta_abierta TEXT,
 
     creada_en TIMESTAMPTZ DEFAULT now(),
@@ -125,6 +131,27 @@ BEGIN
         ALTER TABLE busquedas ALTER COLUMN estrato_objetivo TYPE JSONB USING
             CASE WHEN estrato_objetivo IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(estrato_objetivo) END;
         ALTER TABLE busquedas ALTER COLUMN estrato_objetivo SET DEFAULT '[]'::jsonb;
+    END IF;
+
+    -- antiguedad_deseada (categorias de texto, no comparables entre portales) ->
+    -- antiguedad_anios_min/max (rango numerico, filtro duro exacto). No hay
+    -- traduccion automatica razonable de las categorias viejas, asi que se
+    -- vacian los datos de busqueda/resultados que dependian del esquema
+    -- anterior (autorizado explicitamente, no hay clientes en produccion
+    -- afectados por este cambio de criterios).
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'busquedas' AND column_name = 'antiguedad_deseada') THEN
+        TRUNCATE TABLE reportes, resultados_busqueda, busquedas, anuncios RESTART IDENTITY CASCADE;
+        ALTER TABLE busquedas DROP COLUMN antiguedad_deseada;
+        ALTER TABLE busquedas ADD COLUMN IF NOT EXISTS antiguedad_anios_min SMALLINT;
+        ALTER TABLE busquedas ADD COLUMN IF NOT EXISTS antiguedad_anios_max SMALLINT;
+    END IF;
+
+    -- comodidades (una sola lista plana) -> comodidades_relevantes (soft,
+    -- pesa en el score) + comodidades_indispensables (filtro duro, AND).
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'busquedas' AND column_name = 'comodidades') THEN
+        ALTER TABLE busquedas DROP COLUMN comodidades;
+        ALTER TABLE busquedas ADD COLUMN IF NOT EXISTS comodidades_relevantes JSONB DEFAULT '[]'::jsonb;
+        ALTER TABLE busquedas ADD COLUMN IF NOT EXISTS comodidades_indispensables JSONB DEFAULT '[]'::jsonb;
     END IF;
 END $$;
 

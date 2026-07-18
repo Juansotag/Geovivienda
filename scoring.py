@@ -109,12 +109,14 @@ def top_n(candidatos_rankeados: list[dict], n: int = 5) -> list[dict]:
 
 def _resumir_anuncio_para_prompt(a: dict) -> str:
     precio = a.get("precio_venta") or 0
+    admin = a.get("administracion")
+    admin_txt = f"${admin:,.0f} COP/mes" if admin else "no especificada"
     return (
-        f"- id={a['id']}: {a.get('tipo_inmueble')}, {a.get('estado')}, "
-        f"{a.get('habitaciones')} hab, {a.get('banos')} baños, {a.get('area_metros')} m², "
+        f"- id={a['id']}: {a.get('tipo_inmueble')}, {a.get('estado')}, antigüedad: {a.get('antiguedad') or 'no especificada'}, "
+        f"{a.get('habitaciones')} hab, {a.get('banos')} baños, {a.get('parqueaderos') or 0} parqueadero(s), {a.get('area_metros')} m², "
         f"estrato {a.get('estrato')} (estrato del sector 200m: {a.get('estrato_promedio_200m')}), "
-        f"${precio:,.0f} COP, ubicación: {a.get('ubicacion_texto')}, "
-        f"distancia a TransMilenio: {a.get('dist_tm')}m, distancia a SITP: {a.get('dist_sitp')}m, "
+        f"${precio:,.0f} COP, administración: {admin_txt}, ubicación: {a.get('ubicacion_texto')}, "
+        f"distancia a TransMilenio: {a.get('dist_tm')}m, distancia a SITP: {a.get('dist_sitp')}m, distancia a ciclorruta: {a.get('dist_ciclo')}m, "
         f"comodidades: {a.get('comodidades') or 'no especificadas'}, "
         f"descripción: {(a.get('descripcion') or '')[:200]}"
     )
@@ -124,6 +126,16 @@ def _texto_lista(valores, vacio="no especificado") -> str:
     if not valores:
         return vacio
     return ", ".join(str(v) for v in valores)
+
+
+def _texto_rango_anios(minimo, maximo) -> str:
+    if minimo is None and maximo is None:
+        return "sin límite"
+    if maximo is None:
+        return f"{minimo}+ años"
+    if minimo is None:
+        return f"hasta {maximo} años"
+    return f"{minimo} a {maximo} años"
 
 
 def calcular_scores_llm(busqueda: dict, anuncios: list[dict]) -> dict[int, dict]:
@@ -149,11 +161,12 @@ CRITERIOS DE BUSQUEDA DEL CLIENTE:
 - Presupuesto: {(busqueda.get('presupuesto_min') or 0):,.0f} a {(busqueda.get('presupuesto_max') or 0):,.0f} COP
 - Estrato(s) objetivo: {_texto_lista(busqueda.get('estrato_objetivo'))}
 - Tipo de vivienda: {busqueda.get('tipo_vivienda')}, estado deseado: {busqueda.get('estado_deseado')}
-- Antigüedad deseada: {_texto_lista(busqueda.get('antiguedad_deseada'))}
+- Antigüedad deseada: {_texto_rango_anios(busqueda.get('antiguedad_anios_min'), busqueda.get('antiguedad_anios_max'))}
 - Habitaciones mínimas: {busqueda.get('habitaciones_min')} (exactas: {busqueda.get('habitaciones_exactas')})
 - Baños mínimos: {busqueda.get('banos_min')} (exactos: {busqueda.get('banos_exactos')})
 - Uso previsto: {_texto_lista(busqueda.get('uso_previsto'))}
-- Comodidades deseadas: {_texto_lista(busqueda.get('comodidades'), "no especificadas")}
+- Comodidades relevantes (pesan en el score, no son obligatorias): {_texto_lista(busqueda.get('comodidades_relevantes'), "no especificadas")}
+- Comodidades indispensables: {_texto_lista(busqueda.get('comodidades_indispensables'), "ninguna")} (nota: todos los inmuebles de esta lista YA fueron filtrados y cumplen estas comodidades, no necesitas verificarlas ni penalizar por ellas)
 - Qué busca en la vivienda y su entorno (respuesta abierta del cliente): {busqueda.get('pregunta_abierta') or 'no especificado'}
 
 INMUEBLES A EVALUAR:
@@ -165,6 +178,16 @@ no solo presupuesto/estrato — también el entorno, las comodidades, y lo que e
 dijo textualmente que busca. Diferencia de verdad entre inmuebles: si dos inmuebles tienen
 diferencias reales entre sí (ubicación, comodidades, estado), sus scores deben reflejarlo,
 no le des el mismo número a todos por comodidad.
+
+IMPORTANTE - restricciones duras: habitaciones mínimas y baños mínimos NO son una
+preferencia más entre varias, son un requisito. Si "exactas"/"exactos" es true, el
+inmueble debe tener EXACTAMENTE ese número; si es false, debe tener ESE NÚMERO O MÁS.
+Un inmueble que incumple habitaciones mínimas o baños mínimos no puede pasar de 0.35
+de score sin importar qué tan bien encaje en todo lo demás (los datos del scraper a
+veces no filtran bien esto, así que verifícalo tú mismo con los datos de cada inmueble
+antes de puntuar). La antigüedad y las comodidades indispensables, en cambio, ya
+fueron aplicadas como filtro duro ANTES de que este inmueble llegara a tu evaluación
+- no las vuelvas a verificar ni las penalices, enfócate en diferenciar por lo demás.
 
 Responde ÚNICAMENTE con un array JSON, sin texto adicional antes o después, con este
 formato exacto:

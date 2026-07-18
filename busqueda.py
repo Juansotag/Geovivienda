@@ -1,3 +1,5 @@
+import re
+
 import requests
 
 import db
@@ -5,6 +7,104 @@ from portales import buscar_portal, extraer_detalle
 from extractor_links import configurar_driver
 from spatial_analysis import enriquecer_inmueble
 from scoring import rankear_candidatos_llm, top_n
+
+
+# Sinonimos por comodidad predefinida del formulario, verificados contra el
+# texto REAL ya scrapeado de FincaRaiz y Metrocuadrado (no son una lista
+# teorica) - ambos portales redactan las mismas amenidades con palabras
+# distintas, asi que el filtro duro de comodidades hace match por keyword
+# contra el texto normalizado en anuncios.comodidades, no por igualdad exacta.
+SINONIMOS_COMODIDADES = {
+    "ascensor": ["ascensor"],
+    "balcon": ["balcon"],
+    "parqueadero": ["parqueadero", "garaje", "cochera", "bahia"],
+    "deposito": ["deposito", "bodega", "cuarto util"],
+    "vigilancia": ["vigilancia", "porteria", "recepcion", "citofono", "conjunto cerrado"],
+    "zonas verdes": ["zona verde", "zonas verdes"],
+    "gimnasio": ["gimnasio"],
+}
+
+
+def _sin_tildes(texto: str) -> str:
+    reemplazos = {"á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u", "ñ": "n"}
+    t = texto.lower()
+    for k, v in reemplazos.items():
+        t = t.replace(k, v)
+    return t
+
+
+def _parsear_antiguedad(texto: str | None) -> tuple[int | None, int | None]:
+    """Traduce el texto de antiguedad de CUALQUIERA de los dos portales a un
+    rango numerico (anios_min, anios_max) - max=None significa sin limite
+    superior ('mas de N anios'). Cubre las 5 categorias de FincaRaiz
+    (menor a 1 anio / 1 a 8 / 9 a 15 / 16 a 30 / mas de 30) y las 4 de
+    Metrocuadrado (Entre 0 y 5 / 5 y 10 / 10 y 20 / mas de 20), verificado
+    contra los valores reales que ambos portales devuelven. Si el texto no
+    matchea ningun patron conocido (ej. Metrocuadrado a veces trae
+    "¡Preguntale!" cuando no lo sabe), devuelve (None, None) en vez de
+    fallar - un anuncio sin antiguedad conocida no debe bloquear el filtro
+    duro, solo queda fuera de la comparacion."""
+    if not texto:
+        return None, None
+    t = _sin_tildes(texto.strip())
+
+    m = re.search(r"menor a (\d+)", t)
+    if m:
+        return 0, int(m.group(1))
+
+    m = re.search(r"mas de (\d+)", t)
+    if m:
+        return int(m.group(1)) + 1, None
+
+    m = re.search(r"entre (\d+) y (\d+)", t)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+
+    m = re.search(r"(\d+) a (\d+)", t)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+
+    return None, None
+
+
+def _rangos_se_solapan(min1, max1, min2, max2) -> bool:
+    """None en cualquier punta significa 'sin limite' de ese lado."""
+    if max1 is not None and min2 is not None and max1 < min2:
+        return False
+    if max2 is not None and min1 is not None and max2 < min1:
+        return False
+    return True
+
+
+def _cumple_antiguedad(busqueda: dict, anuncio: dict) -> bool:
+    b_min, b_max = busqueda.get("antiguedad_anios_min"), busqueda.get("antiguedad_anios_max")
+    if b_min is None and b_max is None:
+        return True  # el cliente no puso limite de antiguedad
+    a_min, a_max = anuncio.get("antiguedad_anios_min"), anuncio.get("antiguedad_anios_max")
+    if a_min is None and a_max is None:
+        return True  # no sabemos la antiguedad del anuncio - no lo descartamos por falta de dato
+    return _rangos_se_solapan(a_min, a_max, b_min, b_max)
+
+
+def _cumple_comodidades_indispensables(busqueda: dict, anuncio: dict) -> bool:
+    indispensables = busqueda.get("comodidades_indispensables") or []
+    if not indispensables:
+        return True
+    texto_anuncio = _sin_tildes(anuncio.get("comodidades") or "")
+    for comodidad in indispensables:
+        sinonimos = SINONIMOS_COMODIDADES.get(comodidad, [comodidad])
+        sinonimos_normalizados = [_sin_tildes(s) for s in sinonimos]
+        if not any(s in texto_anuncio for s in sinonimos_normalizados):
+            return False
+    return True
+
+
+def _cumple_filtros_duros(busqueda: dict, anuncio: dict) -> bool:
+    """Filtro duro real: se evalua sobre el registro YA GUARDADO en la tabla
+    maestra (nuevo o previamente conocido), asi que es correcto sin importar
+    si el anuncio se acaba de scrapear para esta busqueda o ya existia de
+    una busqueda anterior con otros criterios."""
+    return _cumple_antiguedad(busqueda, anuncio) and _cumple_comodidades_indispensables(busqueda, anuncio)
 
 
 def filtrar_urls_nuevas(urls: list[str]) -> list[str]:
@@ -82,6 +182,7 @@ def _filtros_desde_cliente(busqueda: dict, portal: str, cantidad: int, municipio
             "tipos_inmueble": tipos,
             "ubicacion": f"{ciudad}/{ciudad}-dc" if ciudad == "bogota" else ciudad,
             "habitaciones": busqueda.get("habitaciones_min"),
+            "banos": busqueda.get("banos_min"),
             "estado": estado,
             "precio_min": busqueda.get("presupuesto_min"),
             "precio_max": busqueda.get("presupuesto_max"),
@@ -94,6 +195,7 @@ def _filtros_desde_cliente(busqueda: dict, portal: str, cantidad: int, municipio
             "tipos_inmueble": tipos,
             "ciudad": ciudad,
             "habitaciones_min": busqueda.get("habitaciones_min"),
+            "banos_min": busqueda.get("banos_min"),
             "precio_min": busqueda.get("presupuesto_min"),
             "precio_max": busqueda.get("presupuesto_max"),
             "estratos": estratos,
@@ -105,6 +207,7 @@ def _filtros_desde_cliente(busqueda: dict, portal: str, cantidad: int, municipio
 def _normalizar_para_db(detalle: dict, portal: str) -> dict:
     """Traduce el dict en español-con-mayusculas de los extractores a las
     columnas en minuscula/snake_case de la tabla anuncios."""
+    antiguedad_min, antiguedad_max = _parsear_antiguedad(detalle.get("Antiguedad"))
     return {
         "url": detalle["URL"],
         "portal": portal,
@@ -122,6 +225,8 @@ def _normalizar_para_db(detalle: dict, portal: str) -> dict:
         "banos": detalle.get("Banos"),
         "parqueaderos": detalle.get("Parqueaderos"),
         "antiguedad": detalle.get("Antiguedad"),
+        "antiguedad_anios_min": antiguedad_min,
+        "antiguedad_anios_max": antiguedad_max,
         "piso_nro": detalle.get("Piso_Nro"),
         "cantidad_pisos": detalle.get("Cantidad_Pisos"),
         "comodidades": detalle.get("Comodidades"),
@@ -219,10 +324,21 @@ def ejecutar_busqueda(busqueda: dict, portales: list[str], cantidad: int, munici
             db.actualizar_busqueda_log(busqueda_id, f"Error procesando {url}: {e}", "error")
 
     resultados = []
+    descartados_duro = 0
     for url in todas_urls:
         a = db.buscar_anuncio_por_url(url)
-        if a and a["activo"]:
-            resultados.append(a)
+        if not a or not a["activo"]:
+            continue
+        if not _cumple_filtros_duros(busqueda, a):
+            descartados_duro += 1
+            continue
+        resultados.append(a)
+    if descartados_duro:
+        db.actualizar_busqueda_log(
+            busqueda_id,
+            f"{municipio_nombre}: {descartados_duro} anuncios descartados por no cumplir antigüedad/comodidades indispensables",
+            "info",
+        )
     return resultados
 
 
