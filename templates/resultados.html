@@ -236,16 +236,6 @@
   {% endif %}
 </div>
 
-<div class="card">
-  <h3 style="margin-top:0;">¿Quieres el reporte de otro anuncio que no está en la lista?</h3>
-  <p style="color:var(--color-text-muted); font-size:14px;">Pega la URL del anuncio (de FincaRaíz o Metrocuadrado) que ya hayas visto en una búsqueda anterior.</p>
-  <div style="display:flex; gap:10px;">
-    <input type="text" id="url-manual" placeholder="https://..." style="flex:1; padding:9px 12px; border:1px solid var(--color-border); border-radius:6px;">
-    <button class="btn btn-primary" onclick="generarReportePorUrl({{ cliente.id }})">Generar reporte</button>
-  </div>
-  <div id="resultado-manual" style="margin-top:10px;"></div>
-</div>
-
 <style>
   @keyframes spin {
     from { transform: rotate(0deg); }
