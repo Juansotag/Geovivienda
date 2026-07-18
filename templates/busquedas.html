@@ -50,6 +50,10 @@
               <span class="badge" style="background-color: #D4EDDA; color: #155724;">Completado</span>
             {% elif b.status == 'running' %}
               <span class="badge" style="background-color: #CCE5FF; color: #004085;">Corriendo...</span>
+            {% elif b.status == 'cancelando' %}
+              <span class="badge" style="background-color: #FFE5CC; color: #8A4B00;">Cancelando...</span>
+            {% elif b.status == 'cancelada' %}
+              <span class="badge" style="background-color: #E2E4E9; color: var(--color-text);">Cancelada</span>
             {% elif b.status == 'error' %}
               <span class="badge" style="background-color: #F8D7DA; color: #721C24;">Falló</span>
             {% elif b.status == 'pendiente' %}
@@ -66,6 +70,9 @@
                 <a href="{{ url_for('cliente_resultados', cliente_id=b.cliente_id, busqueda_id=b.id) }}" class="btn btn-secondary btn-sm">
                   {% if b.status == 'running' %}Progreso{% else %}Resultados{% endif %}
                 </a>
+              {% endif %}
+              {% if b.status == 'running' %}
+                <button type="button" class="btn btn-danger btn-sm" onclick="cancelarBusqueda({{ b.id }}, this)">Detener</button>
               {% endif %}
               <a href="{{ url_for('busqueda_eliminar', busqueda_id=b.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('¿Seguro que deseas eliminar esta búsqueda?')">Eliminar</a>
             </div>

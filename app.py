@@ -337,8 +337,25 @@ def busqueda_lanzar(busqueda_id):
         daemon=True,
     )
     thread.start()
-    
+
     return redirect(url_for("cliente_resultados", cliente_id=busqueda_obj["cliente_id"], busqueda_id=busqueda_id))
+
+
+@app.route("/api/busquedas/<int:busqueda_id>/cancelar", methods=["POST"])
+def api_cancelar_busqueda(busqueda_id):
+    busqueda_obj = db.obtener_busqueda(busqueda_id)
+    if not busqueda_obj:
+        return jsonify({"status": "error", "message": "Búsqueda no encontrada"}), 404
+    if busqueda_obj["status"] != "running":
+        return jsonify({"status": "error", "message": "Solo se pueden cancelar búsquedas en curso"}), 400
+
+    # Cancelacion cooperativa: el hilo en background revisa este estado
+    # entre cada portal y cada anuncio, y se detiene solo en el proximo
+    # punto seguro - no es instantaneo si esta a mitad de una carga de
+    # pagina, pero si en cuestion de segundos.
+    db.actualizar_busqueda_status(busqueda_id, "cancelando")
+    db.actualizar_busqueda_log(busqueda_id, "Cancelación solicitada, deteniendo en el próximo punto seguro...", "info")
+    return jsonify({"status": "ok"})
 
 
 @app.route("/api/fx")

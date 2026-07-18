@@ -52,7 +52,15 @@
       <div id="log-busqueda" style="margin-top:20px; text-align:left; background:#1A1D35; color:#FFF; padding:15px; border-radius:8px; font-family:monospace; font-size:13px; max-height:300px; overflow-y:auto; line-height:1.6;">
         <p style="color:#C7C5D1; margin:0;">[INFO] Conectando con los portales inmobiliarios...</p>
       </div>
+
+      <button type="button" class="btn btn-danger btn-sm" style="margin-top:16px;" id="btn-detener" onclick="cancelarBusqueda({{ busqueda_id }}, this)">Detener búsqueda</button>
     </div>
+    {% elif status == 'cancelando' %}
+    <div style="text-align:center; padding:20px; color:var(--color-text-muted);">
+      <p style="font-size:14px;">Deteniendo la búsqueda en el próximo punto seguro (puede tardar unos segundos más)...</p>
+    </div>
+    {% elif status == 'cancelada' %}
+    <p>Esta búsqueda fue cancelada. Los inmuebles que ya se alcanzaron a procesar quedaron guardados.</p>
     {% else %}
     <p>Todavía no hay resultados para esta búsqueda o ha ocurrido un error.</p>
     {% endif %}
@@ -80,7 +88,7 @@
   const busquedaId = {{ busqueda_id if busqueda_id else 'null' }};
   const currentStatus = "{{ status if status else '' }}";
   
-  if (currentStatus === "running" && busquedaId) {
+  if ((currentStatus === "running" || currentStatus === "cancelando") && busquedaId) {
     let since = 0;
     const interval = setInterval(() => {
       fetch(`/api/status?busqueda_id=${busquedaId}&since=${since}`)
@@ -100,11 +108,14 @@
             since += data.logs.length;
           }
           
-          if (data.status === "done") {
+          if (data.status === "done" || data.status === "cancelada") {
             clearInterval(interval);
             setTimeout(() => {
               window.location.reload();
             }, 1000);
+          } else if (data.status === "cancelando") {
+            const btn = document.getElementById("btn-detener");
+            if (btn) { btn.disabled = true; btn.textContent = "Deteniendo..."; }
           } else if (data.status === "error") {
             clearInterval(interval);
             if (logDiv) {

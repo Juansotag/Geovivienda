@@ -172,16 +172,33 @@ def procesar_anuncio_nuevo(url: str) -> int:
     return db.insertar_anuncio(datos_anuncio)
 
 
+def _fue_cancelada(busqueda_id: int) -> bool:
+    b = db.obtener_busqueda(busqueda_id)
+    return b is not None and b["status"] == "cancelando"
+
+
 def ejecutar_busqueda(cliente: dict, portales: list[str], cantidad: int, busqueda_id: int) -> list[dict]:
     """Pipeline completo: busca en los portales pedidos, deduplica contra la
     tabla maestra, revalida anuncios existentes, procesa los nuevos, y
-    devuelve todos los anuncios activos encontrados."""
+    devuelve todos los anuncios activos encontrados.
+
+    Revisa la bandera de cancelacion entre cada portal y entre cada
+    anuncio procesado - Python no puede matar un thread de forma segura
+    a mitad de ejecucion, asi que la cancelacion es cooperativa: se
+    detiene en el proximo punto seguro, no instantaneamente."""
     todas_urls = []
     for portal in portales:
+        if _fue_cancelada(busqueda_id):
+            db.actualizar_busqueda_log(busqueda_id, "Búsqueda cancelada por el usuario.", "info")
+            return []
         filtros = _filtros_desde_cliente(cliente, portal, cantidad)
         urls = buscar_portal(portal, filtros)
         todas_urls.extend(urls)
         db.actualizar_busqueda_log(busqueda_id, f"{portal}: {len(urls)} anuncios encontrados", "ok")
+
+    if _fue_cancelada(busqueda_id):
+        db.actualizar_busqueda_log(busqueda_id, "Búsqueda cancelada por el usuario.", "info")
+        return []
 
     urls_existentes = [u for u in todas_urls if db.buscar_anuncio_por_url(u) is not None]
     revalidar_anuncios_existentes(urls_existentes)
@@ -190,6 +207,9 @@ def ejecutar_busqueda(cliente: dict, portales: list[str], cantidad: int, busqued
     db.actualizar_busqueda_log(busqueda_id, f"{len(urls_nuevas)} anuncios nuevos por procesar", "info")
 
     for url in urls_nuevas:
+        if _fue_cancelada(busqueda_id):
+            db.actualizar_busqueda_log(busqueda_id, f"Búsqueda cancelada por el usuario ({len(todas_urls) - urls_nuevas.index(url)} anuncios sin procesar).", "info")
+            break
         try:
             procesar_anuncio_nuevo(url)
         except Exception as e:
@@ -224,6 +244,11 @@ def ejecutar_busqueda_completa(busqueda_id: int, top: int = 5):
         criterios_completos = {**cliente, **busqueda_obj, "id": cliente["id"]}
 
         candidatos = ejecutar_busqueda(busqueda_obj, portales, cantidad, busqueda_id)
+
+        if _fue_cancelada(busqueda_id):
+            db.finalizar_busqueda(busqueda_id, "cancelada")
+            return
+
         db.actualizar_busqueda_log(busqueda_id, f"{len(candidatos)} anuncios activos encontrados", "ok")
 
         rankeados = rankear_candidatos(busqueda_obj, candidatos)
@@ -235,6 +260,10 @@ def ejecutar_busqueda_completa(busqueda_id: int, top: int = 5):
 
         db.actualizar_busqueda_log(busqueda_id, f"Generando reportes para el top {len(mejores)}...", "info")
         for a in mejores:
+            if _fue_cancelada(busqueda_id):
+                db.actualizar_busqueda_log(busqueda_id, "Búsqueda cancelada por el usuario (algunos reportes no se generaron).", "info")
+                db.finalizar_busqueda(busqueda_id, "cancelada")
+                return
             score = {"total": a["score"], "componentes": a["score_desglose"]}
             crear_y_guardar_reporte(criterios_completos, a, score)
 

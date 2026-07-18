@@ -65,6 +65,10 @@
             <span class="badge badge-alto" style="background:#23C55E; color:#FFF;">Completada ({{ b.encontrados }} encontrados)</span>
           {% elif b.status == 'running' %}
             <span class="badge badge-medio" style="background:#2F3670; color:#FFF; display:inline-flex; align-items:center; gap:4px;"><i data-lucide="loader" style="width:12px; height:12px; animation: spin 1.5s linear infinite;"></i> Ejecutando...</span>
+          {% elif b.status == 'cancelando' %}
+            <span class="badge" style="background:#FFE5CC; color:#8A4B00;">Cancelando...</span>
+          {% elif b.status == 'cancelada' %}
+            <span class="badge" style="background:var(--color-border); color:var(--color-text-muted);">Cancelada</span>
           {% elif b.status == 'error' %}
             <span class="badge badge-bajo" style="background:#EF4444; color:#FFF;">Falló</span>
           {% elif b.status == 'pendiente' %}
@@ -87,6 +91,11 @@
                   <i data-lucide="list" style="width:12px; height:12px;"></i> Ver resultados
                 {% endif %}
               </a>
+            {% endif %}
+            {% if b.status == 'running' %}
+              <button type="button" class="btn btn-danger btn-sm" onclick="cancelarBusqueda({{ b.id }}, this)">
+                <i data-lucide="square" style="width:12px; height:12px;"></i> Detener
+              </button>
             {% endif %}
             <a href="{{ url_for('busqueda_eliminar', busqueda_id=b.id) }}" class="btn btn-secondary btn-sm" style="color:var(--color-danger); border-color:rgba(197,51,54,0.2);" onclick="return confirm('¿Seguro que deseas eliminar esta búsqueda?')">
               <i data-lucide="trash-2" style="width:12px; height:12px;"></i>

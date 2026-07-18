@@ -1,3 +1,19 @@
+// --- Cancelar busqueda en curso ---
+async function cancelarBusqueda(busquedaId, boton) {
+  if (!confirm('¿Detener esta búsqueda? Los inmuebles ya procesados se conservan, pero no se seguirán agregando más.')) return;
+  boton.disabled = true;
+  boton.textContent = 'Deteniendo...';
+  const resp = await fetch(`/api/busquedas/${busquedaId}/cancelar`, { method: 'POST' });
+  const data = await resp.json();
+  if (data.status === 'ok') {
+    window.location.reload();
+  } else {
+    boton.disabled = false;
+    boton.textContent = 'Detener';
+    alert(data.message || 'No se pudo cancelar la búsqueda.');
+  }
+}
+
 // --- Reportes ---
 async function generarReporte(clienteId, anuncioId, boton) {
   boton.disabled = true;
