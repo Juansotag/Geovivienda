@@ -48,7 +48,16 @@ def _slugify_municipio(nombre: str) -> str:
     }
     for k, v in replacements.items():
         n = n.replace(k, v)
-    return n.replace(" ", "-").replace(".", "")
+    # DIVIPOLA trae el nombre oficial de Bogota como "Bogota, D.C." (con
+    # coma) - sin quitar la coma, el slug quedaba "bogota,-dc", que no
+    # calzaba con el caso especial de abajo y rompia la URL en los dos
+    # portales (esto causo el bug real: Metrocuadrado devolvia 0
+    # resultados y FincaRaiz devolvia inmuebles de otras ciudades).
+    n = n.replace(",", " ").replace(".", "")
+    n = " ".join(n.split())
+    if n in ("bogota", "bogota dc", "santafe de bogota", "santa fe de bogota"):
+        return "bogota"
+    return n.replace(" ", "-")
 
 
 def _filtros_desde_cliente(cliente: dict, portal: str, cantidad: int) -> dict:
