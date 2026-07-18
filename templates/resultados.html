@@ -21,6 +21,10 @@
   {% set portales_unicos = resultados | map(attribute='portal') | unique | list %}
   {% set tipos_unicos = resultados | map(attribute='tipo_inmueble') | unique | list %}
   <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+    <div class="form-group" style="margin-bottom:0; max-width:100px;">
+      <label for="filtro-id" style="font-size:11px;">ID</label>
+      <input type="text" id="filtro-id" placeholder="Ej: 42" oninput="aplicarFiltrosResultados()">
+    </div>
     <div class="form-group" style="margin-bottom:0;">
       <label for="filtro-portal" style="font-size:11px;">Portal</label>
       <select id="filtro-portal" onchange="aplicarFiltrosResultados()">
@@ -36,6 +40,46 @@
       </select>
     </div>
     <div class="form-group" style="margin-bottom:0;">
+      <label for="filtro-estado" style="font-size:11px;">Estado</label>
+      <select id="filtro-estado" onchange="aplicarFiltrosResultados()">
+        <option value="">Todos</option>
+        <option value="usado">Usado</option>
+        <option value="nuevo">Nuevo</option>
+        <option value="proyecto">Proyecto</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label for="filtro-estrato" style="font-size:11px;">Estrato mín.</label>
+      <select id="filtro-estrato" onchange="aplicarFiltrosResultados()">
+        <option value="">Todos</option>
+        {% for e in range(1, 7) %}<option value="{{ e }}">{{ e }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:0; max-width:110px;">
+      <label for="filtro-habs" style="font-size:11px;">Habs. mín.</label>
+      <input type="number" id="filtro-habs" min="0" oninput="aplicarFiltrosResultados()">
+    </div>
+    <div class="form-group" style="margin-bottom:0; max-width:110px;">
+      <label for="filtro-banos" style="font-size:11px;">Baños mín.</label>
+      <input type="number" id="filtro-banos" min="0" oninput="aplicarFiltrosResultados()">
+    </div>
+    <div class="form-group" style="margin-bottom:0; max-width:150px;">
+      <label for="filtro-precio-min" style="font-size:11px;">Precio mín. (COP)</label>
+      <input type="number" id="filtro-precio-min" placeholder="Sin límite" oninput="aplicarFiltrosResultados()">
+    </div>
+    <div class="form-group" style="margin-bottom:0; max-width:150px;">
+      <label for="filtro-precio-max" style="font-size:11px;">Precio máx. (COP)</label>
+      <input type="number" id="filtro-precio-max" placeholder="Sin límite" oninput="aplicarFiltrosResultados()">
+    </div>
+    <div class="form-group" style="margin-bottom:0; max-width:110px;">
+      <label for="filtro-area-min" style="font-size:11px;">Área mín. (m²)</label>
+      <input type="number" id="filtro-area-min" oninput="aplicarFiltrosResultados()">
+    </div>
+    <div class="form-group" style="margin-bottom:0; max-width:110px;">
+      <label for="filtro-area-max" style="font-size:11px;">Área máx. (m²)</label>
+      <input type="number" id="filtro-area-max" oninput="aplicarFiltrosResultados()">
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
       <label for="filtro-score" style="font-size:11px;">Score mínimo</label>
       <select id="filtro-score" onchange="aplicarFiltrosResultados()">
         <option value="0">Todos</option>
@@ -43,6 +87,7 @@
         <option value="0.4">Medio (≥ 0.4)</option>
       </select>
     </div>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="limpiarFiltrosResultados()">Limpiar filtros</button>
   </div>
 
   <div class="table-responsive" id="resultados-table-wrapper">
@@ -61,6 +106,7 @@
       <tbody id="resultados-tbody">
         {% for r in resultados %}
         <tr class="resultado-fila" data-id="{{ r.id }}" data-portal="{{ r.portal }}" data-tipo="{{ r.tipo_inmueble }}"
+            data-estado="{{ r.estado or '' }}" data-estrato="{{ r.estrato or 0 }}" data-habitaciones="{{ r.habitaciones or 0 }}" data-banos="{{ r.banos or 0 }}"
             data-score="{{ r.score or 0 }}" data-precio="{{ r.precio_venta or 0 }}" data-area="{{ r.area_metros or 0 }}">
           <td>
             {% if r.score >= 0.75 %}<span class="badge badge-alto">{{ "%.2f"|format(r.score) }}</span>
@@ -125,6 +171,7 @@
   <div class="inmuebles-grid" id="resultados-grid" style="display:none;">
     {% for r in resultados %}
     <div class="inmueble-card resultado-tarjeta" data-id="{{ r.id }}" data-portal="{{ r.portal }}" data-tipo="{{ r.tipo_inmueble }}"
+         data-estado="{{ r.estado or '' }}" data-estrato="{{ r.estrato or 0 }}" data-habitaciones="{{ r.habitaciones or 0 }}" data-banos="{{ r.banos or 0 }}"
          data-score="{{ r.score or 0 }}" data-precio="{{ r.precio_venta or 0 }}" data-area="{{ r.area_metros or 0 }}">
       <div class="inmueble-card-foto">
         {% if r.foto_url %}
@@ -231,16 +278,40 @@
 
   // --- Filtros (aplican a tabla y tarjetas por igual) ---
   function aplicarFiltrosResultados() {
+    const id = document.getElementById("filtro-id").value.trim();
     const portal = document.getElementById("filtro-portal").value;
     const tipo = document.getElementById("filtro-tipo").value;
+    const estado = document.getElementById("filtro-estado").value;
+    const estratoMin = parseFloat(document.getElementById("filtro-estrato").value) || 0;
+    const habsMin = parseFloat(document.getElementById("filtro-habs").value) || 0;
+    const banosMin = parseFloat(document.getElementById("filtro-banos").value) || 0;
+    const precioMin = parseFloat(document.getElementById("filtro-precio-min").value) || 0;
+    const precioMax = parseFloat(document.getElementById("filtro-precio-max").value) || Infinity;
+    const areaMin = parseFloat(document.getElementById("filtro-area-min").value) || 0;
+    const areaMax = parseFloat(document.getElementById("filtro-area-max").value) || Infinity;
     const scoreMin = parseFloat(document.getElementById("filtro-score").value) || 0;
 
     document.querySelectorAll(".resultado-fila, .resultado-tarjeta").forEach(el => {
-      const coincide = (!portal || el.dataset.portal === portal)
+      const coincide = (!id || el.dataset.id === id)
+        && (!portal || el.dataset.portal === portal)
         && (!tipo || el.dataset.tipo === tipo)
+        && (!estado || el.dataset.estado === estado)
+        && (parseFloat(el.dataset.estrato) || 0) >= estratoMin
+        && (parseFloat(el.dataset.habitaciones) || 0) >= habsMin
+        && (parseFloat(el.dataset.banos) || 0) >= banosMin
+        && (parseFloat(el.dataset.precio) || 0) >= precioMin
+        && (parseFloat(el.dataset.precio) || 0) <= precioMax
+        && (parseFloat(el.dataset.area) || 0) >= areaMin
+        && (parseFloat(el.dataset.area) || 0) <= areaMax
         && (parseFloat(el.dataset.score) || 0) >= scoreMin;
       el.style.display = coincide ? "" : "none";
     });
+  }
+
+  function limpiarFiltrosResultados() {
+    ["filtro-id", "filtro-portal", "filtro-tipo", "filtro-estado", "filtro-estrato", "filtro-score"].forEach(id => document.getElementById(id).value = "");
+    ["filtro-habs", "filtro-banos", "filtro-precio-min", "filtro-precio-max", "filtro-area-min", "filtro-area-max"].forEach(id => document.getElementById(id).value = "");
+    aplicarFiltrosResultados();
   }
 
   // --- Orden (solo tabla - las columnas relevantes son numericas) ---
