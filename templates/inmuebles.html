@@ -18,6 +18,17 @@
 <div class="card">
   {% if anuncios %}
   <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+    <div class="form-group" style="margin-bottom:0; max-width:100px;">
+      <label for="filtro-id" style="font-size:11px;">ID</label>
+      <input type="text" id="filtro-id" placeholder="Ej: 42" oninput="aplicarFiltrosInmuebles()">
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label for="filtro-cliente" style="font-size:11px;">Cliente</label>
+      <select id="filtro-cliente" onchange="aplicarFiltrosInmuebles()">
+        <option value="">Todos</option>
+        {% for c in clientes %}<option value="{{ c.nombre }}">{{ c.nombre }}</option>{% endfor %}
+      </select>
+    </div>
     <div class="form-group" style="margin-bottom:0;">
       <label for="filtro-portal" style="font-size:11px;">Portal</label>
       <select id="filtro-portal" onchange="aplicarFiltrosInmuebles()">
@@ -81,6 +92,7 @@
     <table>
       <thead>
         <tr>
+          <th>ID</th>
           <th>Portal</th>
           <th>Tipo / Estado</th>
           <th>Uso / Precio</th>
@@ -92,9 +104,11 @@
       </thead>
       <tbody>
         {% for a in anuncios %}
-        <tr class="inmueble-fila" data-portal="{{ a.portal }}" data-tipo="{{ a.tipo_inmueble | lower if a.tipo_inmueble else '' }}"
+        <tr class="inmueble-fila" data-id="{{ a.id }}" data-portal="{{ a.portal }}" data-tipo="{{ a.tipo_inmueble | lower if a.tipo_inmueble else '' }}"
             data-estado="{{ a.estado or '' }}" data-estrato="{{ a.estrato or 0 }}" data-habitaciones="{{ a.habitaciones or 0 }}"
-            data-banos="{{ a.banos or 0 }}" data-precio="{{ a.precio_venta or 0 }}" data-area="{{ a.area_metros or 0 }}">
+            data-banos="{{ a.banos or 0 }}" data-precio="{{ a.precio_venta or 0 }}" data-area="{{ a.area_metros or 0 }}"
+            data-clientes="{{ (a.compatibilidades | map(attribute='cliente_nombre') | select | list | join('|')) if a.compatibilidades else '' }}">
+          <td style="font-size:12px; color:var(--color-text-muted); font-weight:600;">#{{ a.id }}</td>
           <td>
             <span style="font-size: 11px; font-weight:600; padding: 2px 6px; background:#E2E4E9; border-radius: var(--radius-sm); color: var(--color-primary-container);">
               {{ a.portal | capitalize }}
@@ -168,9 +182,10 @@
 
   <div class="inmuebles-grid" id="inmuebles-grid" style="display:none;">
     {% for a in anuncios %}
-    <div class="inmueble-card inmueble-tarjeta" data-portal="{{ a.portal }}" data-tipo="{{ a.tipo_inmueble | lower if a.tipo_inmueble else '' }}"
+    <div class="inmueble-card inmueble-tarjeta" data-id="{{ a.id }}" data-portal="{{ a.portal }}" data-tipo="{{ a.tipo_inmueble | lower if a.tipo_inmueble else '' }}"
          data-estado="{{ a.estado or '' }}" data-estrato="{{ a.estrato or 0 }}" data-habitaciones="{{ a.habitaciones or 0 }}"
-         data-banos="{{ a.banos or 0 }}" data-precio="{{ a.precio_venta or 0 }}" data-area="{{ a.area_metros or 0 }}">
+         data-banos="{{ a.banos or 0 }}" data-precio="{{ a.precio_venta or 0 }}" data-area="{{ a.area_metros or 0 }}"
+         data-clientes="{{ (a.compatibilidades | map(attribute='cliente_nombre') | select | list | join('|')) if a.compatibilidades else '' }}">
       <div class="inmueble-card-foto">
         {% if a.foto_url %}
         <img src="{{ a.foto_url }}" alt="{{ a.tipo_inmueble }}" loading="lazy"
@@ -184,6 +199,7 @@
           {% endif %}
         </div>
         <span class="inmueble-card-portal-badge">{{ a.portal | capitalize }}</span>
+        <span style="position:absolute; top:8px; left:8px; font-size:11px; font-weight:600; padding:2px 6px; background:rgba(0,0,0,0.55); color:#fff; border-radius:4px;">#{{ a.id }}</span>
       </div>
       <div class="inmueble-card-body">
         <div class="inmueble-card-price">${{ "{:,.0f}".format(a.precio_venta or 0) }} COP</div>
@@ -247,6 +263,8 @@
 
   // --- Filtros de caracteristicas (aplican a tabla y tarjetas por igual) ---
   function aplicarFiltrosInmuebles() {
+    const id = document.getElementById('filtro-id').value.trim();
+    const clienteFiltro = document.getElementById('filtro-cliente').value;
     const portal = document.getElementById('filtro-portal').value;
     const tipo = document.getElementById('filtro-tipo').value;
     const estado = document.getElementById('filtro-estado').value;
@@ -259,7 +277,10 @@
     const areaMax = parseFloat(document.getElementById('filtro-area-max').value) || Infinity;
 
     document.querySelectorAll('.inmueble-fila, .inmueble-tarjeta').forEach(el => {
-      const coincide = (!portal || el.dataset.portal === portal)
+      const clientesInmueble = (el.dataset.clientes || '').split('|');
+      const coincide = (!id || el.dataset.id === id)
+        && (!clienteFiltro || clientesInmueble.includes(clienteFiltro))
+        && (!portal || el.dataset.portal === portal)
         && (!tipo || el.dataset.tipo === tipo)
         && (!estado || el.dataset.estado === estado)
         && (parseFloat(el.dataset.estrato) || 0) >= estratoMin
@@ -274,7 +295,7 @@
   }
 
   function limpiarFiltrosInmuebles() {
-    ['filtro-portal', 'filtro-tipo', 'filtro-estado', 'filtro-estrato'].forEach(id => document.getElementById(id).value = '');
+    ['filtro-id', 'filtro-cliente', 'filtro-portal', 'filtro-tipo', 'filtro-estado', 'filtro-estrato'].forEach(id => document.getElementById(id).value = '');
     ['filtro-habs', 'filtro-banos', 'filtro-precio-min', 'filtro-precio-max', 'filtro-area-min', 'filtro-area-max'].forEach(id => document.getElementById(id).value = '');
     aplicarFiltrosInmuebles();
   }

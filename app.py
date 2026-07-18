@@ -191,7 +191,8 @@ def busqueda_eliminar(busqueda_id):
 @app.route("/inmuebles")
 def inmuebles():
     all_a = db.obtener_todos_anuncios_con_scores()
-    return render_template("inmuebles.html", activo="inmuebles", anuncios=all_a)
+    clientes = db.listar_clientes()
+    return render_template("inmuebles.html", activo="inmuebles", anuncios=all_a, clientes=clientes)
 
 
 @app.route("/inmuebles/<int:anuncio_id>/eliminar", methods=["POST", "GET"])
