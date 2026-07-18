@@ -99,6 +99,11 @@
             <div style="font-size: 13px;">{{ r.habitaciones }} Habs</div>
             <div style="font-size: 13px;">{{ r.banos }} Baños</div>
             <div style="font-size: 13px;">Estrato {{ r.estrato }}</div>
+            {% if r.piso_nro or r.cantidad_pisos %}
+            <div style="font-size: 12px; color:var(--color-text-muted);">
+              Piso {{ r.piso_nro or '?' }}{% if r.cantidad_pisos %} de {{ r.cantidad_pisos }}{% endif %}
+            </div>
+            {% endif %}
           </td>
           <td>
             <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">

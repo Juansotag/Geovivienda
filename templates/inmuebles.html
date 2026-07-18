@@ -17,6 +17,66 @@
 
 <div class="card">
   {% if anuncios %}
+  <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+    <div class="form-group" style="margin-bottom:0;">
+      <label for="filtro-portal" style="font-size:11px;">Portal</label>
+      <select id="filtro-portal" onchange="aplicarFiltrosInmuebles()">
+        <option value="">Todos</option>
+        <option value="fincaraiz">FincaRaíz</option>
+        <option value="metrocuadrado">Metrocuadrado</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label for="filtro-tipo" style="font-size:11px;">Tipo</label>
+      <select id="filtro-tipo" onchange="aplicarFiltrosInmuebles()">
+        <option value="">Todos</option>
+        <option value="apartamento">Apartamento</option>
+        <option value="casa">Casa</option>
+        <option value="apartaestudio">Apartaestudio</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label for="filtro-estado" style="font-size:11px;">Estado</label>
+      <select id="filtro-estado" onchange="aplicarFiltrosInmuebles()">
+        <option value="">Todos</option>
+        <option value="usado">Usado</option>
+        <option value="nuevo">Nuevo</option>
+        <option value="proyecto">Proyecto</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label for="filtro-estrato" style="font-size:11px;">Estrato mín.</label>
+      <select id="filtro-estrato" onchange="aplicarFiltrosInmuebles()">
+        <option value="">Todos</option>
+        {% for e in range(1, 7) %}<option value="{{ e }}">{{ e }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:0; max-width:110px;">
+      <label for="filtro-habs" style="font-size:11px;">Habs. mín.</label>
+      <input type="number" id="filtro-habs" min="0" oninput="aplicarFiltrosInmuebles()">
+    </div>
+    <div class="form-group" style="margin-bottom:0; max-width:110px;">
+      <label for="filtro-banos" style="font-size:11px;">Baños mín.</label>
+      <input type="number" id="filtro-banos" min="0" oninput="aplicarFiltrosInmuebles()">
+    </div>
+    <div class="form-group" style="margin-bottom:0; max-width:150px;">
+      <label for="filtro-precio-min" style="font-size:11px;">Precio mín. (COP)</label>
+      <input type="number" id="filtro-precio-min" placeholder="Sin límite" oninput="aplicarFiltrosInmuebles()">
+    </div>
+    <div class="form-group" style="margin-bottom:0; max-width:150px;">
+      <label for="filtro-precio-max" style="font-size:11px;">Precio máx. (COP)</label>
+      <input type="number" id="filtro-precio-max" placeholder="Sin límite" oninput="aplicarFiltrosInmuebles()">
+    </div>
+    <div class="form-group" style="margin-bottom:0; max-width:110px;">
+      <label for="filtro-area-min" style="font-size:11px;">Área mín. (m²)</label>
+      <input type="number" id="filtro-area-min" oninput="aplicarFiltrosInmuebles()">
+    </div>
+    <div class="form-group" style="margin-bottom:0; max-width:110px;">
+      <label for="filtro-area-max" style="font-size:11px;">Área máx. (m²)</label>
+      <input type="number" id="filtro-area-max" oninput="aplicarFiltrosInmuebles()">
+    </div>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="limpiarFiltrosInmuebles()">Limpiar filtros</button>
+  </div>
   <div class="table-responsive" id="inmuebles-table-wrapper">
     <table>
       <thead>
@@ -32,7 +92,9 @@
       </thead>
       <tbody>
         {% for a in anuncios %}
-        <tr>
+        <tr class="inmueble-fila" data-portal="{{ a.portal }}" data-tipo="{{ a.tipo_inmueble | lower if a.tipo_inmueble else '' }}"
+            data-estado="{{ a.estado or '' }}" data-estrato="{{ a.estrato or 0 }}" data-habitaciones="{{ a.habitaciones or 0 }}"
+            data-banos="{{ a.banos or 0 }}" data-precio="{{ a.precio_venta or 0 }}" data-area="{{ a.area_metros or 0 }}">
           <td>
             <span style="font-size: 11px; font-weight:600; padding: 2px 6px; background:#E2E4E9; border-radius: var(--radius-sm); color: var(--color-primary-container);">
               {{ a.portal | capitalize }}
@@ -64,6 +126,11 @@
           <td>
             <div style="font-size: 13px;">{{ a.habitaciones }} Habs</div>
             <div style="font-size: 13px;">{{ a.banos }} Baños</div>
+            {% if a.piso_nro or a.cantidad_pisos %}
+            <div style="font-size: 12px; color:var(--color-text-muted);">
+              Piso {{ a.piso_nro or '?' }}{% if a.cantidad_pisos %} de {{ a.cantidad_pisos }}{% endif %}
+            </div>
+            {% endif %}
           </td>
           <td>
             <div class="compatibility-list">
@@ -85,6 +152,7 @@
           </td>
           <td>
             <div style="display: flex; gap: 6px; align-items: center; justify-content: flex-start; flex-wrap: nowrap;">
+              <a href="{{ a.url }}" target="_blank" class="btn btn-secondary btn-sm" style="padding: 6px 10px;">Anuncio</a>
               <a href="{{ url_for('mapa', focus_id=a.id) }}" class="btn btn-secondary btn-sm" style="padding: 6px 10px;">Ver en mapa</a>
               <a href="{{ url_for('anuncio_editar', anuncio_id=a.id) }}" class="btn btn-secondary btn-sm" style="padding: 6px 10px;">Editar</a>
               <form action="{{ url_for('anuncio_eliminar', anuncio_id=a.id) }}" method="post" onsubmit="return confirm('¿Seguro que deseas eliminar este inmueble del inventario?');" style="margin: 0; display: inline-flex;">
@@ -100,7 +168,9 @@
 
   <div class="inmuebles-grid" id="inmuebles-grid" style="display:none;">
     {% for a in anuncios %}
-    <div class="inmueble-card">
+    <div class="inmueble-card inmueble-tarjeta" data-portal="{{ a.portal }}" data-tipo="{{ a.tipo_inmueble | lower if a.tipo_inmueble else '' }}"
+         data-estado="{{ a.estado or '' }}" data-estrato="{{ a.estrato or 0 }}" data-habitaciones="{{ a.habitaciones or 0 }}"
+         data-banos="{{ a.banos or 0 }}" data-precio="{{ a.precio_venta or 0 }}" data-area="{{ a.area_metros or 0 }}">
       <div class="inmueble-card-foto">
         {% if a.foto_url %}
         <img src="{{ a.foto_url }}" alt="{{ a.tipo_inmueble }}" loading="lazy"
@@ -173,6 +243,40 @@
       btnGrid.classList.remove('active');
     }
     localStorage.setItem('inmuebles_vista', vista);
+  }
+
+  // --- Filtros de caracteristicas (aplican a tabla y tarjetas por igual) ---
+  function aplicarFiltrosInmuebles() {
+    const portal = document.getElementById('filtro-portal').value;
+    const tipo = document.getElementById('filtro-tipo').value;
+    const estado = document.getElementById('filtro-estado').value;
+    const estratoMin = parseFloat(document.getElementById('filtro-estrato').value) || 0;
+    const habsMin = parseFloat(document.getElementById('filtro-habs').value) || 0;
+    const banosMin = parseFloat(document.getElementById('filtro-banos').value) || 0;
+    const precioMin = parseFloat(document.getElementById('filtro-precio-min').value) || 0;
+    const precioMax = parseFloat(document.getElementById('filtro-precio-max').value) || Infinity;
+    const areaMin = parseFloat(document.getElementById('filtro-area-min').value) || 0;
+    const areaMax = parseFloat(document.getElementById('filtro-area-max').value) || Infinity;
+
+    document.querySelectorAll('.inmueble-fila, .inmueble-tarjeta').forEach(el => {
+      const coincide = (!portal || el.dataset.portal === portal)
+        && (!tipo || el.dataset.tipo === tipo)
+        && (!estado || el.dataset.estado === estado)
+        && (parseFloat(el.dataset.estrato) || 0) >= estratoMin
+        && (parseFloat(el.dataset.habitaciones) || 0) >= habsMin
+        && (parseFloat(el.dataset.banos) || 0) >= banosMin
+        && (parseFloat(el.dataset.precio) || 0) >= precioMin
+        && (parseFloat(el.dataset.precio) || 0) <= precioMax
+        && (parseFloat(el.dataset.area) || 0) >= areaMin
+        && (parseFloat(el.dataset.area) || 0) <= areaMax;
+      el.style.display = coincide ? '' : 'none';
+    });
+  }
+
+  function limpiarFiltrosInmuebles() {
+    ['filtro-portal', 'filtro-tipo', 'filtro-estado', 'filtro-estrato'].forEach(id => document.getElementById(id).value = '');
+    ['filtro-habs', 'filtro-banos', 'filtro-precio-min', 'filtro-precio-max', 'filtro-area-min', 'filtro-area-max'].forEach(id => document.getElementById(id).value = '');
+    aplicarFiltrosInmuebles();
   }
 
   window.addEventListener('DOMContentLoaded', () => {

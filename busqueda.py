@@ -1,4 +1,5 @@
 import re
+import time
 
 import requests
 
@@ -26,6 +27,17 @@ SINONIMOS_COMODIDADES = {
     "zona bbq": ["zona bbq", "zona de bbq", " bbq"],
     "piscina": ["piscina"],
 }
+
+
+# Catalogo completo de valores de "antiguedad" que efectivamente producen
+# los dos portales (verificado contra texto real ya scrapeado, no es una
+# lista teorica) - se usa para validar el campo en el formulario de editar
+# inmueble como un select cerrado, no texto libre (si el usuario puede
+# escribir cualquier cosa ahi, _parsear_antiguedad no la reconoce y el
+# anuncio pierde su filtro duro de antiguedad silenciosamente).
+ANTIGUEDAD_VALORES_FINCARAIZ = ["menor a 1 año", "1 a 8 años", "9 a 15 años", "16 a 30 años", "más de 30 años"]
+ANTIGUEDAD_VALORES_METROCUADRADO = ["Entre 0 y 5 años", "Entre 5 y 10 años", "Entre 10 y 20 años", "Más de 20 años", "Remodelado"]
+ANTIGUEDAD_VALORES_VALIDOS = ANTIGUEDAD_VALORES_FINCARAIZ + ANTIGUEDAD_VALORES_METROCUADRADO
 
 
 def _sin_tildes(texto: str) -> str:
@@ -207,6 +219,23 @@ def _filtros_desde_cliente(busqueda: dict, portal: str, cantidad: int, municipio
     raise ValueError(f"Portal desconocido: {portal}")
 
 
+def _normalizar_estado(texto: str | None) -> str | None:
+    """Normaliza el estado del anuncio a uno de los 3 valores canonicos que
+    usa el resto de la app (usado/nuevo/proyecto). Los portales devuelven
+    texto libre inconsistente - ej. FincaRaiz a veces dice "Excelente
+    estado" en vez de una categoria limpia como hace Metrocuadrado - y
+    ademas en mayusculas, que no calzaba con los <option value="usado">
+    en minuscula del formulario (el desplegable nunca quedaba preseleccionado)."""
+    if not texto:
+        return None
+    t = _sin_tildes(texto.strip().lower())
+    if "usado" in t:
+        return "usado"
+    if "sobre plano" in t or "en construccion" in t or "proyecto" in t:
+        return "proyecto"
+    return "nuevo"  # "nuevo", "excelente estado", "para estrenar", etc.
+
+
 def _normalizar_para_db(detalle: dict, portal: str) -> dict:
     """Traduce el dict en español-con-mayusculas de los extractores a las
     columnas en minuscula/snake_case de la tabla anuncios."""
@@ -216,7 +245,7 @@ def _normalizar_para_db(detalle: dict, portal: str) -> dict:
         "portal": portal,
         "codigo_portal": detalle.get("Codigo_FincaRaiz"),
         "tipo_inmueble": detalle.get("Tipo_Inmueble"),
-        "estado": detalle.get("Estado"),
+        "estado": _normalizar_estado(detalle.get("Estado")),
         "operacion": "venta",
         "precio_venta": detalle.get("Precio_Venta"),
         "administracion": detalle.get("Administracion"),
@@ -238,6 +267,34 @@ def _normalizar_para_db(detalle: dict, portal: str) -> dict:
         "latitud": detalle.get("Latitud") or None,
         "longitud": detalle.get("Longitud") or None,
     }
+
+
+def buscar_administracion_metrocuadrado(url: str) -> int | None:
+    """Visita la ficha INDIVIDUAL de un anuncio de Metrocuadrado para
+    buscar el valor de administracion, que confirmamos que el portal solo
+    publica ahi (no en el JSON de la pagina de resultados que usa
+    extraer_links_metrocuadrado - por eso nunca se veia). A proposito NO
+    se llama durante una busqueda masiva: visitar cada anuncio uno por uno
+    agregaria varios minutos a cada busqueda para un dato secundario. Se
+    usa bajo demanda, un anuncio a la vez, desde la pantalla de edicion.
+
+    NOTA: la extraccion es best-effort por texto visible de la pagina
+    (no se pudo verificar en vivo contra Metrocuadrado en este entorno de
+    desarrollo por falta de un Selenium accesible - probar despues del
+    deploy, donde si hay Selenium Grid disponible)."""
+    driver = configurar_driver()
+    try:
+        driver.get(url)
+        time.sleep(3)  # esperar hidratacion de Next.js, igual que en la busqueda masiva
+        html = driver.page_source
+    finally:
+        driver.quit()
+
+    m = re.search(r"administraci[oó]n[^\d$]{0,25}\$?\s*([\d.,]{4,})", html, re.IGNORECASE)
+    if not m:
+        return None
+    numero = re.sub(r"[^\d]", "", m.group(1))
+    return int(numero) if numero else None
 
 
 def procesar_anuncio_nuevo(url: str) -> int:
@@ -502,6 +559,14 @@ def ejecutar_busqueda_completa(busqueda_id: int, top: int = 5):
             return
 
         db.actualizar_busqueda_log(busqueda_id, f"{len(candidatos)} anuncios activos encontrados", "ok")
+
+        if busqueda_obj.get("cantidad_exacta") and len(candidatos) > cantidad:
+            db.actualizar_busqueda_log(
+                busqueda_id,
+                f"Número exacto activado: se toman los primeros {cantidad} de {len(candidatos)} encontrados.",
+                "info",
+            )
+            candidatos = candidatos[:cantidad]
 
         if candidatos:
             db.actualizar_busqueda_log(busqueda_id, "Calculando compatibilidad con IA...", "info")

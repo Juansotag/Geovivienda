@@ -24,7 +24,8 @@
       <label for="estado">Estado del Inmueble</label>
       <select id="estado" name="estado" required>
         <option value="usado" {% if anuncio.estado == 'usado' %}selected{% endif %}>Usado</option>
-        <option value="nuevo/proyecto" {% if anuncio.estado == 'nuevo/proyecto' %}selected{% endif %}>Nuevo / Proyecto</option>
+        <option value="nuevo" {% if anuncio.estado == 'nuevo' %}selected{% endif %}>Nuevo</option>
+        <option value="proyecto" {% if anuncio.estado == 'proyecto' %}selected{% endif %}>Proyecto</option>
       </select>
     </div>
     <div class="form-group">
@@ -32,8 +33,14 @@
       <input type="number" id="precio_venta" name="precio_venta" required value="{{ anuncio.precio_venta or 0 }}">
     </div>
     <div class="form-group">
-      <label for="administracion">Administración (COP)</label>
-      <input type="number" id="administracion" name="administracion" value="{{ anuncio.administracion or 0 }}">
+      <label for="administracion">Administración (COP/mes)</label>
+      <input type="number" id="administracion" name="administracion" placeholder="Sin dato" value="{{ anuncio.administracion if anuncio.administracion is not none else '' }}">
+      {% if anuncio.portal == 'metrocuadrado' and not anuncio.administracion %}
+      <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="buscarAdministracion({{ anuncio.id }}, this)">
+        <i data-lucide="search" style="width:12px; height:12px;"></i> Buscar en el anuncio original
+      </button>
+      <p style="font-size:11px; color:var(--color-text-muted); margin:4px 0 0;">Metrocuadrado no trae este dato en la búsqueda masiva, solo en la ficha individual del inmueble.</p>
+      {% endif %}
     </div>
     <div class="form-group">
       <label for="estrato">Estrato</label>
@@ -57,12 +64,33 @@
     </div>
     <div class="form-group">
       <label for="parqueaderos">Parqueaderos</label>
-      <input type="number" id="parqueaderos" name="parqueaderos" value="{{ anuncio.parqueaderos or 0 }}">
+      <input type="number" id="parqueaderos" name="parqueaderos" placeholder="Sin dato" value="{{ anuncio.parqueaderos if anuncio.parqueaderos is not none else '' }}">
+    </div>
+    <div class="form-group">
+      <label for="piso_nro">Piso del inmueble</label>
+      <input type="number" id="piso_nro" name="piso_nro" placeholder="Sin dato" value="{{ anuncio.piso_nro if anuncio.piso_nro is not none else '' }}">
+    </div>
+    <div class="form-group">
+      <label for="cantidad_pisos">Pisos del edificio</label>
+      <input type="number" id="cantidad_pisos" name="cantidad_pisos" placeholder="Sin dato" value="{{ anuncio.cantidad_pisos if anuncio.cantidad_pisos is not none else '' }}">
     </div>
     <div class="form-group">
       <label for="antiguedad">Antigüedad</label>
-      <input type="text" id="antiguedad" name="antiguedad" placeholder="Ej: 3 a 5 años, Sobre planos" value="{{ anuncio.antiguedad or '' }}">
+      <select id="antiguedad" name="antiguedad">
+        <option value="">Sin dato</option>
+        {% for val in antiguedad_opciones %}
+        <option value="{{ val }}" {% if anuncio.antiguedad == val %}selected{% endif %}>{{ val }}</option>
+        {% endfor %}
+      </select>
+      <p style="font-size:11px; color:var(--color-text-muted); margin:4px 0 0;">Debe coincidir con una categoría real de FincaRaíz o Metrocuadrado para que el filtro de antigüedad de las búsquedas funcione.</p>
     </div>
+  </div>
+
+  <div style="margin-top:16px;">
+    <button type="button" class="btn btn-secondary" onclick="recalcularScore({{ anuncio.id }}, this)">
+      <i data-lucide="refresh-cw" style="width:16px; height:16px;"></i> Recalcular score (después de corregir datos)
+    </button>
+    <span id="recalcular-resultado" style="font-size:13px; color:var(--color-text-muted); margin-left:10px;"></span>
   </div>
 
   <hr style="border:0; border-top:1px solid var(--color-border); margin:20px 0;">
@@ -85,7 +113,13 @@
   </div>
 
   <div class="form-group">
-    <label>Ubicación en el mapa (Haz clic o arrastra el marcador para ajustar)</label>
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+      <label style="margin-bottom:0;">Ubicación en el mapa</label>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-habilitar-mapa" onclick="toggleEdicionMapa()">
+        <i data-lucide="lock" style="width:14px; height:14px;"></i> Habilitar edición de ubicación
+      </button>
+    </div>
+    <p id="mapa-hint" style="font-size:12px; color:var(--color-text-muted); margin:4px 0 8px;">El mapa es solo de referencia - habilita la edición antes de hacer clic o arrastrar el marcador.</p>
     <div id="edit-map" style="height: 300px; width: 100%; border-radius: 8px; border: 1px solid var(--color-border);"></div>
   </div>
 
@@ -122,8 +156,11 @@
     maxZoom: 20
   }).addTo(map);
 
-  // Add draggable Marker
-  const marker = L.marker([initLat, initLng], { draggable: true }).addTo(map);
+  // El marcador arranca bloqueado (no draggable) para que un clic accidental
+  // en el mapa no mueva la ubicacion real del inmueble - hay que habilitar
+  // la edicion explicitamente con el boton primero.
+  let edicionMapaHabilitada = false;
+  const marker = L.marker([initLat, initLng], { draggable: false }).addTo(map);
 
   // Function to update input fields when marker moves
   function updateCoords(lat, lng) {
@@ -137,11 +174,28 @@
     updateCoords(latlng.lat, latlng.lng);
   });
 
-  // Handle click on map to reposition marker
+  // Handle click on map to reposition marker (solo si la edicion esta habilitada)
   map.on('click', function (e) {
+    if (!edicionMapaHabilitada) return;
     marker.setLatLng(e.latlng);
     updateCoords(e.latlng.lat, e.latlng.lng);
   });
+
+  function toggleEdicionMapa() {
+    edicionMapaHabilitada = !edicionMapaHabilitada;
+    marker.dragging[edicionMapaHabilitada ? 'enable' : 'disable']();
+
+    const boton = document.getElementById('btn-habilitar-mapa');
+    const hint = document.getElementById('mapa-hint');
+    if (edicionMapaHabilitada) {
+      boton.innerHTML = '<i data-lucide="unlock" style="width:14px; height:14px;"></i> Bloquear ubicación';
+      hint.textContent = 'Edición habilitada - haz clic en el mapa o arrastra el marcador para ajustar la ubicación.';
+    } else {
+      boton.innerHTML = '<i data-lucide="lock" style="width:14px; height:14px;"></i> Habilitar edición de ubicación';
+      hint.textContent = 'El mapa es solo de referencia - habilita la edición antes de hacer clic o arrastrar el marcador.';
+    }
+    if (window.lucide) lucide.createIcons();
+  }
 </script>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 {% endblock %}

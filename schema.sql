@@ -74,7 +74,8 @@ CREATE TABLE IF NOT EXISTS busquedas (
     id BIGSERIAL PRIMARY KEY,
     cliente_id BIGINT REFERENCES clientes(id) ON DELETE CASCADE,
     portales JSONB,                       -- ej: ["fincaraiz","metrocuadrado"]
-    cantidad_solicitada INTEGER,
+    cantidad_solicitada INTEGER,          -- tratada como MINIMO, no exacto, salvo que cantidad_exacta sea true
+    cantidad_exacta BOOLEAN DEFAULT FALSE, -- si true, se trunca la lista final a cantidad_solicitada antes de scorear
     status TEXT DEFAULT 'idle',           -- idle | running | done | error
     log JSONB DEFAULT '[]'::jsonb,        -- logs de eventos del scraper
     
@@ -154,6 +155,8 @@ BEGIN
         ALTER TABLE busquedas ADD COLUMN IF NOT EXISTS comodidades_indispensables JSONB DEFAULT '[]'::jsonb;
     END IF;
 END $$;
+
+ALTER TABLE busquedas ADD COLUMN IF NOT EXISTS cantidad_exacta BOOLEAN DEFAULT FALSE;
 
 -- Tabla de Resultados de Búsquedas (Matches)
 CREATE TABLE IF NOT EXISTS resultados_busqueda (

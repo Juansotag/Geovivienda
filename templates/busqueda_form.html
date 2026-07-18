@@ -252,9 +252,15 @@
       </label>
     </div>
 
-    <div class="form-group" style="margin-bottom:0; max-width:200px; display:inline-flex;">
-      <label for="cantidad" style="margin-bottom:4px; font-size:11px;">Cantidad de anuncios</label>
+    <div class="form-group" style="margin-bottom:0; max-width:220px; display:inline-flex;">
+      <label for="cantidad" style="margin-bottom:4px; font-size:11px;">Cantidad mínima de anuncios</label>
       <input type="number" id="cantidad" name="cantidad" value="{{ busqueda.cantidad_solicitada if busqueda else 30 }}" min="5" max="100" style="padding: 8px 12px;">
+      <p style="font-size:11px; color:var(--color-text-muted); margin:4px 0 0;">El scraper suele traer más de lo pedido (así trae páginas completas de cada portal). Si necesitas exactamente esta cantidad, marca "Número exacto" abajo.</p>
+      <input type="hidden" id="cantidad_exacta" name="cantidad_exacta" value="{{ 'true' if busqueda and busqueda.cantidad_exacta else 'false' }}">
+      <label class="checkbox-label" style="display:inline-flex; align-items:center; margin-top:8px; padding:6px 12px; gap:8px; width:fit-content;">
+        <input type="checkbox" id="check_cantidad_exacta" onchange="toggleCantidadExacta(this)" {% if busqueda and busqueda.cantidad_exacta %}checked{% endif %}>
+        Número exacto
+      </label>
     </div>
   </div>
 
@@ -401,6 +407,10 @@
   function toggleHabsExactas(cb) {
     document.getElementById("habitaciones_exactas").value = cb.checked ? "true" : "false";
     renderHabsButtons();
+  }
+
+  function toggleCantidadExacta(cb) {
+    document.getElementById("cantidad_exacta").value = cb.checked ? "true" : "false";
   }
 
   function renderHabsButtons() {

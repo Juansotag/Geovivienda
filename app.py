@@ -208,26 +208,47 @@ def mapa():
     return render_template("mapa.html", activo="mapa", anuncios=all_anuncios, clientes=clientes, focus_id=focus_id)
 
 
+ESTADO_INMUEBLE_VALORES_VALIDOS = ("usado", "nuevo", "proyecto")
+
+
 @app.route("/inmuebles/<int:anuncio_id>/editar", methods=["GET", "POST"])
 def anuncio_editar(anuncio_id):
     anuncio = db.obtener_anuncio(anuncio_id)
     if not anuncio:
         return "Inmueble no encontrado", 404
-        
+
     if request.method == "GET":
-        return render_template("inmueble_form.html", activo="inmuebles", anuncio=anuncio)
-        
+        return render_template(
+            "inmueble_form.html",
+            activo="inmuebles",
+            anuncio=anuncio,
+            antiguedad_opciones=busqueda.ANTIGUEDAD_VALORES_VALIDOS,
+        )
+
+    estado = request.form["estado"]
+    if estado not in ESTADO_INMUEBLE_VALORES_VALIDOS:
+        return "Estado invalido", 400
+
+    antiguedad = request.form.get("antiguedad") or None
+    if antiguedad and antiguedad not in busqueda.ANTIGUEDAD_VALORES_VALIDOS:
+        return "Antigüedad inválida", 400
+    antiguedad_min, antiguedad_max = busqueda._parsear_antiguedad(antiguedad)
+
     db.actualizar_anuncio(anuncio_id, {
         "tipo_inmueble": request.form["tipo_inmueble"],
-        "estado": request.form["estado"],
+        "estado": estado,
         "precio_venta": int(request.form["precio_venta"]),
-        "administracion": int(request.form["administracion"] or 0),
+        "administracion": _int_opcional(request.form.get("administracion")),
         "estrato": int(request.form["estrato"]),
         "area_metros": float(request.form["area_metros"]),
         "habitaciones": int(request.form["habitaciones"]),
         "banos": int(request.form["banos"]),
-        "parqueaderos": int(request.form["parqueaderos"] or 0),
-        "antiguedad": request.form["antiguedad"],
+        "parqueaderos": _int_opcional(request.form.get("parqueaderos")),
+        "antiguedad": antiguedad,
+        "antiguedad_anios_min": antiguedad_min,
+        "antiguedad_anios_max": antiguedad_max,
+        "piso_nro": _int_opcional(request.form.get("piso_nro")),
+        "cantidad_pisos": _int_opcional(request.form.get("cantidad_pisos")),
         "latitud": float(request.form["latitud"]),
         "longitud": float(request.form["longitud"]),
         "comodidades": request.form["comodidades"],
@@ -235,6 +256,51 @@ def anuncio_editar(anuncio_id):
         "ubicacion_texto": request.form["ubicacion_texto"]
     })
     return redirect(url_for("inmuebles"))
+
+
+@app.route("/inmuebles/<int:anuncio_id>/recalcular-score", methods=["POST"])
+def anuncio_recalcular_score(anuncio_id):
+    """Reevalua un anuncio (ya corregido a mano) contra cada busqueda a la
+    que pertenece, usando el LLM - para cuando un error de scraping
+    evidente (ej. area mal capturada) infla o hunde el score sin que el
+    dato real de fondo haya cambiado."""
+    anuncio_obj = db.obtener_anuncio(anuncio_id)
+    if not anuncio_obj:
+        return jsonify({"status": "error", "message": "Inmueble no encontrado"}), 404
+
+    resultados = db.obtener_resultados_por_anuncio(anuncio_id)
+    if not resultados:
+        return jsonify({"status": "error", "message": "Este inmueble no aparece en ninguna búsqueda todavía."})
+
+    actualizados = 0
+    for r in resultados:
+        scores = scoring.calcular_scores_llm(r, [anuncio_obj])
+        info = scores.get(anuncio_id)
+        if info is not None:
+            db.actualizar_score_resultado(r["resultado_id"], info["score"])
+            actualizados += 1
+
+    return jsonify({"status": "ok", "actualizados": actualizados, "total": len(resultados)})
+
+
+@app.route("/inmuebles/<int:anuncio_id>/buscar-administracion", methods=["POST"])
+def anuncio_buscar_administracion(anuncio_id):
+    anuncio_obj = db.obtener_anuncio(anuncio_id)
+    if not anuncio_obj:
+        return jsonify({"status": "error", "message": "Inmueble no encontrado"}), 404
+    if anuncio_obj["portal"] != "metrocuadrado":
+        return jsonify({"status": "error", "message": "Esta función es solo para anuncios de Metrocuadrado."})
+
+    try:
+        valor = busqueda.buscar_administracion_metrocuadrado(anuncio_obj["url"])
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"No se pudo abrir el anuncio original: {e}"}), 500
+
+    if valor is None:
+        return jsonify({"status": "error", "message": "No se encontró el valor de administración en la ficha del inmueble."})
+
+    db.actualizar_anuncio(anuncio_id, {"administracion": valor})
+    return jsonify({"status": "ok", "administracion": valor})
 
 
 @app.route("/clientes/<int:cliente_id>")
@@ -290,6 +356,7 @@ def _parse_busqueda_form(form) -> dict:
     return {
         "portales": portales,
         "cantidad_solicitada": cantidad,
+        "cantidad_exacta": form.get("cantidad_exacta") == "true",
         "municipios": municipios,
         "tipo_vivienda": form["tipo_vivienda"],
         "estado_deseado": form["estado_deseado"],

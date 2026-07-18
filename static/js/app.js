@@ -32,6 +32,44 @@ async function generarReporte(clienteId, anuncioId, boton, busquedaId) {
   }
 }
 
+// --- Edicion de inmueble: recalcular score / buscar administracion ---
+async function recalcularScore(anuncioId, boton) {
+  boton.disabled = true;
+  const original = boton.innerHTML;
+  boton.innerHTML = 'Recalculando...';
+  const resultado = document.getElementById('recalcular-resultado');
+  try {
+    const resp = await fetch(`/inmuebles/${anuncioId}/recalcular-score`, { method: 'POST' });
+    const data = await resp.json();
+    if (data.status === 'ok') {
+      resultado.textContent = `Score actualizado en ${data.actualizados} de ${data.total} búsqueda(s).`;
+    } else {
+      resultado.textContent = data.message || 'No se pudo recalcular el score.';
+    }
+  } finally {
+    boton.disabled = false;
+    boton.innerHTML = original;
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+async function buscarAdministracion(anuncioId, boton) {
+  boton.disabled = true;
+  const original = boton.innerHTML;
+  boton.innerHTML = 'Buscando...';
+  const resp = await fetch(`/inmuebles/${anuncioId}/buscar-administracion`, { method: 'POST' });
+  const data = await resp.json();
+  if (data.status === 'ok') {
+    document.getElementById('administracion').value = data.administracion;
+    boton.remove();
+  } else {
+    alert(data.message || 'No se pudo encontrar la administración en el anuncio original.');
+    boton.disabled = false;
+    boton.innerHTML = original;
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
 async function generarReportePorUrl(clienteId) {
   const url = document.getElementById('url-manual').value.trim();
   const resultado = document.getElementById('resultado-manual');

@@ -187,6 +187,29 @@ def guardar_resultado_busqueda(busqueda_id: int, anuncio_id: int, score: float, 
         return cur.fetchone()["id"]
 
 
+def obtener_resultados_por_anuncio(anuncio_id: int) -> list[dict]:
+    """Todas las busquedas donde este anuncio aparece como resultado, con
+    los criterios completos de cada una - usado para recalcular el score
+    cuando el funcionario corrige a mano un dato del anuncio que estaba
+    mal (ej. un error de scraping evidente)."""
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            SELECT rb.id AS resultado_id, rb.score AS score_actual, b.*
+            FROM resultados_busqueda rb
+            JOIN busquedas b ON b.id = rb.busqueda_id
+            WHERE rb.anuncio_id = %s
+            """,
+            (anuncio_id,),
+        )
+        return cur.fetchall()
+
+
+def actualizar_score_resultado(resultado_id: int, score: float):
+    with get_cursor() as cur:
+        cur.execute("UPDATE resultados_busqueda SET score = %s WHERE id = %s", (score, resultado_id))
+
+
 def guardar_reporte(cliente_id: int, anuncio_id: int, score: float, html: str) -> int:
     with get_cursor() as cur:
         cur.execute(
