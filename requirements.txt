@@ -12,3 +12,6 @@ requests>=2.31.0
 geopandas
 shapely
 markdown>=3.6.0
+
+# desarrollo (pruebas)
+pytest>=8.0.0

@@ -242,12 +242,85 @@ def _cumple_comodidades_indispensables(busqueda: dict, anuncio: dict) -> bool:
     return all(c in normalizadas_set for c in indispensables)
 
 
+def _cumple_upz(busqueda: dict, anuncio: dict) -> bool:
+    """upz es una LISTA (puede combinar UPZ de localidades distintas en la
+    misma busqueda - localidad ya no es un criterio propio, cada UPZ trae
+    su localidad solo como etiqueta informativa en el formulario). El
+    anuncio pasa si cae en AL MENOS UNA de las UPZ pedidas, mismo patron
+    OR que _cumple_municipios."""
+    upz_pedidas = busqueda.get("upz") or []
+    if not upz_pedidas:
+        return True
+
+    a_upz = anuncio.get("upz")
+    if not a_upz:
+        lat, lng = anuncio.get("latitud"), anuncio.get("longitud")
+        if lat and lng:
+            try:
+                geo = enriquecer_inmueble(float(lat), float(lng))
+                a_upz = geo.get("upz")
+                if a_upz:
+                    db.actualizar_anuncio(anuncio["id"], {"upz": a_upz})
+                    anuncio["upz"] = a_upz
+            except Exception:
+                pass
+    if not a_upz:
+        return True  # sin coordenadas o fuera de Bogota - no descartar por falta de dato
+
+    a_norm = _sin_tildes(str(a_upz).strip().lower())
+    for upz_pedida in upz_pedidas:
+        b_norm = _sin_tildes(str(upz_pedida).strip().lower())
+        if b_norm in a_norm or a_norm in b_norm:
+            return True
+    return False
+
+
+def _cumple_municipios(busqueda: dict, anuncio: dict) -> bool:
+    """A diferencia de localidad/upz (un valor opcional), 'municipios' es
+    una lista ORDENADA que toda busqueda trae obligatoriamente - el
+    anuncio pasa si cae geograficamente en AL MENOS UNO de los municipios
+    pedidos (no tiene que coincidir con todos). Esto es la verificacion
+    real de que el anuncio quedo donde el portal deberia haberlo filtrado
+    por URL - a veces un portal se cuela con un resultado de otra zona."""
+    municipios_pedidos = busqueda.get("municipios") or []
+    nombres_pedidos = [m.get("municipio") for m in municipios_pedidos if m.get("municipio")]
+    if not nombres_pedidos:
+        return True
+
+    a_mpio = anuncio.get("municipio_geo")
+    if not a_mpio:
+        lat, lng = anuncio.get("latitud"), anuncio.get("longitud")
+        if lat and lng:
+            try:
+                geo = enriquecer_inmueble(float(lat), float(lng))
+                a_mpio = geo.get("municipio")
+                if a_mpio:
+                    db.actualizar_anuncio(anuncio["id"], {"municipio_geo": a_mpio})
+                    anuncio["municipio_geo"] = a_mpio
+            except Exception:
+                pass
+    if not a_mpio:
+        return True  # sin coordenadas o fuera de Bogota+Cundinamarca - no descartar por falta de dato
+
+    a_norm = _sin_tildes(str(a_mpio).strip().lower())
+    for nombre in nombres_pedidos:
+        b_norm = _sin_tildes(str(nombre).strip().lower())
+        if b_norm in a_norm or a_norm in b_norm:
+            return True
+    return False
+
+
 def _cumple_filtros_duros(busqueda: dict, anuncio: dict) -> bool:
     """Filtro duro real: se evalua sobre el registro YA GUARDADO en la tabla
     maestra (nuevo o previamente conocido), asi que es correcto sin importar
     si el anuncio se acaba de scrapear para esta busqueda o ya existia de
     una busqueda anterior con otros criterios."""
-    return _cumple_antiguedad(busqueda, anuncio) and _cumple_comodidades_indispensables(busqueda, anuncio)
+    return (
+        _cumple_antiguedad(busqueda, anuncio)
+        and _cumple_comodidades_indispensables(busqueda, anuncio)
+        and _cumple_upz(busqueda, anuncio)
+        and _cumple_municipios(busqueda, anuncio)
+    )
 
 
 def filtrar_urls_nuevas(urls: list[str]) -> list[str]:
@@ -319,13 +392,18 @@ def _filtros_desde_cliente(busqueda: dict, portal: str, cantidad: int, municipio
     paginas = max(1, cantidad // 20)
 
     if portal == "fincaraiz":
+        # habitaciones/banos NO se pasan aca a proposito: FincaRaiz trata esos
+        # segmentos de URL (/N-habitaciones/N-banos) como coincidencia EXACTA,
+        # no como minimo - una busqueda de "2+ habitaciones" para una casa de
+        # estrato 5-6 (que tipicamente tiene 3+) volvia con 0 resultados reales
+        # en el sitio. El filtro de minimo ya lo aplica el prompt del LLM al
+        # puntuar (ver task #44), asi que aca solo se acota por lo que si es
+        # coincidencia exacta en FincaRaiz: tipo, estado, precio y estrato.
         return {
             "paginas_a_extraer": paginas,
             "operacion": "venta",
             "tipos_inmueble": tipos,
             "ubicacion": f"{ciudad}/{ciudad}-dc" if ciudad == "bogota" else ciudad,
-            "habitaciones": busqueda.get("habitaciones_min"),
-            "banos": busqueda.get("banos_min"),
             "estado": estado,
             "precio_min": busqueda.get("presupuesto_min"),
             "precio_max": busqueda.get("presupuesto_max"),
@@ -465,6 +543,10 @@ def procesar_anuncio_nuevo(url: str) -> int:
 
     datos_anuncio = _normalizar_para_db(detalle, portal)
     datos_anuncio["h3_index"] = h3_index
+    if geo.get("localidad"):
+        datos_anuncio["localidad"] = geo["localidad"]
+    if geo.get("upz"):
+        datos_anuncio["upz"] = geo["upz"]
     return db.insertar_anuncio(datos_anuncio)
 
 

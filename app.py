@@ -76,6 +76,43 @@ def api_divipola():
     return jsonify(_divipola_data)
 
 
+@app.route("/api/bogota/localidades")
+def api_bogota_localidades():
+    try:
+        import spatial_analysis
+        sitp, tm, ciclo, estratos, col_estrato, localidades, upzs, metro, municipios, upz_a_loc = spatial_analysis._capas()
+        loc_names = sorted([str(x).strip().title() for x in localidades["LOCNOMBRE"].dropna().unique()])
+        return jsonify(loc_names)
+    except Exception as e:
+        print("Error al cargar localidades:", e)
+        return jsonify([])
+
+
+@app.route("/api/bogota/upzs")
+def api_bogota_upzs():
+    """Si se pasa ?localidad=X, solo devuelve las UPZ que caen dentro de esa
+    localidad (antes traia siempre las UPZ de toda la ciudad, sin importar
+    la localidad ya elegida)."""
+    try:
+        import spatial_analysis
+        sitp, tm, ciclo, estratos, col_estrato, localidades, upzs, metro, municipios, upz_a_loc = spatial_analysis._capas()
+        localidad_filtro = request.args.get("localidad", "").strip()
+
+        if localidad_filtro:
+            loc_norm = localidad_filtro.strip().lower()
+            nombres = [
+                nombre for nombre, loc in upz_a_loc.items()
+                if loc.strip().lower() == loc_norm
+            ]
+            upz_names = sorted(str(n).strip().title() for n in nombres)
+        else:
+            upz_names = sorted([str(x).strip().title() for x in upzs["NOMBRE"].dropna().unique()])
+        return jsonify(upz_names)
+    except Exception as e:
+        print("Error al cargar UPZs:", e)
+        return jsonify([])
+
+
 @app.context_processor
 def inject_perfil():
     return dict(perfil=db.obtener_perfil())
@@ -204,9 +241,30 @@ def anuncio_eliminar(anuncio_id):
 @app.route("/mapa")
 def mapa():
     focus_id = request.args.get("focus_id", type=int)
+    busqueda_id = request.args.get("busqueda_id", type=int)
     all_anuncios = db.obtener_todos_anuncios_con_scores()
     clientes = db.listar_clientes()
-    return render_template("mapa.html", activo="mapa", anuncios=all_anuncios, clientes=clientes, focus_id=focus_id)
+    all_b = db.obtener_todas_busquedas()
+
+    busqueda_resultados_map = {}
+    with db.get_cursor() as cur:
+        cur.execute("SELECT busqueda_id, anuncio_id FROM resultados_busqueda")
+        for r in cur.fetchall():
+            b_id = str(r["busqueda_id"])
+            if b_id not in busqueda_resultados_map:
+                busqueda_resultados_map[b_id] = []
+            busqueda_resultados_map[b_id].append(r["anuncio_id"])
+
+    return render_template(
+        "mapa.html",
+        activo="mapa",
+        anuncios=all_anuncios,
+        clientes=clientes,
+        busquedas=all_b,
+        focus_id=focus_id,
+        busqueda_id=busqueda_id,
+        busqueda_resultados_map=busqueda_resultados_map,
+    )
 
 
 ESTADO_INMUEBLE_VALORES_VALIDOS = ("usado", "nuevo", "proyecto")
@@ -359,6 +417,15 @@ def _int_opcional(valor):
     return int(valor) if valor else None
 
 
+def _upz_opciones():
+    """Lista (upz_nombre, localidad_nombre) para el checkbox grid del
+    formulario de busqueda, ordenada por localidad y luego por UPZ."""
+    import spatial_analysis
+    upz_a_loc = spatial_analysis.upz_a_localidad_map()
+    pares = [(nombre.strip().title(), loc.strip().title()) for nombre, loc in upz_a_loc.items()]
+    return sorted(pares, key=lambda par: (par[1], par[0]))
+
+
 def _parse_busqueda_form(form) -> dict:
     """Compilado compartido entre crear y editar una busqueda: uso_previsto
     y estrato_objetivo son multi-choice (getlist); antiguedad es un rango
@@ -395,6 +462,7 @@ def _parse_busqueda_form(form) -> dict:
         "uso_previsto": form.getlist("uso_previsto"),
         "comodidades_relevantes": form.getlist("comodidades_relevantes"),
         "comodidades_indispensables": form.getlist("comodidades_indispensables"),
+        "upz": form.getlist("upz"),
         "pregunta_abierta": form["pregunta_abierta"],
     }
 
@@ -414,6 +482,7 @@ def busqueda_nueva():
             ciudades=CIUDADES,
             busqueda=None,
             catalogo_comodidades=busqueda.CATALOGO_COMODIDADES,
+            upz_opciones=_upz_opciones(),
         )
 
     # POST: Process search criteria
@@ -450,6 +519,7 @@ def busqueda_editar(busqueda_id):
             ciudades=CIUDADES,
             busqueda=busqueda_obj,
             catalogo_comodidades=busqueda.CATALOGO_COMODIDADES,
+            upz_opciones=_upz_opciones(),
         )
 
     datos = _parse_busqueda_form(request.form)

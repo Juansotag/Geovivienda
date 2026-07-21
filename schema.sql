@@ -4,7 +4,16 @@ CREATE TABLE IF NOT EXISTS hexagonos (
     dist_sitp REAL,
     dist_tm REAL,
     dist_ciclo REAL,
-    estrato_promedio_200m REAL
+    estrato_promedio_200m REAL,
+    dist_metro REAL,
+    cobertura_parques REAL,
+    cobertura_parques_500m REAL,
+    pois_comercio INTEGER,
+    pois_salud INTEGER,
+    pois_educacion INTEGER,
+    tasa_homicidios REAL,
+    tasa_hurtos REAL,
+    tasa_siniestralidad REAL
 );
 
 -- Tabla maestra: Anuncios inmobiliarios capturados
@@ -37,6 +46,9 @@ CREATE TABLE IF NOT EXISTS anuncios (
     latitud DOUBLE PRECISION,
     longitud DOUBLE PRECISION,
     h3_index TEXT REFERENCES hexagonos(h3_index), -- Conexión a datos geoespaciales
+    localidad TEXT,
+    upz TEXT,
+    municipio_geo TEXT,                   -- municipio geo-derivado (point-in-polygon), distinto de 'ciudad' que es texto fijo
     activo BOOLEAN DEFAULT TRUE,
     primera_vez_visto TIMESTAMPTZ DEFAULT now(),
     ultima_verificacion TIMESTAMPTZ DEFAULT now()
@@ -46,6 +58,23 @@ ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS foto_url TEXT;
 ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS antiguedad_anios_min SMALLINT;
 ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS antiguedad_anios_max SMALLINT;
 ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS comodidades_normalizadas JSONB;
+ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS localidad TEXT;
+ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS upz TEXT;
+ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS municipio_geo TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_anuncios_localidad ON anuncios(localidad);
+CREATE INDEX IF NOT EXISTS idx_anuncios_upz ON anuncios(upz);
+CREATE INDEX IF NOT EXISTS idx_anuncios_municipio_geo ON anuncios(municipio_geo);
+
+ALTER TABLE hexagonos ADD COLUMN IF NOT EXISTS dist_metro REAL;
+ALTER TABLE hexagonos ADD COLUMN IF NOT EXISTS cobertura_parques REAL;
+ALTER TABLE hexagonos ADD COLUMN IF NOT EXISTS cobertura_parques_500m REAL;
+ALTER TABLE hexagonos ADD COLUMN IF NOT EXISTS pois_comercio INTEGER;
+ALTER TABLE hexagonos ADD COLUMN IF NOT EXISTS pois_salud INTEGER;
+ALTER TABLE hexagonos ADD COLUMN IF NOT EXISTS pois_educacion INTEGER;
+ALTER TABLE hexagonos ADD COLUMN IF NOT EXISTS tasa_homicidios REAL;
+ALTER TABLE hexagonos ADD COLUMN IF NOT EXISTS tasa_hurtos REAL;
+ALTER TABLE hexagonos ADD COLUMN IF NOT EXISTS tasa_siniestralidad REAL;
 -- NULL = todavia no se ha corrido el clasificador LLM contra este anuncio
 -- (distinto de '[]', que significa "se corrio y no encontro ninguna
 -- comodidad del catalogo") - la distincion permite saber a cuales
@@ -103,11 +132,30 @@ CREATE TABLE IF NOT EXISTS busquedas (
     uso_previsto JSONB DEFAULT '[]'::jsonb,        -- lista de strings (multi-choice)
     comodidades_relevantes JSONB DEFAULT '[]'::jsonb,      -- pesan en el score del LLM, no filtran
     comodidades_indispensables JSONB DEFAULT '[]'::jsonb,  -- filtro duro: el anuncio debe tenerlas TODAS
+    upz JSONB DEFAULT '[]'::jsonb,        -- lista de nombres de UPZ (pueden ser de localidades distintas)
     pregunta_abierta TEXT,
 
     creada_en TIMESTAMPTZ DEFAULT now(),
     terminada_en TIMESTAMPTZ
 );
+
+-- localidad era un solo valor (TEXT) - se reemplaza por upz como lista,
+-- que puede combinar UPZ de localidades distintas en una sola busqueda
+-- (la localidad era demasiado restrictiva: obligaba a que todas las UPZ
+-- pedidas fueran de la MISMA localidad, cuando en la practica un cliente
+-- puede querer 2 UPZ vecinas de una localidad + 1 de otra).
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'busquedas' AND column_name = 'localidad') THEN
+        ALTER TABLE busquedas DROP COLUMN localidad;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'busquedas' AND column_name = 'upz' AND data_type <> 'jsonb') THEN
+        ALTER TABLE busquedas ALTER COLUMN upz TYPE JSONB USING
+            CASE WHEN upz IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(upz) END;
+        ALTER TABLE busquedas ALTER COLUMN upz SET DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
+ALTER TABLE busquedas ADD COLUMN IF NOT EXISTS upz JSONB DEFAULT '[]'::jsonb;
 
 -- Migracion desde el esquema anterior (columnas escalares -> JSONB). Segura de
 -- re-ejecutar: cada bloque solo actua si la columna todavia tiene el tipo viejo.

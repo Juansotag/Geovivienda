@@ -80,7 +80,10 @@
           {% endif %}
         </td>
         <td>
-          <div style="display:flex; gap:8px;">
+          <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick='verCriteriosBusqueda({{ b | tojson | safe }})' title="Ver todas las características de esta búsqueda" style="display:inline-flex; align-items:center; gap:4px;">
+              <i data-lucide="info" style="width:12px; height:12px;"></i> Criterios
+            </button>
             {% if b.status == 'pendiente' %}
               <a href="{{ url_for('busqueda_lanzar', busqueda_id=b.id) }}" class="btn btn-primary btn-sm" style="background-color: #28a745; border-color: #28a745; color: white; display:inline-flex; align-items:center; gap:4px;">
                 <i data-lucide="play" style="width:12px; height:12px;"></i> Lanzar
@@ -93,10 +96,13 @@
                 {% if b.status == 'running' %}
                   <i data-lucide="eye" style="width:12px; height:12px;"></i> Ver progreso
                 {% else %}
-                  <i data-lucide="list" style="width:12px; height:12px;"></i> Ver resultados
+                  <i data-lucide="list" style="width:12px; height:12px;"></i> Resultados
                 {% endif %}
               </a>
             {% endif %}
+            <a href="{{ url_for('mapa', busqueda_id=b.id) }}" class="btn btn-secondary btn-sm" style="display:inline-flex; align-items:center; gap:4px;" title="Ver resultados de esta búsqueda en el mapa">
+              <i data-lucide="map-pin" style="width:12px; height:12px;"></i> Mapa
+            </a>
             {% if b.status == 'running' %}
               <button type="button" class="btn btn-danger btn-sm" onclick="cancelarBusqueda({{ b.id }}, this)">
                 <i data-lucide="square" style="width:12px; height:12px;"></i> Detener
@@ -119,6 +125,69 @@
   </div>
   {% endif %}
 </div>
+
+<!-- Modal de Criterios / Características de Búsqueda -->
+<div id="modal-criterios" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+  <div style="background:#FFF; padding:24px; border-radius:var(--radius-default); max-width:600px; width:90%; max-height:85vh; overflow-y:auto; box-shadow:0 10px 25px rgba(0,0,0,0.2); position:relative;">
+    <button type="button" onclick="cerrarModalCriterios()" style="position:absolute; top:16px; right:16px; background:none; border:none; font-size:22px; cursor:pointer; color:var(--color-text-muted);">&times;</button>
+    <h3 style="margin-top:0; color:var(--color-primary); font-size:18px;" id="modal-criterios-titulo">Características de la Búsqueda</h3>
+    <div id="modal-criterios-contenido" style="line-height:1.6; font-size:14px; margin-top:16px;"></div>
+    <div style="margin-top:20px; text-align:right;">
+      <button type="button" class="btn btn-secondary" onclick="cerrarModalCriterios()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function verCriteriosBusqueda(b) {
+  const modal = document.getElementById("modal-criterios");
+  const tit = document.getElementById("modal-criterios-titulo");
+  const cont = document.getElementById("modal-criterios-contenido");
+
+  tit.textContent = `Búsqueda #${b.id} - ${b.cliente_nombre || 'Cliente'}`;
+
+  const municipiosTxt = (b.municipios || []).map(m => `${m.municipio} (${m.departamento})`).join(', ') || 'Sin especificar';
+  const indispensables = (b.comodidades_indispensables || []).map(c => `<span class="badge" style="background:#FEE2E2; color:#991B1B; font-weight:600; padding:4px 8px; border-radius:4px; font-size:11px; margin-right:4px;">${c}</span>`).join(' ') || '<em>Ninguna</em>';
+  const relevantes = (b.comodidades_relevantes || []).map(c => `<span class="badge" style="background:#E0E7FF; color:#3730A3; font-weight:600; padding:4px 8px; border-radius:4px; font-size:11px; margin-right:4px;">${c}</span>`).join(' ') || '<em>Ninguna</em>';
+
+  cont.innerHTML = `
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; background:rgba(24,31,89,0.03); padding:14px; border-radius:6px; border:1px solid var(--color-border);">
+      <div><strong>Tipo de vivienda:</strong> <span style="text-transform:capitalize;">${b.tipo_vivienda || '—'}</span></div>
+      <div><strong>Estado deseado:</strong> <span style="text-transform:capitalize;">${b.estado_deseado || '—'}</span></div>
+      <div><strong>Antigüedad:</strong> ${b.antiguedad_anios_min != null ? b.antiguedad_anios_min + ' años mín' : 'Sin mín'} - ${b.antiguedad_anios_max != null ? b.antiguedad_anios_max + ' años máx' : 'Sin máx'}</div>
+      <div><strong>Zona:</strong> <span style="text-transform:capitalize;">${b.zona_deseada || '—'}</span></div>
+      <div><strong>Habitaciones:</strong> ${b.habitaciones_min || 1}+ ${b.habitaciones_exactas ? '(Exactas)' : ''}</div>
+      <div><strong>Baños:</strong> ${b.banos_min || 1}+ ${b.banos_exactos ? '(Exactos)' : ''}</div>
+      <div style="grid-column: span 2;"><strong>Presupuesto:</strong> $${(b.presupuesto_min || 0).toLocaleString()} – $${(b.presupuesto_max || 0).toLocaleString()} COP</div>
+      <div style="grid-column: span 2;"><strong>Estratos:</strong> ${(b.estrato_objetivo || []).join(', ') || 'Todos'}</div>
+    </div>
+    
+    <div style="margin-bottom:12px;">
+      <strong>Municipios:</strong> ${municipiosTxt}
+    </div>
+    ${b.localidad ? `<div style="margin-bottom:6px;"><strong>Localidad:</strong> <span class="badge" style="background:#EEF2FF; color:#3730A3; font-weight:600;">${b.localidad}</span></div>` : ''}
+    ${b.upz ? `<div style="margin-bottom:12px;"><strong>UPZ / Barrio:</strong> <span class="badge" style="background:#F0FDF4; color:#166534; font-weight:600;">${b.upz}</span></div>` : ''}
+
+    <div style="margin-bottom:12px;">
+      <strong style="display:block; margin-bottom:6px;">Comodidades Indispensables (Filtro duro):</strong>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">${indispensables}</div>
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <strong style="display:block; margin-bottom:6px;">Comodidades Relevantes (Puntuación IA):</strong>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">${relevantes}</div>
+    </div>
+
+    ${b.pregunta_abierta ? `<div style="margin-top:12px; font-style:italic; background:#FFF; border-left:3px solid var(--color-primary); padding:8px 12px; font-size:13px;">"${b.pregunta_abierta}"</div>` : ''}
+  `;
+
+  modal.style.display = "flex";
+}
+
+function cerrarModalCriterios() {
+  document.getElementById("modal-criterios").style.display = "none";
+}
+</script>
 
 <style>
   @keyframes spin {

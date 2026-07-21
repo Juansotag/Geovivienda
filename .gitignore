@@ -4,6 +4,19 @@
 
 __pycache__/
 *.pyc
-
+.pytest_cache/
 .venv/
 venv/
+
+# Ignorar archivos mayores a 100MB no aptos para GitHub
+static/geo/municipios.geojson
+
+# Ignorar todo el contenido pesado de geodata/ (archivos de delincuencia, raster, shapefiles)
+geodata/*
+
+# Excepciones: Incluir únicamente el Mapa H3 final y los POIs
+!geodata/mapa_h3_bogota.geojson
+!geodata/entorno/
+geodata/entorno/*
+!geodata/entorno/poi/
+!geodata/entorno/poi/**

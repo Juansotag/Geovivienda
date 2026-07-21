@@ -29,6 +29,40 @@
       </small>
     </div>
 
+    <!-- Filtro por Búsqueda Específica -->
+    <div class="form-group">
+      <label for="filter_busqueda">Ver Búsqueda Específica</label>
+      <select id="filter_busqueda" onchange="applyFilters()">
+        <option value="">Todas las búsquedas (Todos los inmuebles)</option>
+        {% for b in busquedas %}
+        <option value="{{ b.id }}" {% if busqueda_id == b.id %}selected{% endif %}>
+          #{{ b.id }} - {{ b.cliente_nombre }} ({{ b.tipo_vivienda | capitalize }})
+        </option>
+        {% endfor %}
+      </select>
+      <small style="color: var(--color-text-muted); font-size: 11px; margin-top: 4px; display: block;">
+        Filtra únicamente los inmuebles encontrados en esa búsqueda.
+      </small>
+    </div>
+
+    <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 16px 0;">
+
+    <h4 style="font-size:11px; text-transform:uppercase; color:var(--color-text-muted); margin:16px 0 8px;">Sector Territorial</h4>
+
+    <div class="form-group">
+      <label for="filter_localidad">Localidad (Bogotá)</label>
+      <select id="filter_localidad" onchange="applyFilters()">
+        <option value="">Todas las localidades</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="filter_upz">UPZ / Barrio (Bogotá)</label>
+      <select id="filter_upz" onchange="applyFilters()">
+        <option value="">Todas las UPZ / Barrios</option>
+      </select>
+    </div>
+
     <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 16px 0;">
 
     <h4 style="font-size:11px; text-transform:uppercase; color:var(--color-text-muted); margin:16px 0 8px;">Características de la vivienda</h4>
@@ -156,6 +190,7 @@
 
 <script>
   // Raw Data from Flask
+  const busquedaResultadosMap = {{ busqueda_resultados_map | tojson | safe }};
   const anuncios = [
     {% for a in anuncios if a.latitud and a.longitud %}
     {
@@ -168,6 +203,8 @@
       habitaciones: {{ a.habitaciones or 0 }},
       banos: {{ a.banos or 0 }},
       estrato: {{ a.estrato or 0 }},
+      localidad: {{ a.localidad | tojson }},
+      upz: {{ a.upz | tojson }},
       dist_tm: {{ a.dist_tm if a.dist_tm is not none else 'null' }},
       dist_sitp: {{ a.dist_sitp if a.dist_sitp is not none else 'null' }},
       dist_ciclo: {{ a.dist_ciclo if a.dist_ciclo is not none else 'null' }},
@@ -224,6 +261,10 @@
     activeMarkers = {};
 
     const clientName = document.getElementById("filter_client").value;
+    const filterBusqueda = document.getElementById("filter_busqueda").value;
+    const filterLocalidad = document.getElementById("filter_localidad") ? document.getElementById("filter_localidad").value.toLowerCase() : "";
+    const filterUpz = document.getElementById("filter_upz") ? document.getElementById("filter_upz").value.toLowerCase() : "";
+
     const filterTipo = document.getElementById("filter_tipo").value;
     const filterEstado = document.getElementById("filter_estado").value;
     const filterPortal = document.getElementById("filter_portal").value;
@@ -246,16 +287,22 @@
       legend.style.display = 'none';
     }
 
+    const idsPermitidosBusqueda = filterBusqueda ? (busquedaResultadosMap[filterBusqueda] || []) : null;
+
     anuncios.forEach(a => {
-      // Filtering logic (comparaciones de texto insensibles a mayusculas,
-      // porque los portales devuelven "Apartamento"/"Usado" capitalizado)
+      if (idsPermitidosBusqueda && !idsPermitidosBusqueda.includes(a.id)) return;
+
       const tipoLower = (a.tipo_inmueble || "").toLowerCase();
       const estadoLower = (a.estado || "").toLowerCase();
       const portalLower = (a.portal || "").toLowerCase();
+      const locLower = (a.localidad || "").toLowerCase();
+      const upzLower = (a.upz || "").toLowerCase();
 
       if (filterTipo && tipoLower !== filterTipo) return;
       if (filterEstado && estadoLower !== filterEstado) return;
       if (filterPortal && portalLower !== filterPortal) return;
+      if (filterLocalidad && !locLower.includes(filterLocalidad)) return;
+      if (filterUpz && !upzLower.includes(filterUpz)) return;
       if (filterEstrato && a.estrato.toString() !== filterEstrato) return;
       if (filterHabsMin && a.habitaciones < filterHabsMin) return;
       if (filterBanosMin && a.banos < filterBanosMin) return;
@@ -274,15 +321,24 @@
       if (clientName) {
         const compat = (a.compatibilidades || []).find(c => c.cliente_nombre === clientName);
         if (compat) {
-          scoreHtml = `<p><strong>Compatibilidad (${clientName}):</strong> ${(compat.score * 100).toFixed(0)}%</p>`;
+          scoreHtml = `<p style="margin:4px 0;"><strong>Compatibilidad (${clientName}):</strong> ${(compat.score * 100).toFixed(0)}%</p>`;
         }
+      }
+
+      let sectorBadges = "";
+      if (a.localidad || a.upz) {
+        sectorBadges = `<div style="display:flex; gap:4px; margin:4px 0; flex-wrap:wrap;">
+          ${a.localidad ? `<span style="background:#EEF2FF; color:#3730A3; font-weight:600; font-size:10px; padding:2px 6px; border-radius:4px;">${a.localidad}</span>` : ''}
+          ${a.upz ? `<span style="background:#F0FDF4; color:#166534; font-weight:600; font-size:10px; padding:2px 6px; border-radius:4px;">${a.upz}</span>` : ''}
+        </div>`;
       }
 
       // Popup Content
       const popupContent = `
         <div style="font-family: var(--font-base); font-size:13px; color:var(--color-text);">
-          <h4 style="margin:0 0 6px 0; color:var(--color-primary); font-size:14px; text-transform:capitalize;">${a.tipo_inmueble} en Venta</h4>
+          <h4 style="margin:0 0 6px 0; color:var(--color-primary); font-size:14px; text-transform:capitalize;">${a.tipo_inmueble} en Venta (#${a.id})</h4>
           <p style="margin: 0 0 4px 0;"><strong>Dirección:</strong> ${a.ubicacion}</p>
+          ${sectorBadges}
           <p style="margin: 0 0 4px 0;"><strong>Precio:</strong> $${(a.precio / 1000000).toFixed(0)}M COP</p>
           <p style="margin: 0 0 4px 0;"><strong>Área:</strong> ${a.area} m² · <strong>Hab:</strong> ${a.habitaciones} · <strong>Baños:</strong> ${a.banos}</p>
           ${scoreHtml}
@@ -305,6 +361,9 @@
 
   function resetFilters() {
     document.getElementById("filter_client").value = "";
+    document.getElementById("filter_busqueda").value = "";
+    if (document.getElementById("filter_localidad")) document.getElementById("filter_localidad").value = "";
+    if (document.getElementById("filter_upz")) document.getElementById("filter_upz").value = "";
     document.getElementById("filter_tipo").value = "";
     document.getElementById("filter_estado").value = "";
     document.getElementById("filter_portal").value = "";
@@ -321,8 +380,47 @@
     renderMarkers();
   }
 
+  async function cargarFiltrosSectoresMapa() {
+    try {
+      const [resLoc, resUpz] = await Promise.all([
+        fetch("/api/bogota/localidades"),
+        fetch("/api/bogota/upzs")
+      ]);
+      if (resLoc.ok && resUpz.ok) {
+        const localidades = await resLoc.json();
+        const upzs = await resUpz.json();
+
+        const locSelect = document.getElementById("filter_localidad");
+        const upzSelect = document.getElementById("filter_upz");
+
+        if (locSelect) {
+          locSelect.innerHTML = '<option value="">Todas las localidades</option>';
+          localidades.forEach(loc => {
+            const opt = document.createElement("option");
+            opt.value = loc;
+            opt.textContent = loc;
+            locSelect.appendChild(opt);
+          });
+        }
+
+        if (upzSelect) {
+          upzSelect.innerHTML = '<option value="">Todas las UPZ / Barrios</option>';
+          upzs.forEach(upz => {
+            const opt = document.createElement("option");
+            opt.value = upz;
+            opt.textContent = upz;
+            upzSelect.appendChild(opt);
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Error cargando sectores para filtros del mapa", e);
+    }
+  }
+
   // Load Initial State and Focus if requested
   window.addEventListener("DOMContentLoaded", () => {
+    cargarFiltrosSectoresMapa();
     renderMarkers();
 
     if (focusId && activeMarkers[focusId]) {
@@ -330,7 +428,6 @@
       map.setView(marker.getLatLng(), 15);
       marker.openPopup();
     } else if (anuncios.length > 0) {
-      // Fit bounds to show all coordinates
       const bounds = L.latLngBounds(anuncios.map(a => [a.lat, a.lng]));
       map.fitBounds(bounds, { padding: [50, 50] });
     }
