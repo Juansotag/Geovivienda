@@ -1,0 +1,462 @@
+{% extends "base.html" %}
+{% block title %}Perfil: {{ anuncio.ubicacion_texto or 'Inmueble' }} — Casa en Casa{% endblock %}
+{% block content %}
+<style>
+  /* ===================== PERFIL INMUEBLE ===================== */
+  .perfil-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 24px;
+  }
+  .perfil-full { grid-column: 1 / -1; }
+  @media (max-width: 900px) { .perfil-grid { grid-template-columns: 1fr; } }
+
+  .perfil-seccion { background: var(--color-card); border-radius: var(--radius-default); padding: 24px; border: 1px solid var(--color-border); }
+  .perfil-seccion h2 { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); margin: 0 0 18px; display: flex; align-items: center; gap: 8px; }
+
+  /* Sub-Score bar */
+  .subscore-row { margin-bottom: 14px; }
+  .subscore-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .subscore-label { font-size: 13px; font-weight: 600; color: var(--color-text); }
+  .subscore-pct { font-size: 13px; font-weight: 700; }
+  .subscore-bar-bg { height: 10px; background: var(--color-border); border-radius: 5px; overflow: hidden; }
+  .subscore-bar-fill { height: 100%; border-radius: 5px; transition: width .6s ease; }
+
+  /* Accordion */
+  .accordion { border: 1px solid var(--color-border); border-radius: var(--radius-default); overflow: hidden; margin-top: 10px; }
+  .accordion-header { padding: 12px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; background: rgba(24,31,89,0.03); user-select: none; }
+  .accordion-header:hover { background: rgba(24,31,89,0.07); }
+  .accordion-body { display: none; padding: 0 16px 16px; }
+  .accordion-body.open { display: block; }
+
+  /* Histograma SVG */
+  .histograma-container { position: relative; margin: 12px 0; }
+  .histograma-svg { width: 100%; height: 60px; display: block; }
+  .hist-label { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; text-align: center; }
+  .hist-interpretation { font-size: 12px; padding: 8px 12px; border-radius: 8px; margin-top: 8px; font-weight: 500; }
+  .hist-interpretation.good { background: rgba(39,174,96,0.1); color: #1a6b3a; }
+  .hist-interpretation.bad { background: rgba(231,76,60,0.1); color: #a93226; }
+  .hist-interpretation.neutral { background: rgba(52,152,219,0.08); color: #1a5276; }
+
+  /* Variables tabla */
+  .var-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+  .var-table th { text-align: left; padding: 6px 8px; border-bottom: 2px solid var(--color-border); color: var(--color-text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }
+  .var-table td { padding: 6px 8px; border-bottom: 1px solid var(--color-border); }
+  .var-table tr:last-child td { border-bottom: none; }
+  .rank-pill { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+
+  /* POIs */
+  .poi-categoria { margin-bottom: 16px; }
+  .poi-categoria h4 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); margin: 0 0 8px; }
+  .poi-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 8px; background: rgba(24,31,89,0.03); margin-bottom: 4px; font-size: 13px; }
+  .poi-dist { font-size: 12px; font-weight: 700; color: var(--color-primary); white-space: nowrap; margin-left: 12px; }
+
+  /* Radar / Pentagon SVG */
+  .radar-container { display: flex; justify-content: center; margin: 8px 0 20px; }
+
+  /* Inmueble info grid */
+  .info-chip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 14px; }
+  .info-chip { background: rgba(24,31,89,0.05); border-radius: 10px; padding: 10px 14px; }
+  .info-chip .val { font-size: 20px; font-weight: 800; color: var(--color-primary); line-height: 1; }
+  .info-chip .lbl { font-size: 11px; color: var(--color-text-muted); margin-top: 3px; }
+
+  /* Análisis LLM */
+  #llm-analisis-box { background: rgba(24,31,89,0.03); border: 1px solid var(--color-border); border-radius: var(--radius-default); padding: 16px; font-size: 14px; line-height: 1.6; color: var(--color-text); min-height: 60px; }
+  #llm-analisis-box.loading { color: var(--color-text-muted); font-style: italic; }
+</style>
+
+<div class="page-header">
+  <h1>Perfil del Inmueble</h1>
+  <div style="display:flex; gap:10px; align-items:center;">
+    <a href="{{ url_for('inmuebles') }}" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:6px;">
+      <i data-lucide="arrow-left" style="width:16px; height:16px;"></i> Todos los inmuebles
+    </a>
+    {% if anuncio.url %}
+    <a href="{{ anuncio.url }}" target="_blank" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:6px;">
+      <i data-lucide="external-link" style="width:16px; height:16px;"></i> Ver en {{ anuncio.portal | capitalize }}
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="perfil-grid">
+  <!-- ============================== SECCIÓN A: EL INMUEBLE ============================== -->
+  <div class="perfil-seccion">
+    <h2><i data-lucide="home" style="width:15px; height:15px;"></i> El Inmueble</h2>
+    {% if anuncio.foto_url %}
+    <img src="{{ anuncio.foto_url }}" alt="Foto del inmueble" style="width:100%; border-radius:10px; max-height:220px; object-fit:cover; margin-bottom:16px;">
+    {% endif %}
+
+    <p style="font-size:16px; font-weight:700; color:var(--color-primary); margin:0 0 4px;">
+      {{ anuncio.tipo_inmueble | capitalize }} — {{ anuncio.estado | capitalize }}
+    </p>
+    <p style="font-size:13px; color:var(--color-text-muted); margin:0 0 14px;">
+      <i data-lucide="map-pin" style="width:13px; height:13px; vertical-align:middle;"></i>
+      {{ anuncio.ubicacion_texto or 'Ubicación no especificada' }}
+      {% if anuncio.localidad %} · {{ anuncio.localidad }}{% endif %}
+      {% if anuncio.upz %} · UPZ {{ anuncio.upz }}{% endif %}
+    </p>
+
+    <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
+      <div>
+        <div style="font-size:26px; font-weight:800; color:var(--color-primary);">
+          {% if anuncio.precio_venta %}${{ "{:,.0f}".format(anuncio.precio_venta) }}{% else %}N/D{% endif %}
+        </div>
+        <div style="font-size:12px; color:var(--color-text-muted);">COP</div>
+      </div>
+      {% if anuncio.precio_venta and anuncio.area_metros %}
+      <div>
+        <div style="font-size:20px; font-weight:700; color:var(--color-primary);">
+          ${{ "{:,.0f}".format(anuncio.precio_venta / anuncio.area_metros) }}
+        </div>
+        <div style="font-size:12px; color:var(--color-text-muted);">COP / m²</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="info-chip-grid">
+      {% if anuncio.area_metros %}<div class="info-chip"><div class="val">{{ anuncio.area_metros | int }}m²</div><div class="lbl">Área construida</div></div>{% endif %}
+      {% if anuncio.habitaciones %}<div class="info-chip"><div class="val">{{ anuncio.habitaciones }}</div><div class="lbl">Habitaciones</div></div>{% endif %}
+      {% if anuncio.banos %}<div class="info-chip"><div class="val">{{ anuncio.banos }}</div><div class="lbl">Baños</div></div>{% endif %}
+      {% if anuncio.parqueaderos %}<div class="info-chip"><div class="val">{{ anuncio.parqueaderos }}</div><div class="lbl">Parqueaderos</div></div>{% endif %}
+      {% if anuncio.estrato %}<div class="info-chip"><div class="val">{{ anuncio.estrato }}</div><div class="lbl">Estrato (anuncio)</div></div>{% endif %}
+      {% if anuncio.estrato_promedio_200m %}<div class="info-chip"><div class="val">{{ "%.1f"|format(anuncio.estrato_promedio_200m) }}</div><div class="lbl">Estrato sector 200m</div></div>{% endif %}
+      {% if anuncio.antiguedad %}<div class="info-chip"><div class="val" style="font-size:13px;">{{ anuncio.antiguedad }}</div><div class="lbl">Antigüedad</div></div>{% endif %}
+      {% if anuncio.piso_nro %}<div class="info-chip"><div class="val">{{ anuncio.piso_nro }}</div><div class="lbl">Piso</div></div>{% endif %}
+      {% if anuncio.administracion %}<div class="info-chip"><div class="val" style="font-size:13px;">${{ "{:,.0f}".format(anuncio.administracion) }}</div><div class="lbl">Administración/mes</div></div>{% endif %}
+    </div>
+
+    {% if anuncio.comodidades_normalizadas %}
+    <div style="margin-top:14px;">
+      <div style="font-size:12px; font-weight:600; color:var(--color-text-muted); margin-bottom:6px; text-transform:uppercase;">Comodidades</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        {% for c in anuncio.comodidades_normalizadas %}
+        <span style="background:rgba(24,31,89,0.08); padding:3px 10px; border-radius:20px; font-size:12px;">{{ c }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if anuncio.descripcion %}
+    <div style="margin-top:16px; font-size:13px; color:var(--color-text); line-height:1.6; border-top:1px solid var(--color-border); padding-top:14px;">
+      {{ anuncio.descripcion[:600] }}{% if anuncio.descripcion|length > 600 %}…{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ============================== SECCIÓN B: ANÁLISIS SECTOR H3 ============================== -->
+  <div class="perfil-seccion">
+    <h2><i data-lucide="bar-chart-2" style="width:15px; height:15px;"></i> Análisis del Sector (H3)</h2>
+
+    {% if not sub_scores or sub_scores.values() | list | select | list | length == 0 %}
+    <p style="color:var(--color-text-muted); font-size:13px;">Este inmueble no tiene datos H3 calculados todavía. Se asignarán en la próxima búsqueda que lo incluya.</p>
+    {% else %}
+
+    <!-- Radar visual de 5 dimensiones -->
+    <div class="radar-container">
+      <svg id="radar-svg" viewBox="-130 -120 260 260" width="220" height="220">
+        <!-- Anillos de referencia -->
+        {% for r in [0.25, 0.5, 0.75, 1.0] %}
+        <polygon id="ring-{{ loop.index }}" style="fill:none; stroke:var(--color-border); stroke-width:1;" />
+        {% endfor %}
+        <!-- Ejes -->
+        {% for i in range(5) %}
+        <line id="axis-{{ i }}" style="stroke:var(--color-border); stroke-width:1;" />
+        {% endfor %}
+        <!-- Área del score -->
+        <polygon id="radar-area" style="fill:rgba(24,31,89,0.15); stroke:#181F59; stroke-width:2;" />
+        <!-- Labels -->
+        <text id="lbl-0" text-anchor="middle" style="font-size:9px; fill:var(--color-text);" y="-108"></text>
+        <text id="lbl-1" text-anchor="start" style="font-size:9px; fill:var(--color-text);" x="90"></text>
+        <text id="lbl-2" text-anchor="start" style="font-size:9px; fill:var(--color-text);" x="60"></text>
+        <text id="lbl-3" text-anchor="end" style="font-size:9px; fill:var(--color-text);" x="-60"></text>
+        <text id="lbl-4" text-anchor="end" style="font-size:9px; fill:var(--color-text);" x="-90"></text>
+      </svg>
+    </div>
+
+    <!-- Barras de Sub-Score -->
+    {% set dim_order = ['s_seguridad', 's_transporte', 's_comercio', 's_entorno_verde', 's_estrato_valor'] %}
+    {% for dim_key in dim_order %}
+    {% set dim = dimensiones[dim_key] %}
+    {% set val = sub_scores.get(dim_key) %}
+    {% if val is not none %}
+    {% set pct = (val * 100) | int %}
+    <div class="subscore-row">
+      <div class="subscore-header">
+        <span class="subscore-label" style="color:{{ dim.color }};">{{ dim.label }}</span>
+        <span class="subscore-pct" style="color:{{ dim.color }};">{{ pct }}%</span>
+      </div>
+      <div class="subscore-bar-bg">
+        <div class="subscore-bar-fill" style="width:{{ pct }}%; background:{{ dim.color }};"></div>
+      </div>
+
+      <!-- Accordion de variables de la dimensión -->
+      <div class="accordion" style="border-color:{{ dim.color }}20;">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          Ver variables de {{ dim.label }}
+          <i data-lucide="chevron-down" style="width:14px; height:14px;"></i>
+        </div>
+        <div class="accordion-body">
+          <!-- Histograma cargado vía JS -->
+          <div class="histograma-container" id="hist-{{ dim_key }}">
+            <div style="font-size:11px; color:var(--color-text-muted); text-align:center; padding:10px 0;">Cargando distribución...</div>
+          </div>
+          <!-- Tabla de variables -->
+          <table class="var-table">
+            <thead><tr><th>Variable</th><th>Valor</th><th>Ranking</th></tr></thead>
+            <tbody>
+              {% set h3d = anuncio.get('h3_data') %}
+              {% if h3d is string %}{% set h3d = h3d | from_json %}{% endif %}
+              {% for rank_key, peso in dim.variables %}
+              {% set val_key = rank_key | replace('rank_', 'val_') %}
+              {% set val_label_info = dim.val_labels.get(val_key, (val_key, '')) %}
+              {% set rank_val = h3d.get(rank_key) if h3d else none %}
+              {% set abs_val = h3d.get(val_key) if h3d else none %}
+              {% if abs_val is none and val_key == 'estrato_promedio_200m' %}{% set abs_val = anuncio.get('estrato_promedio_200m') %}{% endif %}
+              <tr>
+                <td>{{ val_label_info[0] }}</td>
+                <td>
+                  {% if abs_val is not none %}
+                    {{ "%.1f"|format(abs_val|float) }} <span style="font-size:10px; color:var(--color-text-muted);">{{ val_label_info[1] }}</span>
+                  {% else %}N/D{% endif %}
+                </td>
+                <td>
+                  {% if rank_val is not none %}
+                  {% set rpct = (rank_val|float * 100)|int %}
+                  <span class="rank-pill" style="background:{{ dim.color }}20; color:{{ dim.color }};">{{ rpct }}%</span>
+                  {% else %}<span style="color:var(--color-text-muted);">N/D</span>{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+  </div>
+
+  <!-- ============================== SECCIÓN C: POIs CERCANOS ============================== -->
+  <div class="perfil-seccion">
+    <h2><i data-lucide="map-pin" style="width:15px; height:15px;"></i> Puntos de Interés Cercanos</h2>
+    {% if pois %}
+    {% for categoria, items in pois.items() %}
+    {% if items %}
+    <div class="poi-categoria">
+      <h4>{{ categoria }}</h4>
+      {% for poi in items %}
+      <div class="poi-item">
+        <span>{{ poi.nombre }}</span>
+        <span class="poi-dist">{{ poi.distancia_m }} m</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% else %}
+    <p style="color:var(--color-text-muted); font-size:13px;">No se encontraron POIs en un radio de 700m, o el inmueble no tiene coordenadas registradas.</p>
+    {% endif %}
+  </div>
+
+  <!-- ============================== SECCIÓN D: ANÁLISIS DEL ASESOR (LLM) ============================== -->
+  <div class="perfil-seccion">
+    <h2><i data-lucide="sparkles" style="width:15px; height:15px;"></i> Análisis del Asesor</h2>
+    <div id="llm-analisis-box">
+      <span style="color:var(--color-text-muted); font-size:13px;">Haz clic en "Generar análisis" para obtener un comentario cualitativo de este inmueble y su sector.</span>
+    </div>
+    <button id="btn-generar-analisis" class="btn btn-primary btn-sm" onclick="generarAnalisis()" style="margin-top:12px; display:inline-flex; align-items:center; gap:6px;">
+      <i data-lucide="sparkles" style="width:14px; height:14px;"></i> Generar análisis
+    </button>
+  </div>
+</div>
+
+<script>
+  const ANUNCIO_ID = {{ anuncio.id }};
+  const SUB_SCORES = {{ sub_scores | tojson }};
+  const DIM_ORDER = ['s_seguridad', 's_transporte', 's_comercio', 's_entorno_verde', 's_estrato_valor'];
+  const DIM_LABELS = {
+    's_seguridad': 'Seguridad',
+    's_transporte': 'Transporte',
+    's_comercio': 'Comercio',
+    's_entorno_verde': 'Verde',
+    's_estrato_valor': 'Estrato'
+  };
+  const DIM_COLORS = {
+    's_seguridad': '#e74c3c',
+    's_transporte': '#3498db',
+    's_comercio': '#f39c12',
+    's_entorno_verde': '#27ae60',
+    's_estrato_valor': '#9b59b6'
+  };
+
+  // ---- Accordion ----
+  function toggleAccordion(header) {
+    const body = header.nextElementSibling;
+    const isOpen = body.classList.contains('open');
+    body.classList.toggle('open', !isOpen);
+    const icon = header.querySelector('[data-lucide]');
+    if (icon) icon.setAttribute('data-lucide', isOpen ? 'chevron-down' : 'chevron-up');
+    lucide.createIcons();
+    if (!isOpen) {
+      const dimKey = body.closest('.accordion').previousElementSibling
+                         ?.previousElementSibling?.id?.replace('hist-', '');
+      // Load histogram for this dimension
+      const histDiv = document.getElementById('hist-' + body.closest('.accordion').closest('.subscore-row').querySelector('.histograma-container')?.id?.split('-')?.slice(1)?.join('-'));
+    }
+  }
+
+  // ---- Radar SVG ----
+  function drawRadar() {
+    const cx = 0, cy = 0, maxR = 100;
+    const n = 5;
+    const angles = DIM_ORDER.map((_, i) => -Math.PI / 2 + (2 * Math.PI * i) / n);
+
+    // Reference rings
+    [0.25, 0.5, 0.75, 1.0].forEach((frac, ri) => {
+      const pts = angles.map(a => `${cx + maxR * frac * Math.cos(a)},${cy + maxR * frac * Math.sin(a)}`).join(' ');
+      document.getElementById(`ring-${ri + 1}`)?.setAttribute('points', pts);
+    });
+
+    // Axes
+    angles.forEach((a, i) => {
+      const ax = document.getElementById(`axis-${i}`);
+      if (ax) { ax.setAttribute('x1', cx); ax.setAttribute('y1', cy); ax.setAttribute('x2', cx + maxR * Math.cos(a)); ax.setAttribute('y2', cy + maxR * Math.sin(a)); }
+    });
+
+    // Score polygon
+    const vals = DIM_ORDER.map(k => SUB_SCORES[k] != null ? parseFloat(SUB_SCORES[k]) : 0);
+    const scorePts = angles.map((a, i) => `${cx + maxR * vals[i] * Math.cos(a)},${cy + maxR * vals[i] * Math.sin(a)}`).join(' ');
+    document.getElementById('radar-area')?.setAttribute('points', scorePts);
+
+    // Labels
+    const lblEls = [0, 1, 2, 3, 4].map(i => document.getElementById(`lbl-${i}`));
+    angles.forEach((a, i) => {
+      const el = lblEls[i];
+      if (!el) return;
+      const r = maxR + 14;
+      el.setAttribute('x', cx + r * Math.cos(a));
+      el.setAttribute('y', cy + r * Math.sin(a) + 4);
+      el.textContent = DIM_LABELS[DIM_ORDER[i]];
+    });
+  }
+  drawRadar();
+
+  // ---- Histogramas ----
+  let distribuciones = null;
+  async function cargarDistribuciones() {
+    if (distribuciones) return distribuciones;
+    const resp = await fetch('/api/h3/distribuciones');
+    distribuciones = await resp.json();
+    return distribuciones;
+  }
+
+  function dibujarHistograma(container, valores, valorActual, color) {
+    if (!valores || !valores.length) { container.innerHTML = '<div style="font-size:11px;color:var(--color-text-muted);text-align:center;padding:6px 0;">Sin datos de distribución</div>'; return; }
+    const n = 20;
+    const min = Math.min(...valores), max = Math.max(...valores);
+    if (min === max) { container.innerHTML = '<div style="font-size:11px;color:var(--color-text-muted);text-align:center;padding:6px 0;">Distribución constante</div>'; return; }
+    const step = (max - min) / n;
+    const bins = Array(n).fill(0);
+    valores.forEach(v => { const idx = Math.min(Math.floor((v - min) / step), n - 1); bins[idx]++; });
+    const maxBin = Math.max(...bins);
+    const W = 260, H = 50;
+    const bw = W / n;
+    let rects = bins.map((b, i) => {
+      const bh = (b / maxBin) * H;
+      return `<rect x="${i * bw}" y="${H - bh}" width="${bw - 1}" height="${bh}" fill="${color}60" rx="2"/>`;
+    }).join('');
+
+    // Marcador del inmueble actual
+    let markerLine = '';
+    let interpretation = '';
+    if (valorActual != null) {
+      const xPos = Math.min(((valorActual - min) / (max - min)) * W, W - 1);
+      markerLine = `<line x1="${xPos}" y1="0" x2="${xPos}" y2="${H}" stroke="${color}" stroke-width="2"/>`;
+      // Percentil aproximado
+      const below = valores.filter(v => v <= valorActual).length;
+      const pct = Math.round((below / valores.length) * 100);
+      if (pct >= 50) {
+        interpretation = `<div class="hist-interpretation good">Esta propiedad está en el top ${100 - pct}% de sectores con mejor desempeño en esta dimensión</div>`;
+      } else {
+        interpretation = `<div class="hist-interpretation bad">Esta propiedad está en el ${pct}% inferior en esta dimensión</div>`;
+      }
+    }
+
+    container.innerHTML = `
+      <svg class="histograma-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${rects}${markerLine}</svg>
+      <div class="hist-label">Distribución de los ${valores.length} hexágonos urbanos — línea: este sector</div>
+      ${interpretation}`;
+  }
+
+  async function cargarHistogramasDimension(dimKey, container) {
+    const dist = await cargarDistribuciones();
+    const dim = dimKey;
+    // Usar el primer rank_* de la dimensión como representativo de la dimensión
+    const rankKeys = {
+      's_seguridad': 'rank_hurtos_upz',
+      's_transporte': 'rank_dist_brt',
+      's_comercio': 'rank_dist_d1_ara',
+      's_entorno_verde': 'rank_dist_parque',
+      's_estrato_valor': 'rank_estrato'
+    };
+    const rk = rankKeys[dimKey];
+    const data = dist[rk];
+    const valorActual = SUB_SCORES[dimKey];
+    if (data) {
+      dibujarHistograma(container, data.valores, valorActual, DIM_COLORS[dimKey]);
+    } else {
+      container.innerHTML = '<div style="font-size:11px;color:var(--color-text-muted);text-align:center;padding:6px 0;">Sin datos</div>';
+    }
+  }
+
+  // Cargar histogramas cuando se abre un accordion
+  document.querySelectorAll('.accordion-header').forEach(header => {
+    header.addEventListener('click', async () => {
+      const body = header.nextElementSibling;
+      if (!body.classList.contains('open')) return; // wait for toggle
+      setTimeout(async () => {
+        const subscore = header.closest('.subscore-row');
+        if (!subscore) return;
+        const histId = subscore.querySelector('.histograma-container')?.id;
+        if (!histId) return;
+        const dimKey = histId.replace('hist-', '');
+        const histDiv = document.getElementById(histId);
+        if (histDiv && histDiv.querySelector('svg') === null) {
+          await cargarHistogramasDimension(dimKey, histDiv);
+        }
+      }, 50);
+    });
+  });
+
+  // ---- Análisis LLM on-demand ----
+  async function generarAnalisis() {
+    const box = document.getElementById('llm-analisis-box');
+    const btn = document.getElementById('btn-generar-analisis');
+    box.className = 'loading';
+    box.textContent = 'Generando análisis del asesor IA...';
+    btn.disabled = true;
+    try {
+      const resp = await fetch(`/api/inmuebles/${ANUNCIO_ID}/analisis-llm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await resp.json();
+      box.className = '';
+      box.textContent = data.razon || 'El análisis no pudo generarse. Intenta de nuevo.';
+    } catch (e) {
+      box.className = '';
+      box.textContent = 'Error al conectar con el servidor. Intenta de nuevo.';
+    }
+    btn.disabled = false;
+  }
+
+  // Jinja2 custom filter for from_json — fallback
+  document.querySelectorAll('.accordion-body').forEach(body => {
+    // Fix: Jinja2 filter from_json may not exist; h3_data is already parsed server-side
+  });
+</script>
+{% endblock %}

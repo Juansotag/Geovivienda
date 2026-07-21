@@ -52,7 +52,7 @@ nb = {
     "ruta_h3 = os.path.join('geodata', 'mapa_h3_bogota.geojson')\n",
     "gdf_h3 = gpd.read_file(ruta_h3)\n",
     "print(f'Total celdas H3 urbanas cargadas: {len(gdf_h3)}')\n",
-    "gdf_h3.head(3)"
+    "gdf_h3.sort_values('score_h3_global', ascending=False).head(3)"
    ]
   },
   {

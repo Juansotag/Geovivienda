@@ -2,6 +2,7 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
 import os
+import json
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 GEO_DIR  = os.path.join(BASE_DIR, 'static', 'geo')
@@ -28,6 +29,7 @@ def _cargar_capas():
     pois_malls = None
     pois_salud = None
     pois_educacion = None
+    pois_parques = None
 
     if os.path.exists(poi_path):
         pois_gdf = gpd.read_file(poi_path).to_crs(CRS_METRICO)
@@ -35,6 +37,18 @@ def _cargar_capas():
         pois_malls = pois_gdf[pois_gdf['categoria'] == 'centro_comercial']
         pois_salud = pois_gdf[pois_gdf['categoria'] == 'salud']
         pois_educacion = pois_gdf[pois_gdf['categoria'] == 'educacion']
+
+    # Capas de parques y transporte extendido para POIs cercanos
+    parques_path = os.path.join(BASE_DIR, 'geodata', 'entorno', 'ambiente', 'parques.geojson')
+    if os.path.exists(parques_path):
+        try:
+            pois_parques = gpd.read_file(parques_path)
+            if pois_parques.crs and str(pois_parques.crs).upper() in ('EPSG:6247', 'None'):
+                pois_parques = pois_parques.set_crs('EPSG:6247', allow_override=True).to_crs(CRS_METRICO)
+            else:
+                pois_parques = pois_parques.to_crs(CRS_METRICO)
+        except Exception:
+            pois_parques = None
 
     col_estrato = next((c for c in estratos.columns if c.lower() == 'estrato'), None)
     if col_estrato:
@@ -48,9 +62,26 @@ def _cargar_capas():
         if not loc_match.empty:
             upz_a_localidad[str(upz_row['NOMBRE']).strip()] = str(loc_match.iloc[0]['LOCNOMBRE']).strip()
 
+    # Cargar GeoJSON H3 Res 9 maestro en memoria, indexado por h3_index
+    h3_lookup = {}
+    h3_geojson_path = os.path.join(BASE_DIR, 'geodata', 'mapa_h3_bogota.geojson')
+    if os.path.exists(h3_geojson_path):
+        try:
+            h3_gdf = gpd.read_file(h3_geojson_path)
+            # Excluir columna geometry para el snapshot
+            prop_cols = [c for c in h3_gdf.columns if c != 'geometry']
+            for _, row in h3_gdf.iterrows():
+                idx = str(row.get('h3_index', ''))
+                if idx:
+                    h3_lookup[idx] = {c: row[c] for c in prop_cols}
+            print(f"[spatial_analysis] GeoJSON H3 cargado: {len(h3_lookup)} hexágonos en memoria")
+        except Exception as e:
+            print(f"[spatial_analysis] Advertencia: no se pudo cargar el GeoJSON H3: {e}")
+
     return (
         sitp, tm, ciclo, estratos, col_estrato, localidades, upzs, metro, municipios,
-        upz_a_localidad, pois_d1_ara, pois_malls, pois_salud, pois_educacion
+        upz_a_localidad, pois_d1_ara, pois_malls, pois_salud, pois_educacion,
+        pois_parques, h3_lookup
     )
 
 
@@ -104,10 +135,73 @@ def upz_a_localidad_map() -> dict:
     return capas_res[9]
 
 
+def _top_pois_cercanos(capa_gdf, punto_metrico, nombre_col, radio_m=700, max_n=3):
+    """Retorna hasta max_n POIs más cercanos dentro de radio_m metros.
+    Devuelve lista de dicts {nombre, distancia_m}."""
+    if capa_gdf is None or capa_gdf.empty:
+        return []
+    try:
+        dists = capa_gdf.distance(punto_metrico)
+        cercanos = dists[dists <= radio_m].nsmallest(max_n)
+        resultado = []
+        for idx, dist in cercanos.items():
+            nombre = None
+            for col in [nombre_col, 'nombre', 'NOMBRE', 'name', 'Name']:
+                val = capa_gdf.loc[idx].get(col) if col else None
+                if val and str(val).strip() and str(val).strip().lower() not in ('none', 'nan', ''):
+                    nombre = str(val).strip()
+                    break
+            if not nombre:
+                nombre = "Sin nombre"
+            resultado.append({"nombre": nombre, "distancia_m": round(float(dist))})
+        return resultado
+    except Exception:
+        return []
+
+
+def pois_cercanos(lat: float, lon: float, radio_m: int = 700) -> dict:
+    """Calcula los POIs más cercanos al punto (lat, lon) por categoría.
+    Retorna dict {categoria: [{nombre, distancia_m}]} con hasta 4 POIs por categoría."""
+    (
+        sitp, tm, ciclo, estratos, col_estrato, localidades, upzs, metro, municipios, _,
+        pois_d1_ara, pois_malls, pois_salud, pois_educacion,
+        pois_parques, h3_lookup
+    ) = _capas()
+
+    punto = gpd.GeoSeries([Point(lon, lat)], crs=CRS_WGS84).to_crs(CRS_METRICO).iloc[0]
+
+    resultado = {}
+
+    # Transporte — TM/Cable/Metro
+    tm_cercanos = _top_pois_cercanos(tm, punto, 'nombre', radio_m, 3)
+    metro_cercanos = _top_pois_cercanos(metro, punto, 'nombre', radio_m, 2)
+    sitp_cercanos = _top_pois_cercanos(sitp, punto, 'nombre', radio_m, 3)
+    resultado['Transporte BRT / Cable'] = tm_cercanos
+    resultado['Transporte Metro'] = metro_cercanos
+    resultado['Transporte SITP'] = sitp_cercanos
+
+    # Comercio
+    resultado['Hard Discount (D1/Ara)'] = _top_pois_cercanos(pois_d1_ara, punto, 'nombre', radio_m, 3)
+    resultado['Centros Comerciales'] = _top_pois_cercanos(pois_malls, punto, 'nombre', radio_m, 3)
+
+    # Salud
+    resultado['Salud'] = _top_pois_cercanos(pois_salud, punto, 'nombre', radio_m, 3)
+
+    # Educación
+    resultado['Educacion'] = _top_pois_cercanos(pois_educacion, punto, 'nombre', radio_m, 3)
+
+    # Parques
+    resultado['Parques'] = _top_pois_cercanos(pois_parques, punto, 'nombre', radio_m * 1.5, 3)
+
+    # Filtrar categorías vacías
+    return {k: v for k, v in resultado.items() if v}
+
+
 def enriquecer_inmueble(lat: float, lon: float) -> dict:
     (
         sitp, tm, ciclo, estratos, col_estrato, localidades, upzs, metro, municipios, _,
-        pois_d1_ara, pois_malls, pois_salud, pois_educacion
+        pois_d1_ara, pois_malls, pois_salud, pois_educacion,
+        pois_parques, h3_lookup
     ) = _capas()
 
     punto = gpd.GeoSeries([Point(lon, lat)], crs=CRS_WGS84).to_crs(CRS_METRICO).iloc[0]
@@ -122,8 +216,11 @@ def enriquecer_inmueble(lat: float, lon: float) -> dict:
     dist_hospital = pois_salud.distance(punto).min() if pois_salud is not None and not pois_salud.empty else None
     dist_colegio = pois_educacion.distance(punto).min() if pois_educacion is not None and not pois_educacion.empty else None
 
-    # H3 Cell Index (Resolucion 8)
-    h3_index = h3.latlng_to_cell(lat, lon, 8)
+    # H3 Cell Index (Resolución 9 — micro-urbana ~300m, coincide con mapa_h3_bogota.geojson)
+    h3_index = h3.latlng_to_cell(lat, lon, 9)
+
+    # Lookup de los 72 atributos del hexágono en el dict en memoria
+    h3_data = h3_lookup.get(h3_index)
 
     # Point-in-polygon para localidad, UPZ y municipio
     loc_match = localidades[localidades.contains(punto)]
@@ -159,6 +256,7 @@ def enriquecer_inmueble(lat: float, lon: float) -> dict:
         "dist_hospital": float(round(dist_hospital, 1)) if dist_hospital is not None else None,
         "dist_colegio": float(round(dist_colegio, 1)) if dist_colegio is not None else None,
         "h3_index": h3_index,
+        "h3_data": h3_data,
         "estrato_promedio_200m": estrato_promedio,
         "localidad": localidad,
         "upz": upz,

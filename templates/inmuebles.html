@@ -186,8 +186,11 @@
           </td>
           <td>
             <div style="display: flex; gap: 6px; align-items: center; justify-content: flex-start; flex-wrap: nowrap;">
+              <a href="{{ url_for('inmueble_perfil', anuncio_id=a.id) }}" class="btn btn-primary btn-sm" style="padding: 6px 10px; display:inline-flex; align-items:center; gap:4px;" title="Ver perfil detallado">
+                <i data-lucide="layout-panel-left" style="width:12px; height:12px;"></i> Perfil
+              </a>
               <a href="{{ a.url }}" target="_blank" class="btn btn-secondary btn-sm" style="padding: 6px 10px;">Anuncio</a>
-              <a href="{{ url_for('mapa', focus_id=a.id) }}" class="btn btn-secondary btn-sm" style="padding: 6px 10px;">Ver en mapa</a>
+              <a href="{{ url_for('mapa', focus_id=a.id) }}" class="btn btn-secondary btn-sm" style="padding: 6px 10px;">Mapa</a>
               <a href="{{ url_for('anuncio_editar', anuncio_id=a.id) }}" class="btn btn-secondary btn-sm" style="padding: 6px 10px;">Editar</a>
               <form action="{{ url_for('anuncio_eliminar', anuncio_id=a.id) }}" method="post" onsubmit="return confirm('¿Seguro que deseas eliminar este inmueble del inventario?');" style="margin: 0; display: inline-flex;">
                 <button type="submit" class="btn btn-danger btn-sm" style="padding: 6px 10px;">Eliminar</button>

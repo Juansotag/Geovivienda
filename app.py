@@ -21,6 +21,17 @@ app = Flask(__name__)
 # proceso despues de cada edicion a un .html para ver el cambio reflejado.
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 
+# Filtro personalizado: deserializar JSONB que llega como string desde PostgreSQL
+@app.template_filter("from_json")
+def from_json_filter(value):
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except Exception:
+            return {}
+    return value or {}
+
+
 CIUDADES = [
     {"slug": "bogota", "nombre": "Bogotá", "activa": True},
     {"slug": "medellin", "nombre": "Medellín", "activa": False},
@@ -446,6 +457,7 @@ def _parse_busqueda_form(form) -> dict:
         "portales": portales,
         "cantidad_solicitada": cantidad,
         "cantidad_exacta": form.get("cantidad_exacta") == "true",
+        "top_n": min(int(form.get("top_n") or 5), 10),
         "municipios": municipios,
         "tipo_vivienda": form["tipo_vivienda"],
         "estado_deseado": form["estado_deseado"],
@@ -658,6 +670,83 @@ def descargar_reporte_pdf(reporte_id):
 
 iniciar_scheduler()
 
+
+@app.route("/inmuebles/<int:anuncio_id>/perfil")
+def inmueble_perfil(anuncio_id):
+    """Página de perfil detallado del inmueble con análisis de sector H3, Sub-Scores y POIs."""
+    anuncio = db.buscar_anuncio_por_id(anuncio_id)
+    if not anuncio:
+        return "Inmueble no encontrado", 404
+
+    # Calcular Sub-Scores desde h3_data
+    sub_scores = scoring.calcular_sub_scores(anuncio)
+
+    # POIs cercanos desde las coordenadas exactas del inmueble
+    pois = {}
+    lat, lon = anuncio.get("latitud"), anuncio.get("longitud")
+    if lat and lon:
+        try:
+            import spatial_analysis
+            pois = spatial_analysis.pois_cercanos(float(lat), float(lon), radio_m=700)
+        except Exception as e:
+            print(f"Error calculando POIs para inmueble {anuncio_id}: {e}")
+
+    # Metadatos de dimensiones para el template
+    dimensiones = scoring.DIMENSIONES_H3
+
+    return render_template(
+        "inmueble_perfil.html",
+        activo="inmuebles",
+        anuncio=anuncio,
+        sub_scores=sub_scores,
+        pois=pois,
+        dimensiones=dimensiones,
+    )
+
+
+@app.route("/api/inmuebles/<int:anuncio_id>/analisis-llm", methods=["POST"])
+def inmueble_analisis_llm(anuncio_id):
+    """Genera un informe cualitativo on-demand para un inmueble específico."""
+    anuncio = db.buscar_anuncio_por_id(anuncio_id)
+    if not anuncio:
+        return jsonify({"status": "error", "message": "Inmueble no encontrado"}), 404
+
+    busqueda_id = request.json.get("busqueda_id") if request.is_json else None
+    busqueda_obj = db.obtener_busqueda(busqueda_id) if busqueda_id else {}
+    if not busqueda_obj:
+        busqueda_obj = {}
+
+    # Enriquecer el anuncio con sub_scores y POIs para el prompt
+    sub = scoring.calcular_sub_scores(anuncio)
+    anuncio["_sub_scores"] = sub
+    lat, lon = anuncio.get("latitud"), anuncio.get("longitud")
+    if lat and lon:
+        try:
+            import spatial_analysis
+            anuncio["_pois_cercanos"] = spatial_analysis.pois_cercanos(float(lat), float(lon))
+        except Exception:
+            pass
+
+    scores_llm = scoring.calcular_scores_llm(busqueda_obj, [anuncio])
+    info = scores_llm.get(anuncio_id)
+    razon = info.get("razon", "") if info else "No se pudo generar el análisis."
+    return jsonify({"status": "ok", "razon": razon})
+
+
+@app.route("/api/h3/distribuciones")
+def api_h3_distribuciones():
+    """Sirve el JSON pre-calculado de distribuciones de variables H3 para los histogramas del perfil."""
+    dist_path = os.path.join(BASE_DIR, "static", "data", "h3_distribuciones.json")
+    if not os.path.exists(dist_path):
+        return jsonify({"error": "Distribuciones no generadas. Ejecuta scripts/generar_distribuciones_h3.py"}), 404
+    with open(dist_path, encoding="utf-8") as f:
+        data = json.load(f)
+    resp = jsonify(data)
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
+

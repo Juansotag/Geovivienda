@@ -125,7 +125,8 @@ def listar_clientes() -> list[dict]:
 def buscar_anuncio_por_id(anuncio_id: int) -> dict | None:
     """Misma razon que buscar_anuncio_por_url: esta funcion alimenta al
     generador de reportes (ver reportes.py PROMPT_TEMPLATE, seccion
-    ENTORNO), que necesita dist_tm/dist_sitp/dist_ciclo/estrato_promedio_200m."""
+    ENTORNO), que necesita dist_tm/dist_sitp/dist_ciclo/estrato_promedio_200m
+    y h3_data para el perfil detallado del inmueble."""
     with get_cursor() as cur:
         cur.execute(
             """
@@ -175,14 +176,14 @@ def finalizar_busqueda(busqueda_id: int, status: str):
         )
 
 
-def guardar_resultado_busqueda(busqueda_id: int, anuncio_id: int, score: float, es_top: bool = False) -> int:
+def guardar_resultado_busqueda(busqueda_id: int, anuncio_id: int, score: float, es_top: bool = False, sub_scores: dict | None = None) -> int:
     with get_cursor() as cur:
         cur.execute(
             """
-            INSERT INTO resultados_busqueda (busqueda_id, anuncio_id, score, es_top)
-            VALUES (%s, %s, %s, %s) RETURNING id
+            INSERT INTO resultados_busqueda (busqueda_id, anuncio_id, score, es_top, sub_scores)
+            VALUES (%s, %s, %s, %s, %s::jsonb) RETURNING id
             """,
-            (busqueda_id, anuncio_id, score, es_top),
+            (busqueda_id, anuncio_id, score, es_top, json.dumps(sub_scores) if sub_scores else None),
         )
         return cur.fetchone()["id"]
 
@@ -210,6 +211,14 @@ def actualizar_score_resultado(resultado_id: int, score: float):
         cur.execute("UPDATE resultados_busqueda SET score = %s WHERE id = %s", (score, resultado_id))
 
 
+def actualizar_sub_scores_resultado(resultado_id: int, sub_scores: dict):
+    with get_cursor() as cur:
+        cur.execute(
+            "UPDATE resultados_busqueda SET sub_scores = %s::jsonb WHERE id = %s",
+            (json.dumps(sub_scores), resultado_id),
+        )
+
+
 def guardar_reporte(cliente_id: int, anuncio_id: int, score: float, html: str) -> int:
     with get_cursor() as cur:
         cur.execute(
@@ -230,13 +239,13 @@ def obtener_reporte(reporte_id: int) -> dict | None:
 
 
 def obtener_resultados_busqueda(busqueda_id: int) -> list[dict]:
-    """Anuncios de una busqueda con su score y el id del reporte mas
+    """Anuncios de una busqueda con su score, sub_scores y el id del reporte mas
     reciente (si ya se genero uno), ordenados de mejor a peor score."""
     with get_cursor() as cur:
         cur.execute(
             """
             SELECT a.*, h.dist_sitp, h.dist_tm, h.dist_ciclo, h.estrato_promedio_200m,
-                   rb.score, rb.es_top,
+                   rb.score, rb.es_top, rb.sub_scores, rb.id AS resultado_id,
                    (SELECT r.id FROM reportes r
                     WHERE r.anuncio_id = a.id AND r.cliente_id = (
                         SELECT cliente_id FROM busquedas WHERE id = %s

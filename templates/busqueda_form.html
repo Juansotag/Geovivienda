@@ -393,6 +393,16 @@
         Número exacto
       </label>
     </div>
+    <div class="form-group" style="margin-bottom:0; max-width:200px; display:inline-flex; margin-left:20px;">
+      <label for="top_n" style="margin-bottom:4px; font-size:11px;">Informe IA para los mejores (Top N)</label>
+      <input type="number" id="top_n" name="top_n"
+        value="{{ busqueda.top_n if busqueda and busqueda.top_n else 5 }}"
+        min="1" max="10" style="padding: 8px 12px;">
+      <p style="font-size:11px; color:var(--color-text-muted); margin:4px 0 0;">
+        Los <strong>N mejores inmuebles</strong> (1–10) recibirán un análisis cualitativo completo del asesor IA,
+        incluyendo POIs cercanos y características del sector.
+      </p>
+    </div>
   </div>
 
   <div style="margin-top:30px;">

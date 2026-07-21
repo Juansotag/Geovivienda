@@ -87,7 +87,6 @@ def ejecutar():
     join_upz = gpd.sjoin(gdf_h3, upzs_metric[['NOMBRE', 'geometry']], how='left', predicate='within')
     gdf_h3['upz'] = join_upz['NOMBRE'].fillna('ZONA URBANA')
 
-    # Filtro rural estricto
     gdf_h3 = gdf_h3[~gdf_h3['localidad'].apply(lambda n: any(e in str(n).upper() for e in EXCLUSIONES)) &
                     ~gdf_h3['upz'].apply(lambda n: any(e in str(n).upper() for e in EXCLUSIONES))].copy().reset_index(drop=True)
 
@@ -120,7 +119,25 @@ def ejecutar():
     gdf_h3['val_hurtos_residencias'] = [s[3] for s in stats_h]
     gdf_h3['val_hurtos_vehiculos'] = [s[4] for s in stats_h]
 
-    print("=== 4. Cargando y Unificando Capas Vectoriales (BRT + Cable, Metro EPSG:6247, Parques EPSG:6247) ===")
+    # Cargar Siniestros Viales
+    print("=== 4. Cargar Siniestros Viales (Puntos) ===")
+    sin_path = os.path.join(GEODATA_DIR, 'seguridad', 'crimen', 'siniestros.csv')
+    siniestros_gdf = None
+    siniestros_graves_gdf = None
+    if os.path.exists(sin_path):
+        df_sin = pd.read_csv(sin_path)
+        df_sin['LATITUD'] = pd.to_numeric(df_sin['LATITUD'], errors='coerce')
+        df_sin['LONGITUD'] = pd.to_numeric(df_sin['LONGITUD'], errors='coerce')
+        df_sin = df_sin.dropna(subset=['LATITUD', 'LONGITUD'])
+        
+        geometry_sin = [Point(xy) for xy in zip(df_sin['LONGITUD'], df_sin['LATITUD'])]
+        siniestros_gdf = gpd.GeoDataFrame(df_sin, geometry=geometry_sin, crs=CRS_WGS84).to_crs(CRS_METRICO)
+        
+        df_graves = df_sin[df_sin['GRAVEDAD'].astype(str).str.upper().str.contains('HERIDO|MUERTO|GRAVE')]
+        geometry_graves = [Point(xy) for xy in zip(df_graves['LONGITUD'], df_graves['LATITUD'])]
+        siniestros_graves_gdf = gpd.GeoDataFrame(df_graves, geometry=geometry_graves, crs=CRS_WGS84).to_crs(CRS_METRICO)
+
+    print("=== 5. Cargando y Unificando Capas Vectoriales Completa ===")
     poi_path = os.path.join(GEODATA_DIR, 'entorno', 'poi', 'pois_bogota_completo.geojson')
     pois_gdf = cargar_layer_fix(poi_path)
     
@@ -143,14 +160,36 @@ def ejecutar():
 
     bus_gdf = cargar_layer_fix(os.path.join(GEODATA_DIR, 'transporte', 'bus.geojson'))
     metro_gdf = cargar_layer_fix(os.path.join(GEODATA_DIR, 'transporte', 'ferreo.geojson'), native_crs='EPSG:6247')
-    ciclo_gdf = cargar_layer_fix(os.path.join(GEODATA_DIR, 'entorno', 'ambiente', 'ciclovia.geojson'))
+    
+    # Ciclorrutas ampliadas
+    c1 = cargar_layer_fix(os.path.join(GEODATA_DIR, 'entorno', 'ambiente', 'ciclovia.geojson'))
+    c2 = cargar_layer_fix(os.path.join(STATIC_GEO_DIR, 'cicloalameda.geojson'))
+    c3 = cargar_layer_fix(os.path.join(STATIC_GEO_DIR, 'cliclorutas.geojson'))
+    c_list = [c for c in [c1, c2, c3] if c is not None and not c.empty]
+    ciclo_gdf = pd.concat(c_list, ignore_index=True) if c_list else None
+
     cai_gdf = cargar_layer_fix(os.path.join(GEODATA_DIR, 'seguridad', 'policia', 'centro_atencion_inmediata.geojson'))
     est_policia_gdf = cargar_layer_fix(os.path.join(GEODATA_DIR, 'seguridad', 'policia', 'estacion_policia.geojson'))
+    
+    # Equipamiento Justicia (URI + Inspecciones + Salas)
+    j1 = cargar_layer_fix(os.path.join(GEODATA_DIR, 'seguridad', 'policia', 'inspeccion_policia.geojson'))
+    j2 = cargar_layer_fix(os.path.join(GEODATA_DIR, 'seguridad', 'policia', 'sala_de_atencion.geojson'))
+    j3 = cargar_layer_fix(os.path.join(GEODATA_DIR, 'seguridad', 'policia', 'unidad_reaccion_inmediata.geojson'))
+    j_list = [j for j in [j1, j2, j3] if j is not None and not j.empty]
+    justicia_gdf = pd.concat(j_list, ignore_index=True) if j_list else None
+
+    # Recreación y Deportes (Gimnasios + Mobiliario Deportivo + Parques Infantiles)
+    d1_g = cargar_layer_fix(os.path.join(GEODATA_DIR, 'entorno', 'servicios_publicos', 'gimnasio.geojson'))
+    d2_g = cargar_layer_fix(os.path.join(GEODATA_DIR, 'entorno', 'servicios_publicos', 'mobiliariodeportivo.geojson'))
+    d3_g = cargar_layer_fix(os.path.join(GEODATA_DIR, 'entorno', 'servicios_publicos', 'parque_infantil.geojson'))
+    dep_list = [d for d in [d1_g, d2_g, d3_g] if d is not None and not d.empty]
+    deporte_gdf = pd.concat(dep_list, ignore_index=True) if dep_list else None
+
     parques_gdf = cargar_layer_fix(os.path.join(GEODATA_DIR, 'entorno', 'ambiente', 'parques.geojson'), native_crs='EPSG:6247')
     basuras_gdf = cargar_layer_fix(os.path.join(GEODATA_DIR, 'entorno', 'servicios_publicos', 'puntos_criticos_arrojo_clandestino_residuos.geojson'))
     arboles_gdf = cargar_layer_fix(os.path.join(GEODATA_DIR, 'entorno', 'ambiente', 'arbolado_urbano.geojson'))
 
-    # Capas Ambientales (PM2.5, Temperatura, Precipitación)
+    # Capas Ambientales
     pm25_gdf = cargar_layer_fix(os.path.join(GEODATA_DIR, 'entorno', 'ambiente', 'pm25_promedio_anual_2024.geojson'))
     temp_gdf = cargar_layer_fix(os.path.join(GEODATA_DIR, 'entorno', 'ambiente', 'temperatura_promedio_2024.geojson'))
     prec_gdf = cargar_layer_fix(os.path.join(GEODATA_DIR, 'entorno', 'ambiente', 'precipitacion_acumulada_2024.geojson'))
@@ -161,7 +200,7 @@ def ejecutar():
     uso_gdf = cargar_layer_fix(os.path.join(GEODATA_DIR, 'entorno', 'uso', 'uso_suelo_manzana.geojson'))
     area_act_gdf = cargar_layer_fix(os.path.join(GEODATA_DIR, 'areaactividad', 'AreaActividad.shp'))
 
-    print("=== 5. Calculando Distancias Mínimas (sjoin_nearest) ===")
+    print("=== 6. Calculando Distancias Mínimas (sjoin_nearest) ===")
     def calc_dist(gdf_p, layer, col):
         if layer is None or layer.empty:
             gdf_p[col] = 9999.0
@@ -176,15 +215,17 @@ def ejecutar():
     calc_dist(gdf_h3, ciclo_gdf, 'val_dist_ciclo')
     calc_dist(gdf_h3, cai_gdf, 'val_dist_cai')
     calc_dist(gdf_h3, est_policia_gdf, 'val_dist_est_policia')
+    calc_dist(gdf_h3, justicia_gdf, 'val_dist_equipamiento_justicia')
     calc_dist(gdf_h3, pois_d1, 'val_dist_d1_ara')
     calc_dist(gdf_h3, pois_malls, 'val_dist_centro_comercial')
     calc_dist(gdf_h3, pois_salud, 'val_dist_hospital')
     calc_dist(gdf_h3, pois_colegios, 'val_dist_colegio')
     calc_dist(gdf_h3, pois_premium, 'val_dist_supermercado_premium')
     calc_dist(gdf_h3, parques_gdf, 'val_dist_parque')
+    calc_dist(gdf_h3, deporte_gdf, 'val_dist_recreacion_deporte')
     calc_dist(gdf_h3, basuras_gdf, 'val_dist_basura')
 
-    print("=== 6. Calculando Conteos y Buffers (500m y 300m) ===")
+    print("=== 7. Calculando Conteos y Buffers (500m y 300m) ===")
     gdf_h3['buffer_500'] = gdf_h3.geometry.buffer(500)
     gdf_h3['buffer_300'] = gdf_h3.geometry.buffer(300)
 
@@ -204,9 +245,11 @@ def ejecutar():
     calc_conteo(gdf_h3, pois_colegios, 'buffer_500', 'val_colegios_500m')
     calc_conteo(gdf_h3, basuras_gdf, 'buffer_300', 'val_basuras_300m')
     calc_conteo(gdf_h3, arboles_gdf, 'buffer_300', 'val_arboles_300m')
+    calc_conteo(gdf_h3, siniestros_gdf, 'buffer_300', 'val_siniestros_viales_300m')
+    calc_conteo(gdf_h3, siniestros_graves_gdf, 'buffer_500', 'val_siniestros_graves_500m')
 
     # Imputación de PM2.5, Temperatura y Precipitación
-    print("=== 7. Imputando Capas Ambientales (PM2.5, Temperatura, Precipitación) ===")
+    print("=== 8. Imputando Capas Ambientales (PM2.5, Temperatura, Precipitación) ===")
     def imputar_poligono_val(gdf_p, layer, target_col, src_val_col, default_val):
         if layer is None or layer.empty or src_val_col not in layer.columns:
             gdf_p[target_col] = default_val
@@ -221,7 +264,7 @@ def ejecutar():
     imputar_poligono_val(gdf_h3, prec_gdf, 'val_precipitacion', 'precip_per', 800.0)
 
     # Imputación de Estrato, Avalúo Catastral y Uso
-    print("=== 8. Imputando Estrato, Avalúo Catastral y Uso de Suelo ===")
+    print("=== 9. Imputando Estrato, Avalúo Catastral y Uso de Suelo ===")
     if estratos_gdf is not None and not estratos_gdf.empty:
         col_e = next((c for c in estratos_gdf.columns if c.lower() == 'estrato'), None)
         if col_e:
@@ -254,14 +297,14 @@ def ejecutar():
             m_pot = j_pot.groupby('h3_index')[col_pot].first()
             gdf_h3['area_actividad_pot'] = gdf_h3['h3_index'].map(m_pot).fillna('Residencial')
 
-    print("=== 9. Calculando Rankings Percentiles (0.00 a 1.00) sobre área urbana ===")
-    cols_distancia = ["val_dist_brt", "val_dist_sitp", "val_dist_metro", "val_dist_ciclo", "val_dist_cai", "val_dist_est_policia", "val_dist_d1_ara", "val_dist_centro_comercial", "val_dist_hospital", "val_dist_colegio", "val_dist_supermercado_premium", "val_dist_parque"]
+    print("=== 10. Calculando Rankings Percentiles (0.00 a 1.00) sobre 100% de las variables ===")
+    cols_distancia = ["val_dist_brt", "val_dist_sitp", "val_dist_metro", "val_dist_ciclo", "val_dist_cai", "val_dist_est_policia", "val_dist_equipamiento_justicia", "val_dist_d1_ara", "val_dist_centro_comercial", "val_dist_hospital", "val_dist_colegio", "val_dist_supermercado_premium", "val_dist_parque", "val_dist_recreacion_deporte"]
     for col in cols_distancia:
         rank_col = col.replace("val_", "rank_")
         gdf_h3[rank_col] = (1.0 - gdf_h3[col].rank(pct=True, ascending=True)).round(4)
 
-    # Penalizaciones (Menor delincuencia/PM2.5 = Mayor ranking)
-    cols_penalizaciones = ["val_dist_basura", "val_hurtos_upz", "val_hurtos_personas", "val_hurtos_comercios", "val_hurtos_residencias", "val_hurtos_vehiculos", "val_basuras_300m", "val_pm25"]
+    # Penalizaciones (Menor delincuencia/accidentalidad/PM2.5 = Mayor ranking)
+    cols_penalizaciones = ["val_dist_basura", "val_hurtos_upz", "val_hurtos_personas", "val_hurtos_comercios", "val_hurtos_residencias", "val_hurtos_vehiculos", "val_basuras_300m", "val_siniestros_viales_300m", "val_siniestros_graves_500m", "val_pm25"]
     for col in cols_penalizaciones:
         rank_col = col.replace("val_", "rank_")
         if col == "val_dist_basura":
@@ -269,15 +312,14 @@ def ejecutar():
         else:
             gdf_h3[rank_col] = (1.0 - gdf_h3[col].rank(pct=True, ascending=True)).round(4)
 
-    cols_conteo = ["val_brt_500m", "val_sitp_300m", "val_conteo_hard_discount_500m", "val_hospitales_500m", "val_colegios_500m", "val_arboles_300m", "val_avaluo_catastral_m2"]
+    cols_conteo = ["val_brt_500m", "val_sitp_300m", "val_conteo_hard_discount_500m", "val_hospitales_500m", "val_colegios_500m", "val_arboles_300m", "val_avaluo_catastral_m2", "val_temperatura", "val_precipitacion"]
     for col in cols_conteo:
         rank_col = col.replace("val_", "rank_")
         gdf_h3[rank_col] = gdf_h3[col].rank(pct=True, ascending=True).round(4)
 
-    # Ranking de Estrato Promedio (Mayor estrato = Mayor rank)
     gdf_h3['rank_estrato'] = gdf_h3['estrato_promedio_200m'].rank(pct=True, ascending=True).round(4)
 
-    # SCORE GLOBAL SINTÉTICO REPONDERADO (BENEFICIANDO ESTRATOS ALTOS, POCA DELINCUENCIA, PARQUES, COMERCIO, TRANSPORTE Y ÁRBOLES)
+    # SCORE GLOBAL SINTÉTICO REPONDERADO MAESTRO
     gdf_h3['score_h3_global'] = (
         gdf_h3['rank_hurtos_upz'] * 0.25 +                  # 25% Poca Criminalidad / Seguridad
         gdf_h3['rank_estrato'] * 0.20 +                     # 20% Estratos Altos
@@ -289,7 +331,7 @@ def ejecutar():
         gdf_h3['rank_arboles_300m'] * 0.10                  # 10% Árboles
     ).round(4)
 
-    print("=== 10. Exportando GeoJSON Maestro Definitivo ===")
+    print("=== 11. Exportando GeoJSON Maestro Definitivo ===")
     drop_cols = ['geometry', 'buffer_500', 'buffer_300']
     features = []
     for _, r in gdf_h3.iterrows():
@@ -309,7 +351,7 @@ def ejecutar():
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump({"type": "FeatureCollection", "features": features}, f, ensure_ascii=False, indent=2)
 
-    print(f"¡SOBREESCRITURA MAESTRA DEFINITIVA COMPLETADA! mapa_h3_bogota.geojson guardado con {len(features)} hexágonos urbanos Res 9.")
+    print(f"¡PROCESAMIENTO ABSOLUTAMENTE COMPLETO! mapa_h3_bogota.geojson sobrescrito con {len(features)} hexágonos urbanos Res 9 y 100% de variables de geodata/.")
 
 if __name__ == "__main__":
     ejecutar()

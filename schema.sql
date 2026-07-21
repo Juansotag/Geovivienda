@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS anuncios (
     upz TEXT,
     municipio_geo TEXT,                   -- municipio geo-derivado (point-in-polygon), distinto de 'ciudad' que es texto fijo
     activo BOOLEAN DEFAULT TRUE,
+    h3_data JSONB,                        -- snapshot completo de val_* y rank_* del hexágono H3 Res 9
     primera_vez_visto TIMESTAMPTZ DEFAULT now(),
     ultima_verificacion TIMESTAMPTZ DEFAULT now()
 );
@@ -134,6 +135,7 @@ CREATE TABLE IF NOT EXISTS busquedas (
     comodidades_indispensables JSONB DEFAULT '[]'::jsonb,  -- filtro duro: el anuncio debe tenerlas TODAS
     upz JSONB DEFAULT '[]'::jsonb,        -- lista de nombres de UPZ (pueden ser de localidades distintas)
     pregunta_abierta TEXT,
+    top_n SMALLINT DEFAULT 5,             -- cuántos inmuebles reciben informe LLM cualitativo (1-10)
 
     creada_en TIMESTAMPTZ DEFAULT now(),
     terminada_en TIMESTAMPTZ
@@ -219,8 +221,14 @@ CREATE TABLE IF NOT EXISTS resultados_busqueda (
     busqueda_id BIGINT REFERENCES busquedas(id) ON DELETE CASCADE,
     anuncio_id BIGINT REFERENCES anuncios(id) ON DELETE CASCADE,
     score REAL,
-    es_top BOOLEAN DEFAULT FALSE
+    es_top BOOLEAN DEFAULT FALSE,
+    sub_scores JSONB                       -- {s_seguridad, s_transporte, s_comercio, s_entorno_verde, s_estrato_valor}
 );
+
+-- Migraciones para nuevas columnas del scoring híbrido
+ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS h3_data JSONB;
+ALTER TABLE busquedas ADD COLUMN IF NOT EXISTS top_n SMALLINT DEFAULT 5;
+ALTER TABLE resultados_busqueda ADD COLUMN IF NOT EXISTS sub_scores JSONB;
 
 -- Tabla de Reportes IA
 CREATE TABLE IF NOT EXISTS reportes (
