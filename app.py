@@ -99,6 +99,17 @@ for dept in _divipola_data:
 _divipola_data = dict(sorted(_divipola_data.items()))
 
 
+@app.context_processor
+def inject_global_catalogs():
+    from services import paises_onu
+    return {
+        "paises_onu": paises_onu.PAISES_ONU,
+        "tipos_permiso": paises_onu.TIPOS_PERMISO_RESIDENCIA,
+        "ciudades_populares": paises_onu.CIUDADES_POPULARES,
+        "ciudades": CIUDADES,
+    }
+
+
 @app.route("/api/divipola")
 def api_divipola():
     return jsonify(_divipola_data)

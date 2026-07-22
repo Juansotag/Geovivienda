@@ -49,8 +49,13 @@
       </select>
     </div>
     <div class="form-group">
-      <label for="ciudad_residencia">Ciudad de residencia</label>
-      <input type="text" id="ciudad_residencia" name="ciudad_residencia" required placeholder="Ej: Madrid, Miami, Toronto, Bogotá" value="{{ cliente.ciudad_residencia if cliente else '' }}">
+      <label for="ciudad_residencia">Ciudad de residencia (Desplegable / Escribir)</label>
+      <input type="text" id="ciudad_residencia" name="ciudad_residencia" required list="ciudades_list" placeholder="Ej: Madrid, Miami, Toronto, Bogotá" value="{{ cliente.ciudad_residencia if cliente else '' }}" autocomplete="off">
+      <datalist id="ciudades_list">
+        {% for c in ciudades_populares %}
+        <option value="{{ c }}"></option>
+        {% endfor %}
+      </datalist>
     </div>
     <div class="form-group">
       <label for="anios_en_pais">Años de residencia en este país</label>
