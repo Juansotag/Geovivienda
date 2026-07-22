@@ -153,8 +153,12 @@
       }
 
       timer = setTimeout(() => {
+        const countrySelect = document.getElementById('pais_residencia');
+        const selectedCountry = countrySelect ? countrySelect.value.trim() : '';
+        const searchQuery = selectedCountry ? `${query}, ${selectedCountry}` : query;
+
         // Petición de geocodificación de ciudades a OpenStreetMap Nominatim
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=7&accept-language=es`;
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&addressdetails=1&limit=8&accept-language=es`;
         
         fetch(url)
           .then(res => {
@@ -171,8 +175,10 @@
             const itemsProcesados = new Set();
             data.forEach(item => {
               const addr = item.address || {};
-              const city = addr.city || addr.town || addr.village || addr.municipality || addr.county || item.display_name.split(',')[0].trim();
-              const country = addr.country || '';
+              // Nombre exacto y completo de la ciudad/municipio
+              const city = item.name || addr.municipality || addr.city || addr.town || addr.village || addr.county || item.display_name.split(',')[0].trim();
+              const state = addr.province || addr.state || addr.region || '';
+              const country = addr.country || selectedCountry || '';
 
               const keyUnica = `${city.toLowerCase()}_${country.toLowerCase()}`;
               if (itemsProcesados.has(keyUnica)) return;
@@ -187,16 +193,17 @@
               div.style.justifyContent = 'space-between';
               div.style.alignItems = 'center';
 
+              const subtext = [state, country].filter(Boolean).join(', ');
+
               div.innerHTML = `
-                <span>📍 <strong>${city}</strong></span>
-                ${country ? `<small style="color:var(--color-text-muted); font-size:11px;">${country}</small>` : ''}
+                <span><strong>${city}</strong></span>
+                ${subtext ? `<small style="color:var(--color-text-muted); font-size:11px;">${subtext}</small>` : ''}
               `;
 
               div.addEventListener('click', () => {
                 input.value = city;
                 suggestionsBox.style.display = 'none';
                 if (country) {
-                  const countrySelect = document.getElementById('pais_residencia');
                   if (countrySelect) {
                     for (let opt of countrySelect.options) {
                       if (opt.value.toLowerCase() === country.toLowerCase() || country.toLowerCase().includes(opt.value.toLowerCase())) {
