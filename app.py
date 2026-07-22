@@ -107,6 +107,7 @@ def inject_global_catalogs():
         "tipos_permiso": paises_onu.TIPOS_PERMISO_RESIDENCIA,
         "ciudades_populares": paises_onu.CIUDADES_POPULARES,
         "ciudades": CIUDADES,
+        "google_maps_api_key": os.environ.get("GOOGLE_MAPS_API_KEY", "") or getattr(config, "GOOGLE_MAPS_API_KEY", ""),
     }
 
 
