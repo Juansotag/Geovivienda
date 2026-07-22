@@ -120,10 +120,12 @@
     padding: 12px;
     display: none;
     background: #ffffff;
+    overflow: visible;
   }
 
   .accordion-item.active .accordion-content {
     display: block;
+    overflow: visible;
   }
 
   .form-group-sm {
@@ -787,6 +789,39 @@
     return '#EF4444';
   }
 
+  function formatH3Value(key, val) {
+    if (val === null || val === undefined || isNaN(val)) return 'N/D';
+
+    if (key === 'val_avaluo_catastral_m2') {
+      return `$${Math.round(val).toLocaleString('es-CO')} COP/m²`;
+    }
+    if (key.includes('hurtos')) {
+      return `${Math.round(val).toLocaleString('es-CO')} casos`;
+    }
+    if (key.startsWith('val_dist_')) {
+      return val >= 1000 ? `${(val / 1000).toFixed(2)} km` : `${Math.round(val)} m`;
+    }
+    if (key.endsWith('_500m') || key.endsWith('_300m')) {
+      return `${Math.round(val)} unidades`;
+    }
+    if (key === 'val_pm25') {
+      return `${val.toFixed(1)} µg/m³`;
+    }
+    if (key === 'val_temperatura') {
+      return `${val.toFixed(1)} °C`;
+    }
+    if (key === 'val_precipitacion') {
+      return `${Math.round(val)} mm`;
+    }
+    if (key === 'estrato_promedio_200m') {
+      return `Estrato ${val.toFixed(1)}`;
+    }
+    if (key === 'score_h3_global') {
+      return `${val.toFixed(1)} / 10`;
+    }
+    return typeof val === 'number' ? (val > 1000 ? Math.round(val).toLocaleString('es-CO') : val.toFixed(1)) : val;
+  }
+
   function renderH3Choropleth() {
     if (!h3GeojsonData) return;
     h3LayerGroup.clearLayers();
@@ -832,18 +867,16 @@
     }
 
     // ── CASO B: Variable Numérica (Con opción de Ranking / Percentil) ──
-    const isDistance = currentH3Metric.startsWith('val_dist_') || currentH3Metric.includes('hurtos');
+    const isDistance = currentH3Metric.startsWith('val_dist_');
     const rankKey = METRIC_TO_RANK[currentH3Metric];
 
     let minVal = 0, maxVal = 1;
     let rankMap = null;
 
     if (useRankingScale) {
-      // Si el ranking precalculado existe en las propiedades
       const hasPrecalculatedRank = h3GeojsonData.features.some(f => f.properties && typeof f.properties[rankKey] === 'number');
       
       if (!hasPrecalculatedRank) {
-        // Calcular percentil dinámico si no hay columna rank_ directa
         let pairs = [];
         h3GeojsonData.features.forEach((f, idx) => {
           const v = f.properties ? f.properties[currentH3Metric] : null;
@@ -858,7 +891,6 @@
       }
     }
 
-    // Extraer rango min/max para la etiqueta de la leyenda
     let numValues = [];
     h3GeojsonData.features.forEach(f => {
       const v = f.properties ? f.properties[currentH3Metric] : null;
@@ -869,14 +901,16 @@
       maxVal = Math.max(...numValues);
     }
 
-    // Renderizar HTML Leyenda Flotante Numérica
+    const minFormatted = formatH3Value(currentH3Metric, isDistance ? maxVal : minVal);
+    const maxFormatted = formatH3Value(currentH3Metric, isDistance ? minVal : maxVal);
+
     legendBox.innerHTML = `
       <div style="font-weight:700;" id="legend-metric-title">${labelTitle}</div>
       ${useRankingScale ? `<div style="font-size:9px; color:#475569; margin-top:2px;">Modo: Ranking / Percentil H3 (Visualización Óptima)</div>` : ''}
       <div class="legend-bar"></div>
       <div style="display:flex; justify-content:space-between; color:var(--color-text-muted);" id="legend-metric-range">
-        <span>${isDistance ? `${Math.round(maxVal)}m (Lejos)` : `${minVal > 1000 ? (minVal/1000000).toFixed(1)+'M' : minVal.toFixed(1)}`}</span>
-        <span>${isDistance ? `${Math.round(minVal)}m (Cerca)` : `${maxVal > 1000 ? (maxVal/1000000).toFixed(1)+'M' : maxVal.toFixed(1)}`}</span>
+        <span>${isDistance ? `${minFormatted} (Lejos)` : minFormatted}</span>
+        <span>${isDistance ? `${maxFormatted} (Cerca)` : maxFormatted}</span>
       </div>
     `;
 
@@ -907,8 +941,7 @@
       onEachFeature: (feature, layer) => {
         const p = feature.properties || {};
         const val = p[currentH3Metric];
-        let valFormatted = val !== null && val !== undefined ? (typeof val === 'number' ? (val > 1000 ? `$${(val/1000000).toFixed(2)}M` : (val > 100 ? Math.round(val) : val.toFixed(1))) : val) : 'N/D';
-        if (currentH3Metric.startsWith('val_dist_')) valFormatted += ' m';
+        const valFormatted = formatH3Value(currentH3Metric, val);
 
         layer.bindTooltip(`
           <div style="font-size:12px; padding:4px;">
@@ -931,11 +964,38 @@
   };
 
   const _poisCargados = {};
-  function cargarPoisCategoria(cat) {
+  async function cargarPoisCategoria(cat) {
     if (_poisCargados[cat]) return;
     _poisCargados[cat] = true;
-    const cfg = _poiCategoryConfig[cat] || { color: '#6B7280', text: 'P' };
 
+    if (cat === 'transporte') {
+      try {
+        const res = await fetch("/api/gis/estaciones_transporte");
+        if (!res.ok) return;
+        const data = await res.json();
+        (data.features || []).forEach(feat => {
+          const props = feat.properties || {};
+          const coords = feat.geometry ? feat.geometry.coordinates : null;
+          if (!coords || coords.length < 2) return;
+          const tipo = props.tipo || 'TransMilenio';
+          let iconColor = '#EF4444';
+          if (tipo === 'Metro') iconColor = '#8B5CF6';
+          else if (tipo === 'TransMiCable') iconColor = '#F59E0B';
+
+          const icon = L.divIcon({
+            className: 'poi-icon',
+            html: `<div style="background:${iconColor}; color:#fff; font-size:10px; font-weight:700; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(0,0,0,0.3); border:2px solid #fff;">T</div>`,
+            iconSize: [22, 22], iconAnchor: [11, 11]
+          });
+          const m = L.marker([coords[1], coords[0]], { icon: icon });
+          m.bindPopup(`<strong>${tipo}</strong>: ${props.nombre || 'Estación'}${props.ub ? `<br><small>${props.ub}</small>` : ''}`);
+          poiLayerGroups['transporte'].addLayer(m);
+        });
+      } catch (e) { console.error("Error cargando estaciones de transporte real:", e); }
+      return;
+    }
+
+    const cfg = _poiCategoryConfig[cat] || { color: '#6B7280', text: 'P' };
     anuncios.forEach(a => {
       if (!a.lat || !a.lng) return;
       const jitterLat = (Math.random() - 0.5) * 0.005;
@@ -1026,6 +1086,11 @@
   const selectedChiclets = new Set();
   let allCatalogComodidades = [];
 
+  function normalizeStr(str) {
+    if (!str) return '';
+    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  }
+
   function initComodidadesCatalog() {
     const comSet = new Set();
     anuncios.forEach(a => {
@@ -1045,21 +1110,21 @@
     if (!input || !dropdown) return;
 
     input.addEventListener('input', function() {
-      const q = this.value.trim().toLowerCase();
+      const q = normalizeStr(this.value);
       if (!q) { dropdown.style.display = 'none'; return; }
 
-      const matches = allCatalogComodidades.filter(c => c.toLowerCase().includes(q) && !selectedChiclets.has(c));
+      const matches = allCatalogComodidades.filter(c => normalizeStr(c).includes(q) && !selectedChiclets.has(c));
       dropdown.innerHTML = '';
       if (matches.length === 0) {
         dropdown.style.display = 'none';
         return;
       }
 
-      matches.slice(0, 10).forEach(comName => {
+      matches.slice(0, 15).forEach(comName => {
         const div = document.createElement('div');
-        div.style.padding = '6px 10px';
+        div.style.padding = '8px 12px';
         div.style.cursor = 'pointer';
-        div.style.fontSize = '11px';
+        div.style.fontSize = '12px';
         div.style.borderBottom = '1px solid var(--color-border)';
         div.textContent = comName;
         div.addEventListener('click', () => {
@@ -1142,16 +1207,18 @@
       if (filterAreaMin && a.area < filterAreaMin) return;
       if (filterAreaMax && a.area > filterAreaMax) return;
 
-      // Filtro de Comodidades Seleccionadas mediante Chiclets
+      // Filtro de Comodidades Seleccionadas mediante Chiclets (Match Flexible Acentos/Normalización)
       if (selectedChiclets.size > 0) {
         let comsList = [];
         if (Array.isArray(a.comodidades)) comsList = a.comodidades;
         else if (typeof a.comodidades === 'string') comsList = a.comodidades.split(',').map(s => s.trim());
-        const comsStr = comsList.join(' ').toLowerCase();
+        const comsNorm = comsList.map(c => normalizeStr(c));
 
         let tieneTodas = true;
         for (let c of selectedChiclets) {
-          if (!comsStr.includes(c.toLowerCase())) { tieneTodas = false; break; }
+          const targetNorm = normalizeStr(c);
+          const match = comsNorm.some(cn => cn.includes(targetNorm) || targetNorm.includes(cn));
+          if (!match) { tieneTodas = false; break; }
         }
         if (!tieneTodas) return;
       }

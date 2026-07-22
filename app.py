@@ -367,6 +367,63 @@ def api_boundaries_upz():
     return resp
 
 
+@app.route("/api/gis/estaciones_transporte")
+def api_gis_estaciones_transporte():
+    """Sirve las estaciones reales de TransMilenio, TransMiCable y Metro en formato GeoJSON."""
+    from shapely.geometry import shape
+
+    features = []
+
+    # 1. TransMilenio
+    tm_path = os.path.join(BASE_DIR, "static", "geo", "estaciones_tm.geojson")
+    if os.path.exists(tm_path):
+        with open(tm_path, encoding="utf-8") as f:
+            tm = json.load(f)
+            for feat in tm.get("features", []):
+                nom = feat.get("properties", {}).get("nom_est") or "Estación TransMilenio"
+                coords = feat.get("geometry", {}).get("coordinates")
+                if coords and len(coords) >= 2:
+                    features.append({
+                        "type": "Feature",
+                        "properties": {"nombre": nom, "tipo": "TransMilenio", "ub": feat.get("properties", {}).get("ub_est", "")},
+                        "geometry": {"type": "Point", "coordinates": [coords[0], coords[1]]}
+                    })
+
+    # 2. TransMiCable
+    cable_path = os.path.join(BASE_DIR, "static", "geo", "estaciones_cable.geojson")
+    if os.path.exists(cable_path):
+        with open(cable_path, encoding="utf-8") as f:
+            cb = json.load(f)
+            for feat in cb.get("features", []):
+                nom = feat.get("properties", {}).get("nom_est") or "Estación Cable"
+                coords = feat.get("geometry", {}).get("coordinates")
+                if coords and len(coords) >= 2:
+                    features.append({
+                        "type": "Feature",
+                        "properties": {"nombre": nom, "tipo": "TransMiCable"},
+                        "geometry": {"type": "Point", "coordinates": [coords[0], coords[1]]}
+                    })
+
+    # 3. Metro (Centroides)
+    metro_path = os.path.join(BASE_DIR, "static", "geo", "estaciones_metro_2.geojson")
+    if os.path.exists(metro_path):
+        with open(metro_path, encoding="utf-8") as f:
+            mt = json.load(f)
+            for feat in mt.get("features", []):
+                obj_id = feat.get("properties", {}).get("OBJECTID", "")
+                nom = f"Estación Metro #{obj_id}"
+                c = shape(feat["geometry"]).centroid
+                features.append({
+                    "type": "Feature",
+                    "properties": {"nombre": nom, "tipo": "Metro"},
+                    "geometry": {"type": "Point", "coordinates": [c.x, c.y]}
+                })
+
+    resp = jsonify({"type": "FeatureCollection", "features": features})
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
+
 
 ESTADO_INMUEBLE_VALORES_VALIDOS = ("usado", "nuevo", "proyecto")
 
