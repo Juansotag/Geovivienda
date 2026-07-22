@@ -423,6 +423,26 @@
             </select>
           </div>
 
+          <!-- Slider de Opacidad -->
+          <div class="form-group-sm">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+              <label for="range_h3_opacity" style="margin-bottom:0;">Opacidad de Hexágonos</label>
+              <span id="opacity_val_label" style="font-weight:700; font-size:11px; color:var(--color-primary);">25%</span>
+            </div>
+            <input type="range" id="range_h3_opacity" min="0.05" max="0.9" step="0.05" value="0.25" oninput="updateH3Opacity(this.value)" style="width:100%;">
+          </div>
+
+          <!-- Botón / Checkbox para Mejorar Escala por Ranking / Percentil -->
+          <div class="form-group-sm" style="background:#F8FAFC; border:1px solid var(--color-border); border-radius:6px; padding:8px 10px;">
+            <label class="checkbox-label" style="font-size:11px; font-weight:700; color:var(--color-primary);">
+              <input type="checkbox" id="chk_use_ranking" onchange="toggleRankingScale(this.checked)">
+              Mejorar escala de colores (Percentil / Ranking H3)
+            </label>
+            <small style="color:var(--color-text-muted); font-size:10px; display:block; margin-top:3px; line-height:1.3;">
+              Elimina sesgo por valores extremos (outliers) distribuyendo la intensidad de color homogéneamente por percentiles.
+            </small>
+          </div>
+
           <hr style="border:0; border-top:1px solid var(--color-border); margin:10px 0;">
 
           <!-- Capas de Equipamiento POI -->
@@ -653,18 +673,88 @@
     } catch (e) { console.error("Error cargando GeoJSON H3", e); }
   }
 
+  // ── Capa H3 y Recálculo Dinámico de Métricas ──
+  let useRankingScale = false;
+  let h3FillOpacity = 0.25;
+
+  const USO_SUELO_COLORS = {
+    'Residencial': '#3B82F6',
+    'Comercio y oficinas': '#F59E0B',
+    'Dotacional': '#8B5CF6',
+    'Industrial': '#64748B',
+    'Bodegas': '#475569',
+    'Depositos y parqueaderos': '#94A3B8',
+    'Otros': '#CBD5E1'
+  };
+
+  const METRIC_TO_RANK = {
+    'val_dist_brt': 'rank_dist_brt',
+    'val_dist_sitp': 'rank_dist_sitp',
+    'val_dist_metro': 'rank_dist_metro',
+    'val_dist_ciclo': 'rank_dist_ciclo',
+    'val_dist_cai': 'rank_dist_cai',
+    'val_dist_est_policia': 'rank_dist_est_policia',
+    'val_dist_equipamiento_justicia': 'rank_dist_equipamiento_justicia',
+    'val_dist_d1_ara': 'rank_dist_d1_ara',
+    'val_dist_centro_comercial': 'rank_dist_centro_comercial',
+    'val_dist_hospital': 'rank_dist_hospital',
+    'val_dist_colegio': 'rank_dist_colegio',
+    'val_dist_supermercado_premium': 'rank_dist_supermercado_premium',
+    'val_dist_parque': 'rank_dist_parque',
+    'val_dist_recreacion_deporte': 'rank_dist_recreacion_deporte',
+    'val_dist_basura': 'rank_dist_basura',
+    'val_hurtos_upz': 'rank_hurtos_upz',
+    'val_hurtos_personas': 'rank_hurtos_personas',
+    'val_hurtos_comercios': 'rank_hurtos_comercios',
+    'val_hurtos_residencias': 'rank_hurtos_residencias',
+    'val_hurtos_vehiculos': 'rank_hurtos_vehiculos',
+    'val_basuras_300m': 'rank_basuras_300m',
+    'val_siniestros_viales_300m': 'rank_siniestros_viales_300m',
+    'val_siniestros_graves_500m': 'rank_siniestros_graves_500m',
+    'val_pm25': 'rank_pm25',
+    'val_brt_500m': 'rank_brt_500m',
+    'val_sitp_300m': 'rank_sitp_300m',
+    'val_conteo_hard_discount_500m': 'rank_conteo_hard_discount_500m',
+    'val_hospitales_500m': 'rank_hospitales_500m',
+    'val_colegios_500m': 'rank_colegios_500m',
+    'val_arboles_300m': 'rank_arboles_300m',
+    'val_avaluo_catastral_m2': 'rank_avaluo_catastral_m2',
+    'val_temperatura': 'rank_temperatura',
+    'val_precipitacion': 'rank_precipitacion',
+    'estrato_promedio_200m': 'rank_estrato',
+  };
+
+  async function cargarCapaH3() {
+    try {
+      const res = await fetch("/api/h3/geojson");
+      if (!res.ok) return;
+      h3GeojsonData = await res.json();
+      renderH3Choropleth();
+      map.addLayer(h3LayerGroup);
+      document.getElementById('h3-legend').style.display = 'block';
+    } catch (e) { console.error("Error cargando GeoJSON H3", e); }
+  }
+
   function updateH3Metric(metricKey) {
     currentH3Metric = metricKey;
     if (h3GeojsonData) renderH3Choropleth();
   }
 
-  function getColorForMetricValue(val, min, max, isReverse = false) {
-    if (val === null || val === undefined || isNaN(val)) return '#94A3B8';
-    let ratio = (val - min) / (max - min || 1);
-    ratio = Math.max(0, Math.min(1, ratio));
-    if (isReverse) ratio = 1 - ratio;
+  function toggleRankingScale(enabled) {
+    useRankingScale = enabled;
+    if (h3GeojsonData) renderH3Choropleth();
+  }
 
-    // Gradiente suave 5 niveles: Azul → Verde → Amarillo → Rojo
+  function updateH3Opacity(val) {
+    h3FillOpacity = parseFloat(val);
+    document.getElementById('opacity_val_label').textContent = `${Math.round(h3FillOpacity * 100)}%`;
+    if (h3LeafletLayer) {
+      h3LeafletLayer.setStyle({ fillOpacity: h3FillOpacity });
+    }
+  }
+
+  function getColorForRatio(ratio) {
+    ratio = Math.max(0, Math.min(1, ratio));
     if (ratio < 0.25) return '#3B82F6';
     if (ratio < 0.50) return '#10B981';
     if (ratio < 0.75) return '#F59E0B';
@@ -675,35 +765,123 @@
     if (!h3GeojsonData) return;
     h3LayerGroup.clearLayers();
 
-    // Determinar min/max de la métrica activa
-    let values = [];
-    h3GeojsonData.features.forEach(f => {
-      const v = f.properties ? f.properties[currentH3Metric] : null;
-      if (typeof v === 'number' && !isNaN(v)) values.push(v);
-    });
-
-    const minVal = values.length ? Math.min(...values) : 0;
-    const maxVal = values.length ? Math.max(...values) : 1;
-    const isDistance = currentH3Metric.startsWith('val_dist_') || currentH3Metric.includes('hurtos');
-
-    // Actualizar Leyenda Flotante
+    const legendBox = document.getElementById('h3-legend');
     const selectOpt = document.querySelector(`#select_h3_metric option[value="${currentH3Metric}"]`);
     const labelTitle = selectOpt ? selectOpt.textContent : currentH3Metric;
-    document.getElementById('legend-metric-title').textContent = labelTitle;
-    document.getElementById('legend-min').textContent = isDistance ? `${Math.round(maxVal)}m (Lejos)` : `${minVal.toFixed(1)}`;
-    document.getElementById('legend-max').textContent = isDistance ? `${Math.round(minVal)}m (Cerca)` : `${maxVal.toFixed(1)}`;
+
+    // ── CASO A: Variable Categórica (Uso de Suelo Predominante) ──
+    if (currentH3Metric === 'uso_suelo_predominante') {
+      legendBox.innerHTML = `
+        <div style="font-weight:700; margin-bottom:6px;">${labelTitle}</div>
+        <div style="display:flex; flex-direction:column; gap:3px;">
+          ${Object.entries(USO_SUELO_COLORS).map(([uso, col]) => `
+            <div style="display:flex; align-items:center; gap:6px; font-size:10px;">
+              <span style="display:inline-block; width:10px; height:10px; background:${col}; border-radius:2px;"></span>
+              <span>${uso}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+
+      h3LeafletLayer = L.geoJSON(h3GeojsonData, {
+        style: feature => {
+          const p = feature.properties || {};
+          const val = p.uso_suelo_predominante || 'Otros';
+          const color = USO_SUELO_COLORS[val] || '#94A3B8';
+          return { color: color, weight: 1, opacity: 0.4, fillOpacity: h3FillOpacity };
+        },
+        onEachFeature: (feature, layer) => {
+          const p = feature.properties || {};
+          const val = p.uso_suelo_predominante || 'Sin definir';
+          layer.bindTooltip(`
+            <div style="font-size:12px; padding:4px;">
+              <strong>Hexágono:</strong> ${p.h3_index || ''}<br>
+              <strong>Localidad:</strong> ${p.localidad || 'Bogotá'}<br>
+              <strong>Uso de Suelo:</strong> <span style="font-weight:700; color:var(--color-primary);">${val}</span>
+            </div>
+          `);
+        }
+      }).addTo(h3LayerGroup);
+      return;
+    }
+
+    // ── CASO B: Variable Numérica (Con opción de Ranking / Percentil) ──
+    const isDistance = currentH3Metric.startsWith('val_dist_') || currentH3Metric.includes('hurtos');
+    const rankKey = METRIC_TO_RANK[currentH3Metric];
+
+    let minVal = 0, maxVal = 1;
+    let rankMap = null;
+
+    if (useRankingScale) {
+      // Si el ranking precalculado existe en las propiedades
+      const hasPrecalculatedRank = h3GeojsonData.features.some(f => f.properties && typeof f.properties[rankKey] === 'number');
+      
+      if (!hasPrecalculatedRank) {
+        // Calcular percentil dinámico si no hay columna rank_ directa
+        let pairs = [];
+        h3GeojsonData.features.forEach((f, idx) => {
+          const v = f.properties ? f.properties[currentH3Metric] : null;
+          if (typeof v === 'number' && !isNaN(v)) pairs.push({ idx, v });
+        });
+        pairs.sort((a, b) => a.v - b.v);
+        rankMap = {};
+        const total = pairs.length || 1;
+        pairs.forEach((item, pos) => {
+          rankMap[item.idx] = pos / total;
+        });
+      }
+    }
+
+    // Extraer rango min/max para la etiqueta de la leyenda
+    let numValues = [];
+    h3GeojsonData.features.forEach(f => {
+      const v = f.properties ? f.properties[currentH3Metric] : null;
+      if (typeof v === 'number' && !isNaN(v)) numValues.push(v);
+    });
+    if (numValues.length) {
+      minVal = Math.min(...numValues);
+      maxVal = Math.max(...numValues);
+    }
+
+    // Renderizar HTML Leyenda Flotante Numérica
+    legendBox.innerHTML = `
+      <div style="font-weight:700;" id="legend-metric-title">${labelTitle}</div>
+      ${useRankingScale ? `<div style="font-size:9px; color:#475569; margin-top:2px;">Modo: Ranking / Percentil H3 (Visualización Óptima)</div>` : ''}
+      <div class="legend-bar"></div>
+      <div style="display:flex; justify-content:space-between; color:var(--color-text-muted);" id="legend-metric-range">
+        <span>${isDistance ? `${Math.round(maxVal)}m (Lejos)` : `${minVal > 1000 ? (minVal/1000000).toFixed(1)+'M' : minVal.toFixed(1)}`}</span>
+        <span>${isDistance ? `${Math.round(minVal)}m (Cerca)` : `${maxVal > 1000 ? (maxVal/1000000).toFixed(1)+'M' : maxVal.toFixed(1)}`}</span>
+      </div>
+    `;
 
     h3LeafletLayer = L.geoJSON(h3GeojsonData, {
-      style: feature => {
+      style: (feature, idx) => {
         const p = feature.properties || {};
-        const val = p[currentH3Metric];
-        const color = getColorForMetricValue(val, minVal, maxVal, isDistance);
-        return { color: color, weight: 1, opacity: 0.4, fillOpacity: 0.25 };
+        const rawVal = p[currentH3Metric];
+        let ratio = 0.5;
+
+        if (rawVal === null || rawVal === undefined || isNaN(rawVal)) return { color: '#94A3B8', weight: 1, opacity: 0.2, fillOpacity: 0.05 };
+
+        if (useRankingScale) {
+          if (rankKey && typeof p[rankKey] === 'number') {
+            ratio = p[rankKey];
+          } else if (rankMap && rankMap[idx] !== undefined) {
+            ratio = rankMap[idx];
+          } else {
+            ratio = (rawVal - minVal) / (maxVal - minVal || 1);
+          }
+        } else {
+          ratio = (rawVal - minVal) / (maxVal - minVal || 1);
+        }
+
+        if (isDistance) ratio = 1 - ratio;
+        const color = getColorForRatio(ratio);
+        return { color: color, weight: 1, opacity: 0.4, fillOpacity: h3FillOpacity };
       },
       onEachFeature: (feature, layer) => {
         const p = feature.properties || {};
         const val = p[currentH3Metric];
-        let valFormatted = val !== null && val !== undefined ? (typeof val === 'number' ? (val > 100 ? Math.round(val) : val.toFixed(1)) : val) : 'N/D';
+        let valFormatted = val !== null && val !== undefined ? (typeof val === 'number' ? (val > 1000 ? `$${(val/1000000).toFixed(2)}M` : (val > 100 ? Math.round(val) : val.toFixed(1))) : val) : 'N/D';
         if (currentH3Metric.startsWith('val_dist_')) valFormatted += ' m';
 
         layer.bindTooltip(`
