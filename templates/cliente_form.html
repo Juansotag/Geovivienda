@@ -48,14 +48,12 @@
         {% endfor %}
       </select>
     </div>
-    <div class="form-group">
-      <label for="ciudad_residencia">Ciudad de residencia (Desplegable / Escribir)</label>
-      <input type="text" id="ciudad_residencia" name="ciudad_residencia" required list="ciudades_list" placeholder="Ej: Madrid, Miami, Toronto, Bogotá" value="{{ cliente.ciudad_residencia if cliente else '' }}" autocomplete="off">
-      <datalist id="ciudades_list">
-        {% for c in ciudades_populares %}
-        <option value="{{ c }}"></option>
-        {% endfor %}
-      </datalist>
+    <div class="form-group" style="position:relative;">
+      <label for="ciudad_residencia">Ciudad de residencia (Búsqueda mundial de ciudades)</label>
+      <input type="text" id="ciudad_residencia" name="ciudad_residencia" required
+             placeholder="Escribe cualquier ciudad del mundo (ej: Tokio, Madrid, Miami, Cali)..."
+             value="{{ cliente.ciudad_residencia if cliente else '' }}" autocomplete="off">
+      <div id="ciudad-suggestions" class="card" style="position:absolute; top:100%; left:0; right:0; z-index:100; display:none; max-height:220px; overflow-y:auto; padding:4px; margin-top:2px; box-shadow:0 4px 12px rgba(0,0,0,0.15);"></div>
     </div>
     <div class="form-group">
       <label for="anios_en_pais">Años de residencia en este país</label>
@@ -135,8 +133,118 @@
   }
 
   // Bind conversion listeners
-  document.getElementById("ingreso_mensual").addEventListener("input", convertirValores);
-  document.getElementById("ahorro_mensual").addEventListener("input", convertirValores);
+  document.getElementById("ingreso_mensual")?.addEventListener("input", convertirValores);
+  document.getElementById("ahorro_mensual")?.addEventListener("input", convertirValores);
+
+  // ── Autocompletado Mundial de Ciudades (Google Places API + OpenStreetMap Fallback) ──
+  const GOOGLE_MAPS_KEY = {{ (google_maps_api_key or '') | tojson }};
+
+  function initCityAutocomplete() {
+    const input = document.getElementById('ciudad_residencia');
+    const suggestionsBox = document.getElementById('ciudad-suggestions');
+    if (!input) return;
+
+    // 1. Google Places Autocomplete (si hay API Key de Google Maps activa)
+    if (GOOGLE_MAPS_KEY && window.google && google.maps && google.maps.places) {
+      const autocomplete = new google.maps.places.Autocomplete(input, {
+        types: ['(cities)'],
+      });
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (place && place.address_components) {
+          const cityComp = place.address_components.find(c => c.types.includes('locality') || c.types.includes('administrative_area_level_1'));
+          const countryComp = place.address_components.find(c => c.types.includes('country'));
+          if (cityComp) input.value = cityComp.long_name;
+          if (countryComp) {
+            const countryName = countryComp.long_name;
+            const countrySelect = document.getElementById('pais_residencia');
+            if (countrySelect) {
+              for (let opt of countrySelect.options) {
+                if (opt.value.toLowerCase() === countryName.toLowerCase() || countryName.toLowerCase().includes(opt.value.toLowerCase())) {
+                  opt.selected = true;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      });
+      return;
+    }
+
+    // 2. OpenStreetMap / Nominatim fallback mundial en vivo
+    let timer = null;
+    input.addEventListener('input', function() {
+      const query = this.value.trim();
+      clearTimeout(timer);
+      if (query.length < 2) {
+        if (suggestionsBox) suggestionsBox.style.display = 'none';
+        return;
+      }
+      timer = setTimeout(() => {
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=6&accept-language=es`)
+          .then(r => r.json())
+          .then(data => {
+            if (!suggestionsBox) return;
+            suggestionsBox.innerHTML = '';
+            if (!data || data.length === 0) {
+              suggestionsBox.style.display = 'none';
+              return;
+            }
+            data.forEach(item => {
+              const city = item.address.city || item.address.town || item.address.village || item.address.municipality || item.display_name.split(',')[0];
+              const country = item.address.country || '';
+              const label = `${city}`;
+
+              const div = document.createElement('div');
+              div.style.padding = '8px 12px';
+              div.style.cursor = 'pointer';
+              div.style.fontSize = '13px';
+              div.style.borderBottom = '1px solid var(--color-border)';
+              div.innerHTML = `📍 <strong>${city}</strong> ${country ? `<small style="color:var(--color-text-muted);">(${country})</small>` : ''}`;
+              
+              div.addEventListener('click', () => {
+                input.value = label;
+                suggestionsBox.style.display = 'none';
+                if (country) {
+                  const countrySelect = document.getElementById('pais_residencia');
+                  if (countrySelect) {
+                    for (let opt of countrySelect.options) {
+                      if (opt.value.toLowerCase() === country.toLowerCase() || country.toLowerCase().includes(opt.value.toLowerCase())) {
+                        opt.selected = true;
+                        break;
+                      }
+                    }
+                  }
+                }
+              });
+              div.addEventListener('mouseenter', () => div.style.background = 'rgba(24,31,89,0.05)');
+              div.addEventListener('mouseleave', () => div.style.background = '');
+              suggestionsBox.appendChild(div);
+            });
+            suggestionsBox.style.display = 'block';
+          })
+          .catch(() => { if (suggestionsBox) suggestionsBox.style.display = 'none'; });
+      }, 300);
+    });
+
+    document.addEventListener('click', (e) => {
+      if (suggestionsBox && !input.contains(e.target) && !suggestionsBox.contains(e.target)) {
+        suggestionsBox.style.display = 'none';
+      }
+    });
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    if (GOOGLE_MAPS_KEY) {
+      const s = document.createElement('script');
+      s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&libraries=places&callback=initCityAutocomplete`;
+      s.async = true;
+      document.head.appendChild(s);
+    } else {
+      initCityAutocomplete();
+    }
+  });
 </script>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 {% endblock %}
