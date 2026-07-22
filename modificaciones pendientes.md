@@ -90,6 +90,13 @@
 - **Costo Económico Externo:** ⚠️ Google exige tarjeta de crédito y otorga $200 USD/mes gratis (~28,000 cargas). Si se supera, genera cobro en USD. *Alternativa 100% gratuita:* CartoDB Positron / Mapbox.
 - **Mejora de Experiencia (UX):** ⭐⭐⭐ (Medio-Alto: Aporta familiaridad visual).
 
+### 🔹 Integración de Google Street View 360° en Perfil del Inmueble
+- **Descripción:** Visualizador panorámico 360° en vivo del barrio usando latitud/longitud del inmueble y Google Embed API.
+- **Dificultad:** 🟢 **Baja / Preparada** (Componente responsive ya implementado en `inmueble_perfil.html` con fallback automático y enlace directo si falta la clave).
+- **Consumo de Tokens (Anthropic):** ⚪ **0 tokens**.
+- **Configuración requerida:** Definir la variable `GOOGLE_MAPS_API_KEY` en `.env` y en Railway.
+- **Mejora de Experiencia (UX):** ⭐⭐⭐⭐⭐ (Crítico / Efecto WOW: Inspección visual inmediata del entorno físico y fachadas).
+
 ---
 
 ## 🤖 6. Perfil del Inmueble & Chatbot del Asesor
@@ -106,10 +113,11 @@
 
 | Función | Dificultad | Consumo Tokens | Impacto UX | Prioridad Recomendada |
 | :--- | :---: | :---: | :---: | :---: |
-| **Métrica $/m² y Galería de Fotos** | 🟢 Baja / 🟡 Media | 0 tokens | ⭐⭐⭐⭐⭐ | 🚀 **Fase 1 (Inmediata)** |
-| **Calculadora de Crédito Hipotecario** | 🟢 Baja | 0 tokens | ⭐⭐⭐⭐⭐ | 🚀 **Fase 1 (Inmediata)** |
-| **Campos de Área min/max en Búsqueda** | 🟢 Baja | 0 tokens | ⭐⭐⭐⭐ | 🚀 **Fase 1 (Inmediata)** |
-| **Dropdowns Localidad/UPZ y Ordenamiento** | 🟡 Media | 0 tokens | ⭐⭐⭐⭐⭐ | 🚀 **Fase 1 (Inmediata)** |
+| **Métrica $/m² y Galería de Fotos** | 🟢 Baja / 🟡 Media | 0 tokens | ⭐⭐⭐⭐⭐ | 🚀 **Fase 1 (Completada)** |
+| **Calculadora de Crédito Hipotecario** | 🟢 Baja | 0 tokens | ⭐⭐⭐⭐⭐ | 🚀 **Fase 1 (Completada)** |
+| **Campos de Área min/max en Búsqueda** | 🟢 Baja | 0 tokens | ⭐⭐⭐⭐ | 🚀 **Fase 1 (Completada)** |
+| **Dropdowns Localidad/UPZ y Ordenamiento** | 🟡 Media | 0 tokens | ⭐⭐⭐⭐⭐ | 🚀 **Fase 1 (Completada)** |
+| **Google Street View 360° (vía Lat/Lon)** | 🟢 Baja | 0 tokens | ⭐⭐⭐⭐⭐ | 🔷 **Fase 2 (Código listo)** |
 | **Perfil Ampliado de Clientes + Países** | 🟡 Media | Bajo | ⭐⭐⭐⭐ | 🔷 **Fase 2** |
 | **Mapa del Entorno (Capas H3 + POIs)** | 🔴 Alta | 0 tokens | ⭐⭐⭐⭐⭐ | 🔷 **Fase 2** |
 | **Chatbot del Asesor IA** | 🔴 Alta | Alto | ⭐⭐⭐⭐⭐ | 🔶 **Fase 3** |

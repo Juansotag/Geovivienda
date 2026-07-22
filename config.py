@@ -22,3 +22,7 @@ CLAUDE_FAST = "claude-sonnet-4-5"
 MAX_TOKENS_SCORING = 4000
 MAX_TOKENS_PESOS   = 250
 MAX_TOKENS_REPORTE = 1600
+
+# --- Integraciones externas --------------------------------------------------
+import os
+GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")

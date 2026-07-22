@@ -730,6 +730,7 @@ def inmueble_perfil(anuncio_id):
         sub_scores=sub_scores,
         pois=pois,
         dimensiones=dimensiones,
+        google_maps_api_key=config.GOOGLE_MAPS_API_KEY,
     )
 
 
