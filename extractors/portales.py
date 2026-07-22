@@ -1,7 +1,7 @@
-from extractor_links import extraer_links_fincaraiz
-from extractor_metrocuadrado_links import extraer_links_metrocuadrado
-from extractor_detalles import extraer_detalles_inmueble as _detalle_fincaraiz
-from extractor_metrocuadrado_detalles import extraer_detalles_inmueble as _detalle_metrocuadrado
+from .extractor_links import extraer_links_fincaraiz
+from .extractor_metrocuadrado_links import extraer_links_metrocuadrado
+from .extractor_detalles import extraer_detalles_inmueble as _detalle_fincaraiz
+from .extractor_metrocuadrado_detalles import extraer_detalles_inmueble as _detalle_metrocuadrado
 
 _BUSCADORES = {
     "fincaraiz": extraer_links_fincaraiz,

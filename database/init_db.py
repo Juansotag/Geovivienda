@@ -34,12 +34,14 @@ def main():
     try:
         with conn.cursor() as cur:
             # 1. Schema base: CREATE TABLE IF NOT EXISTS (estado final de cada tabla)
-            _aplicar_sql(cur, "schema.sql")
+            _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+            _aplicar_sql(cur, os.path.join(_BASE_DIR, "schema.sql"))
             # 2. Migraciones: ALTER TABLE ADD COLUMN IF NOT EXISTS para columnas
             #    anadidas despues de la creacion inicial del schema.
             #    Seguro de re-ejecutar: cada sentencia usa IF NOT EXISTS / DO $$.
-            if os.path.exists("migrations.sql"):
-                _aplicar_sql(cur, "migrations.sql")
+            mig_path = os.path.join(_BASE_DIR, "migrations.sql")
+            if os.path.exists(mig_path):
+                _aplicar_sql(cur, mig_path)
         conn.commit()
         print("Esquema y migraciones aplicados correctamente.")
     finally:

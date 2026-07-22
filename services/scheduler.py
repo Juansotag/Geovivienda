@@ -1,6 +1,6 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from db import limpiar_reportes_vencidos
+from database.db import limpiar_reportes_vencidos
 
 
 def _job_limpieza():

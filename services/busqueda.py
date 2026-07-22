@@ -9,11 +9,11 @@ import requests
 from dotenv import load_dotenv
 
 import config
-import db
-from portales import buscar_portal, extraer_detalle
-from extractor_links import configurar_driver
-from spatial_analysis import enriquecer_inmueble, verificar_ubicacion_rapida
-from scoring import rankear_candidatos_llm, top_n
+from database import db
+from extractors.portales import buscar_portal, extraer_detalle
+from extractors.extractor_links import configurar_driver
+from services.spatial_analysis import enriquecer_inmueble, verificar_ubicacion_rapida
+from services.scoring import rankear_candidatos_llm, top_n
 
 load_dotenv()
 _client = anthropic.Anthropic()

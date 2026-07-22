@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 
 import app as app_module
-import db
+from database import db
 
 
 @pytest.fixture

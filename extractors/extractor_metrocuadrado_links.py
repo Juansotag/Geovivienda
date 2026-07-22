@@ -2,7 +2,7 @@ import json
 import re
 import time
 
-from extractor_links import configurar_driver
+from .extractor_links import configurar_driver
 
 # Modulo de funciones para extraer links (y datos completos) de Metrocuadrado.
 #

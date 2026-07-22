@@ -1,7 +1,7 @@
 """Pruebas de construccion de filtros/URL por portal. Todo en memoria, sin
 red - construir_url_fincaraiz solo arma un string, no visita el sitio."""
-import busqueda
-from extractor_links import construir_url_fincaraiz
+from services import busqueda
+from extractors.extractor_links import construir_url_fincaraiz
 
 CRITERIOS_BASE = {
     "tipo_vivienda": "casa",

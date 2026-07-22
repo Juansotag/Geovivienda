@@ -9,7 +9,7 @@ import config
 load_dotenv()
 _client = anthropic.Anthropic()
 
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 with open(os.path.join(_BASE_DIR, "score_config.json"), encoding="utf-8") as f:
     PESOS = json.load(f)

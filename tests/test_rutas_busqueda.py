@@ -90,5 +90,5 @@ def test_boton_reintentar_no_aparece_para_busqueda_pendiente(client, crear_busqu
 
 
 def _cliente_de(crear_busqueda_fixture, busqueda_id):
-    import db
+    from database import db
     return db.obtener_busqueda(busqueda_id)["cliente_id"]

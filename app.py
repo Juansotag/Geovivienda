@@ -7,12 +7,13 @@ import threading
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify, redirect, url_for, Response
 
-import db
-import fx
-import scoring
-import reportes
-import busqueda
-from scheduler import iniciar_scheduler
+from database import db
+from services import fx
+from services import scoring
+from services import reportes
+from services import busqueda
+from services import spatial_analysis
+from services.scheduler import iniciar_scheduler
 
 load_dotenv()
 
@@ -107,7 +108,7 @@ def api_divipola():
 @app.route("/api/bogota/localidades")
 def api_bogota_localidades():
     try:
-        import spatial_analysis
+        from services import spatial_analysis
         sitp, tm, ciclo, estratos, col_estrato, localidades, upzs, metro, municipios, upz_a_loc = spatial_analysis._capas()
         loc_names = sorted([str(x).strip().title() for x in localidades["LOCNOMBRE"].dropna().unique()])
         return jsonify(loc_names)
@@ -122,7 +123,7 @@ def api_bogota_upzs():
     localidad (antes traia siempre las UPZ de toda la ciudad, sin importar
     la localidad ya elegida)."""
     try:
-        import spatial_analysis
+        from services import spatial_analysis
         sitp, tm, ciclo, estratos, col_estrato, localidades, upzs, metro, municipios, upz_a_loc = spatial_analysis._capas()
         localidad_filtro = request.args.get("localidad", "").strip()
 
@@ -451,7 +452,7 @@ def _int_opcional(valor):
 def _upz_opciones():
     """Lista (upz_nombre, localidad_nombre) para el checkbox grid del
     formulario de busqueda, ordenada por localidad y luego por UPZ."""
-    import spatial_analysis
+    from services import spatial_analysis
     upz_a_loc = spatial_analysis.upz_a_localidad_map()
     pares = [(nombre.strip().title(), loc.strip().title()) for nombre, loc in upz_a_loc.items()]
     return sorted(pares, key=lambda par: (par[1], par[0]))
@@ -707,7 +708,7 @@ def inmueble_perfil(anuncio_id):
     lat, lon = anuncio.get("latitud"), anuncio.get("longitud")
     if lat and lon:
         try:
-            import spatial_analysis
+            from services import spatial_analysis
             pois = spatial_analysis.pois_cercanos(float(lat), float(lon), radio_m=700)
         except Exception as e:
             print(f"Error calculando POIs para inmueble {anuncio_id}: {e}")
@@ -743,7 +744,7 @@ def inmueble_analisis_llm(anuncio_id):
     lat, lon = anuncio.get("latitud"), anuncio.get("longitud")
     if lat and lon:
         try:
-            import spatial_analysis
+            from services import spatial_analysis
             anuncio["_pois_cercanos"] = spatial_analysis.pois_cercanos(float(lat), float(lon))
         except Exception:
             pass

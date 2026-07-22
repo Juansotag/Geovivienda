@@ -1,6 +1,6 @@
 import re
 
-from extractor_metrocuadrado_links import _CACHE
+from .extractor_metrocuadrado_links import _CACHE
 
 # Modulo de funciones para extraer detalles de Metrocuadrado.
 #

@@ -7,7 +7,7 @@ import math
 
 import numpy as np
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GEO_DIR  = os.path.join(BASE_DIR, 'static', 'geo')
 
 CRS_METRICO = 'EPSG:3116'

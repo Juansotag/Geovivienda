@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from xhtml2pdf import pisa
 
 import config
-import db
+from database import db
 
 load_dotenv()
 

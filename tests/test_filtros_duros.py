@@ -3,7 +3,7 @@ diccionarios en memoria - ningun caso aqui debe tocar la base de datos ni
 la red (si un anuncio no trae 'upz'/'municipio_geo' precalculado y tampoco
 trae lat/lng, _cumple_upz/_cumple_municipios devuelven True sin intentar
 geolocalizar, que es justo el comportamiento fail-open que se prueba)."""
-import busqueda
+from services import busqueda
 
 
 def test_cumple_antiguedad_sin_restriccion():
