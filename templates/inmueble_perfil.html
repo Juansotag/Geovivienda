@@ -447,19 +447,34 @@
     </button>
   <!-- ============================== SECCIÓN E: VISTA STREET VIEW (GOOGLE MAPS) ============================== -->
   <div class="perfil-seccion perfil-full">
-    <h2><i data-lucide="camera" style="width:15px; height:15px;"></i> Vista 360° Street View del Barrio</h2>
+    <h2><i data-lucide="camera" style="width:15px; height:15px;"></i> Vista Street View del Barrio (Google Cloud)</h2>
     {% if google_maps_api_key and anuncio.latitud and anuncio.longitud %}
-      <div style="border-radius:10px; overflow:hidden; border:1px solid var(--color-border);">
-        <iframe width="100%" height="340" style="border:0;" loading="lazy" allowfullscreen
-                src="https://www.google.com/maps/embed/v1/streetview?key={{ google_maps_api_key }}&location={{ anuncio.latitud }},{{ anuncio.longitud }}&heading=210&pitch=10&fov=80">
-        </iframe>
+      <div style="position:relative; border-radius:10px; overflow:hidden; border:1px solid var(--color-border); background:#000;">
+        <!-- Street View Static API image HD -->
+        <img src="https://maps.googleapis.com/maps/api/streetview?size=800x380&location={{ anuncio.latitud }},{{ anuncio.longitud }}&fov=90&heading=210&pitch=10&key={{ google_maps_api_key }}"
+             alt="Vistas de la calle según Street View Static API"
+             style="width:100%; max-height:380px; object-fit:cover; display:block;"
+             onerror="this.style.display='none'; document.getElementById('streetview-iframe-fallback').style.display='block';">
+        
+        <!-- Fallback iframe si prefiere Embed API -->
+        <div id="streetview-iframe-fallback" style="display:none;">
+          <iframe width="100%" height="340" style="border:0;" loading="lazy" allowfullscreen
+                  src="https://www.google.com/maps/embed/v1/streetview?key={{ google_maps_api_key }}&location={{ anuncio.latitud }},{{ anuncio.longitud }}&heading=210&pitch=10&fov=80">
+          </iframe>
+        </div>
+
+        <div style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.65); padding:4px 10px; border-radius:20px;">
+          <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={{ anuncio.latitud }},{{ anuncio.longitud }}" target="_blank" style="color:#fff; font-size:11px; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+            <i data-lucide="external-link" style="width:12px; height:12px;"></i> Explorar en 360° interactivo &nearr;
+          </a>
+        </div>
       </div>
     {% elif not google_maps_api_key %}
       <div style="background:rgba(24,31,89,0.04); border:1px dashed var(--color-primary); border-radius:10px; padding:20px; text-align:center;">
         <i data-lucide="map" style="width:32px; height:32px; color:var(--color-primary); margin-bottom:8px;"></i>
-        <p style="margin:0 0 6px; font-weight:700; color:var(--color-primary); font-size:14px;">Google Street View Integrado</p>
+        <p style="margin:0 0 6px; font-weight:700; color:var(--color-primary); font-size:14px;">Google Street View Static API Integrado</p>
         <p style="margin:0; font-size:12px; color:var(--color-text-muted);">
-          Para visualizar la panorámica 360° en vivo aquí dentro, solo debes agregar la variable <code>GOOGLE_MAPS_API_KEY</code> en tu archivo <code>.env</code> y en tu proyecto de Railway.
+          Tu clave de <b>Street View Static API</b> cargará aquí la foto real de la calle. Agrega la variable <code>GOOGLE_MAPS_API_KEY</code> en tu archivo <code>.env</code> y en Railway.
         </p>
         {% if anuncio.latitud and anuncio.longitud %}
         <div style="margin-top:12px;">
@@ -471,7 +486,7 @@
       </div>
     {% else %}
       <div style="background:rgba(24,31,89,0.03); border:1px solid var(--color-border); border-radius:10px; padding:16px; text-align:center; color:var(--color-text-muted); font-size:13px;">
-        Este inmueble no posee coordenadas (latitud/longitud) registradas para mostrar el entorno en Street View.
+        Este inmueble no posee coordenadas (latitud/longitud) registradas para generar la vista de Street View.
       </div>
     {% endif %}
   </div>
