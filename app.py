@@ -897,6 +897,96 @@ def inmueble_analisis_llm(anuncio_id):
     return jsonify({"status": "ok", "razon": razon})
 
 
+@app.route("/api/inmuebles/<int:anuncio_id>/chat", methods=["POST"])
+def inmueble_chat(anuncio_id):
+    """Chatbot del Asesor IA: responde preguntas sobre el inmueble usando Claude con historial de conversación."""
+    import anthropic as _anthropic
+
+    anuncio = db.buscar_anuncio_por_id(anuncio_id)
+    if not anuncio:
+        return jsonify({"error": "Inmueble no encontrado"}), 404
+
+    body = request.get_json(silent=True) or {}
+    user_message = (body.get("message") or "").strip()
+    history = body.get("history") or []  # [{"role": "user"|"assistant", "content": "..."}]
+
+    if not user_message:
+        return jsonify({"error": "Mensaje vacío"}), 400
+
+    # Construir contexto del inmueble para el system prompt
+    precio_m2 = ""
+    if anuncio.get("precio") and anuncio.get("area"):
+        try:
+            precio_m2 = f" | Precio/m²: ${int(anuncio['precio']) // int(anuncio['area']):,.0f} COP/m²"
+        except Exception:
+            pass
+
+    comodidades_str = ""
+    coms = anuncio.get("comodidades") or []
+    if isinstance(coms, str):
+        comodidades_str = coms
+    elif isinstance(coms, list):
+        comodidades_str = ", ".join(coms)
+
+    # Sub-scores de territorio H3
+    sub = {}
+    try:
+        sub = scoring.calcular_sub_scores(anuncio)
+    except Exception:
+        pass
+
+    sub_txt = ""
+    if sub:
+        sub_txt = "\n".join([f"  - {k}: {v:.2f}/1.0" for k, v in sub.items() if isinstance(v, (int, float))])
+
+    system_prompt = f"""Eres el Asesor de Vivienda IA de Geovivienda / Casa en Casa. Tu rol es ayudar a clientes a entender en profundidad este inmueble específico: responde preguntas sobre sus características, el sector, el precio, comparaciones y cualquier duda que tenga el usuario.
+
+FICHA TÉCNICA DEL INMUEBLE #{anuncio_id}:
+- Tipo: {anuncio.get('tipo_inmueble', 'N/D')}
+- Dirección: {anuncio.get('ubicacion', 'N/D')}
+- Localidad: {anuncio.get('localidad', 'N/D')} | UPZ: {anuncio.get('upz', 'N/D')}
+- Precio: ${anuncio.get('precio', 0):,.0f} COP{precio_m2}
+- Área: {anuncio.get('area', 'N/D')} m² | Habitaciones: {anuncio.get('habitaciones', 'N/D')} | Baños: {anuncio.get('banos', 'N/D')}
+- Estrato: {anuncio.get('estrato', 'N/D')} | Estado: {anuncio.get('estado', 'N/D')}
+- Comodidades: {comodidades_str or 'No especificadas'}
+- Descripción del anuncio: {(anuncio.get('descripcion') or '')[:600]}
+
+ANÁLISIS TERRITORIAL (Hexágono H3 del Sector):
+{sub_txt or '  No disponible'}
+
+INSTRUCCIONES:
+- Responde siempre en español, de forma clara, concisa y amigable.
+- Si el usuario pregunta algo que no está en la ficha técnica, dilo honestamente y sugiere cómo podría obtener esa info.
+- No inventes datos. Si no tienes certeza, indícalo.
+- Máximo 3 párrafos cortos por respuesta para no abrumar al usuario.
+- No uses emojis."""
+
+    # Construir lista de mensajes para la API de Claude
+    claude_messages = []
+    for msg in history[-12:]:  # Limitar historial a 12 mensajes para controlar tokens
+        role = msg.get("role")
+        content = msg.get("content", "")
+        if role in ("user", "assistant") and content:
+            claude_messages.append({"role": role, "content": content})
+
+    # Agregar el mensaje actual del usuario
+    claude_messages.append({"role": "user", "content": user_message})
+
+    try:
+        _client_chat = _anthropic.Anthropic()
+        response = _client_chat.messages.create(
+            model=config.CLAUDE_SMART,
+            max_tokens=800,
+            system=system_prompt,
+            messages=claude_messages,
+        )
+        answer = response.content[0].text if response.content else "No pude generar una respuesta en este momento."
+        return jsonify({"status": "ok", "answer": answer})
+    except Exception as e:
+        logging.error(f"Error en chatbot inmueble {anuncio_id}: {e}")
+        return jsonify({"error": f"Error al procesar: {str(e)}"}), 500
+
+
 @app.route("/api/h3/distribuciones")
 def api_h3_distribuciones():
     """Sirve el JSON pre-calculado de distribuciones de variables H3 para los histogramas del perfil."""
