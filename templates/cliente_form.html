@@ -136,45 +136,26 @@
   document.getElementById("ingreso_mensual")?.addEventListener("input", convertirValores);
   document.getElementById("ahorro_mensual")?.addEventListener("input", convertirValores);
 
-  // ── Autocompletado Mundial de Ciudades (Google Places API + OpenStreetMap Fallback) ──
+  // ── Autocompletado Mundial de Ciudades (Robusto con Fallback Gratuito) ──
   const GOOGLE_MAPS_KEY = {{ (google_maps_api_key or '') | tojson }};
+  let googlePlacesActive = false;
 
-  function initCityAutocomplete() {
+  // Manejar errores de autenticación de Google Maps (ApiTargetBlockedMapError, etc.)
+  window.gm_authFailure = function() {
+    console.warn("Google Maps API Key error (ApiTargetBlockedMapError). Fallback a OpenStreetMap activo.");
+    googlePlacesActive = false;
+    setupOsmCityAutocomplete();
+  };
+
+  function setupOsmCityAutocomplete() {
     const input = document.getElementById('ciudad_residencia');
     const suggestionsBox = document.getElementById('ciudad-suggestions');
-    if (!input) return;
+    if (!input || input.dataset.osmActive === "true") return;
+    input.dataset.osmActive = "true";
 
-    // 1. Google Places Autocomplete (si hay API Key de Google Maps activa)
-    if (GOOGLE_MAPS_KEY && window.google && google.maps && google.maps.places) {
-      const autocomplete = new google.maps.places.Autocomplete(input, {
-        types: ['(cities)'],
-      });
-      autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace();
-        if (place && place.address_components) {
-          const cityComp = place.address_components.find(c => c.types.includes('locality') || c.types.includes('administrative_area_level_1'));
-          const countryComp = place.address_components.find(c => c.types.includes('country'));
-          if (cityComp) input.value = cityComp.long_name;
-          if (countryComp) {
-            const countryName = countryComp.long_name;
-            const countrySelect = document.getElementById('pais_residencia');
-            if (countrySelect) {
-              for (let opt of countrySelect.options) {
-                if (opt.value.toLowerCase() === countryName.toLowerCase() || countryName.toLowerCase().includes(opt.value.toLowerCase())) {
-                  opt.selected = true;
-                  break;
-                }
-              }
-            }
-          }
-        }
-      });
-      return;
-    }
-
-    // 2. OpenStreetMap / Nominatim fallback mundial en vivo
     let timer = null;
     input.addEventListener('input', function() {
+      if (googlePlacesActive) return; // Si Google Places está funcionando, dejarlo actuar
       const query = this.value.trim();
       clearTimeout(timer);
       if (query.length < 2) {
@@ -225,7 +206,7 @@
             suggestionsBox.style.display = 'block';
           })
           .catch(() => { if (suggestionsBox) suggestionsBox.style.display = 'none'; });
-      }, 300);
+      }, 250);
     });
 
     document.addEventListener('click', (e) => {
@@ -235,14 +216,47 @@
     });
   }
 
+  function initCityAutocomplete() {
+    setupOsmCityAutocomplete();
+    const input = document.getElementById('ciudad_residencia');
+    if (GOOGLE_MAPS_KEY && window.google && google.maps && google.maps.places) {
+      try {
+        const autocomplete = new google.maps.places.Autocomplete(input, { types: ['(cities)'] });
+        googlePlacesActive = true;
+        autocomplete.addListener('place_changed', () => {
+          const place = autocomplete.getPlace();
+          if (place && place.address_components) {
+            const cityComp = place.address_components.find(c => c.types.includes('locality') || c.types.includes('administrative_area_level_1'));
+            const countryComp = place.address_components.find(c => c.types.includes('country'));
+            if (cityComp) input.value = cityComp.long_name;
+            if (countryComp) {
+              const countryName = countryComp.long_name;
+              const countrySelect = document.getElementById('pais_residencia');
+              if (countrySelect) {
+                for (let opt of countrySelect.options) {
+                  if (opt.value.toLowerCase() === countryName.toLowerCase() || countryName.toLowerCase().includes(opt.value.toLowerCase())) {
+                    opt.selected = true;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        });
+      } catch (e) {
+        googlePlacesActive = false;
+        console.warn("Google Places initialization fallback to OSM:", e);
+      }
+    }
+  }
+
   window.addEventListener('DOMContentLoaded', () => {
+    setupOsmCityAutocomplete();
     if (GOOGLE_MAPS_KEY) {
       const s = document.createElement('script');
-      s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&libraries=places&callback=initCityAutocomplete`;
+      s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&libraries=places&loading=async&callback=initCityAutocomplete`;
       s.async = true;
       document.head.appendChild(s);
-    } else {
-      initCityAutocomplete();
     }
   });
 </script>
