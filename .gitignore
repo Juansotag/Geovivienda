@@ -23,6 +23,7 @@ geodata/entorno/*
 
 # Backups y logs temporales de desarrollo
 anuncios_backup_*.csv
+/*.csv
 last_500_error.txt
 resultado_prueba_suba.*
 
