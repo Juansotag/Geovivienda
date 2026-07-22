@@ -339,6 +339,34 @@ def api_h3_geojson():
     return resp
 
 
+@app.route("/api/boundaries/localidades")
+def api_boundaries_localidades():
+    """Sirve el polígono GeoJSON de las 20 localidades de Bogotá."""
+    path = os.path.join(BASE_DIR, "static", "geo", "localidad.geojson")
+    if not os.path.exists(path):
+        return jsonify({"error": "GeoJSON de localidades no encontrado"}), 404
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    resp = jsonify(data)
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
+
+@app.route("/api/boundaries/upz")
+def api_boundaries_upz():
+    """Sirve el polígono GeoJSON de las UPZ de Bogotá."""
+    path = os.path.join(BASE_DIR, "geodata", "upz.geojson")
+    if not os.path.exists(path):
+        path = os.path.join(BASE_DIR, "static", "geo", "upz.geojson")
+    if not os.path.exists(path):
+        return jsonify({"error": "GeoJSON de UPZ no encontrado"}), 404
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    resp = jsonify(data)
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
+
 
 ESTADO_INMUEBLE_VALORES_VALIDOS = ("usado", "nuevo", "proyecto")
 

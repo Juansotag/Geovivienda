@@ -5,251 +5,469 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
 <style>
-  .gis-layer-control {
-    background: rgba(24, 31, 89, 0.03);
+  .map-wrapper {
+    position: relative;
+    width: 100%;
+    height: calc(100vh - 130px);
+    min-height: 650px;
+    border-radius: 12px;
+    overflow: hidden;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    padding: 10px 12px;
-    margin-bottom: 14px;
   }
-  .gis-layer-row {
+
+  #map {
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+  }
+
+  /* Panel Flotante Desplazable y Desplegable */
+  .floating-filter-panel {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 1000;
+    width: 360px;
+    max-height: calc(100% - 32px);
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.18), 0 8px 10px -6px rgba(0,0,0,0.1);
+    border: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-size: 13px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .floating-filter-panel.minimized {
+    height: 48px;
+    width: 220px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    background: var(--color-primary);
+    color: #ffffff;
+    padding: 12px 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 12px;
-    padding: 4px 0;
+    font-weight: 700;
+    font-size: 14px;
+    user-select: none;
+    cursor: pointer;
   }
-  .gis-layer-row label {
+
+  .panel-header button {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: #fff;
+    border-radius: 6px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .panel-header button:hover {
+    background: rgba(255,255,255,0.3);
+  }
+
+  .panel-body {
+    padding: 12px 16px;
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* Acordeón de Secciones */
+  .accordion-item {
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #FAFAFA;
+  }
+
+  .accordion-header {
+    background: #F1F5F9;
+    padding: 10px 14px;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--color-primary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid transparent;
+  }
+
+  .accordion-header:hover {
+    background: #E2E8F0;
+  }
+
+  .accordion-item.active .accordion-header {
+    border-bottom-color: var(--color-border);
+    background: #E2E8F0;
+  }
+
+  .accordion-content {
+    padding: 12px;
+    display: none;
+    background: #ffffff;
+  }
+
+  .accordion-item.active .accordion-content {
+    display: block;
+  }
+
+  .form-group-sm {
+    margin-bottom: 10px;
+  }
+  .form-group-sm label {
+    display: block;
+    font-weight: 600;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+  .form-group-sm select, .form-group-sm input[type="text"], .form-group-sm input[type="number"] {
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    background: #fff;
+  }
+
+  .checkbox-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
     cursor: pointer;
     font-weight: 500;
-    margin-bottom: 0;
   }
-  .gis-badge {
+
+  /* Leyenda Flotante */
+  .h3-legend {
+    position: absolute;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    max-width: 260px;
+  }
+
+  .legend-bar {
+    height: 10px;
+    border-radius: 4px;
+    margin: 6px 0;
+    background: linear-gradient(to right, #3B82F6, #10B981, #F59E0B, #EF4444);
+  }
+
+  .gis-badge-tag {
     font-size: 10px;
     font-weight: 700;
-    padding: 1px 6px;
-    border-radius: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
     color: #fff;
-  }
-  .h3-tooltip {
-    font-family: var(--font-base);
-    font-size: 12px;
-    line-height: 1.4;
-    padding: 4px;
   }
 </style>
 
-<div class="page-header">
+<div class="page-header" style="margin-bottom: 14px;">
   <h1>Mapa de Viviendas e Inteligencia Territorial (GIS)</h1>
 </div>
 
-<div style="display: grid; grid-template-columns: 310px 1fr; gap: 20px; align-items: start;">
-  <!-- Sidebar de Filtros y Capas -->
-  <div class="card" style="padding: 16px; margin: 0;">
-    
-    <!-- Selector de Proveedor de Mapa Base -->
-    <div class="form-group" style="margin-bottom: 14px;">
-      <label for="select_basemap" style="font-weight: 700;">Mapa Base</label>
-      <select id="select_basemap" onchange="changeBaseMap(this.value)">
-        <option value="carto_voyager">🇨🇴 CartoDB Voyager (Claro)</option>
-        <option value="carto_dark">🌙 CartoDB Dark Matter (Oscuro)</option>
-        <option value="osm">🗺️ OpenStreetMap Standard</option>
-        <option value="google_roadmap">🗺️ Google Maps Roadmap</option>
-        <option value="google_satellite">🛰️ Google Maps Satelital</option>
-        <option value="google_hybrid">🛰️ Google Maps Híbrido</option>
-      </select>
+<div class="map-wrapper">
+  <!-- Mapa Principal Leaflet -->
+  <div id="map"></div>
+
+  <!-- Panel Flotante de Filtros -->
+  <div id="floating-panel" class="floating-filter-panel">
+    <div class="panel-header" onclick="toggleFloatingPanel(event)">
+      <span>Filtros y Capas GIS</span>
+      <button type="button" id="btn-toggle-floating-panel" title="Minimizar / Expandir">
+        <i data-lucide="chevron-up" id="icon-panel-toggle" style="width:16px; height:16px;"></i>
+      </button>
     </div>
 
-    <!-- Control de Capas GIS -->
-    <div class="gis-layer-control">
-      <h4 style="font-size:11px; text-transform:uppercase; color:var(--color-text-muted); margin:0 0 8px;">Capas de Información GIS</h4>
-      
-      <div class="gis-layer-row">
-        <label for="chk_layer_inmuebles">
-          <input type="checkbox" id="chk_layer_inmuebles" checked onchange="toggleGisLayer('inmuebles', this.checked)">
-          🏠 Inmuebles Candidatos
-        </label>
-        <span class="gis-badge" style="background:#2F3670;" id="badge-inmuebles-count">0</span>
+    <div class="panel-body">
+
+      <!-- Sección 1: Mapa base -->
+      <div class="accordion-item active" id="sec-mapa-base">
+        <div class="accordion-header" onclick="toggleAccordion('sec-mapa-base')">
+          <span>1. Mapa base</span>
+          <i data-lucide="chevron-down" style="width:14px; height:14px;"></i>
+        </div>
+        <div class="accordion-content">
+          <div class="form-group-sm">
+            <label for="select_basemap">Proveedor de Mapa</label>
+            <select id="select_basemap" onchange="changeBaseMap(this.value)">
+              <option value="carto_voyager">CartoDB Voyager (Claro)</option>
+              <option value="carto_dark">CartoDB Dark Matter (Oscuro)</option>
+              <option value="osm">OpenStreetMap Standard</option>
+              <option value="google_roadmap">Google Maps Roadmap</option>
+              <option value="google_satellite">Google Maps Satelital</option>
+              <option value="google_hybrid">Google Maps Híbrido</option>
+            </select>
+          </div>
+        </div>
       </div>
 
-      <div class="gis-layer-row">
-        <label for="chk_layer_h3">
-          <input type="checkbox" id="chk_layer_h3" onchange="toggleGisLayer('h3', this.checked)">
-          ⬡ Hexágonos H3 (Sector)
-        </label>
-        <span class="gis-badge" style="background:#8B5CF6;">H3 r9</span>
+      <!-- Sección 2: Características del inmueble -->
+      <div class="accordion-item" id="sec-inmueble">
+        <div class="accordion-header" onclick="toggleAccordion('sec-inmueble')">
+          <span>2. Características del inmueble</span>
+          <i data-lucide="chevron-down" style="width:14px; height:14px;"></i>
+        </div>
+        <div class="accordion-content">
+          
+          <div class="form-group-sm">
+            <label for="filter_client">Simular Cliente</label>
+            <select id="filter_client" onchange="applyFilters()">
+              <option value="">Todos los candidatos</option>
+              {% for c in clientes %}
+              <option value="{{ c.nombre }}">{{ c.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group-sm">
+            <label for="filter_localidad">Localidad (Bogotá)</label>
+            <select id="filter_localidad" onchange="onLocalidadChange()">
+              <option value="">Todas las localidades</option>
+            </select>
+          </div>
+
+          <div class="form-group-sm">
+            <label for="filter_upz">UPZ / Barrio (Bogotá)</label>
+            <select id="filter_upz" onchange="applyFilters()">
+              <option value="">Todas las UPZ</option>
+            </select>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div class="form-group-sm">
+              <label for="filter_tipo">Tipo</label>
+              <select id="filter_tipo" onchange="applyFilters()">
+                <option value="">Todos</option>
+                <option value="apartamento">Apartamento</option>
+                <option value="casa">Casa</option>
+                <option value="apartaestudio">Apartaestudio</option>
+              </select>
+            </div>
+            <div class="form-group-sm">
+              <label for="filter_estado">Estado</label>
+              <select id="filter_estado" onchange="applyFilters()">
+                <option value="">Todos</option>
+                <option value="usado">Usado</option>
+                <option value="nuevo">Nuevo</option>
+                <option value="proyecto">Proyecto</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div class="form-group-sm">
+              <label for="filter_precio_min">Precio Mín (M COP)</label>
+              <input type="number" id="filter_precio_min" placeholder="Ej: 150" oninput="applyFilters()">
+            </div>
+            <div class="form-group-sm">
+              <label for="filter_precio_max">Precio Máx (M COP)</label>
+              <input type="number" id="filter_precio_max" placeholder="Ej: 600" oninput="applyFilters()">
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div class="form-group-sm">
+              <label for="filter_area_min">Área Mín (m²)</label>
+              <input type="number" id="filter_area_min" placeholder="Ej: 50" oninput="applyFilters()">
+            </div>
+            <div class="form-group-sm">
+              <label for="filter_area_max">Área Máx (m²)</label>
+              <input type="number" id="filter_area_max" placeholder="Ej: 200" oninput="applyFilters()">
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
+            <div class="form-group-sm">
+              <label for="filter_estrato">Estrato</label>
+              <select id="filter_estrato" onchange="applyFilters()">
+                <option value="">Todos</option>
+                {% for e in range(1, 7) %}<option value="{{ e }}">{{ e }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="form-group-sm">
+              <label for="filter_habitaciones_min">Habs</label>
+              <input type="number" id="filter_habitaciones_min" placeholder="1+" min="1" oninput="applyFilters()">
+            </div>
+            <div class="form-group-sm">
+              <label for="filter_banos_min">Baños</label>
+              <input type="number" id="filter_banos_min" placeholder="1+" min="1" oninput="applyFilters()">
+            </div>
+          </div>
+
+          <!-- Comodidades / Amenidades -->
+          <div class="form-group-sm">
+            <label>Comodidades / Equipamiento</label>
+            <div class="checkbox-grid">
+              <label class="checkbox-label"><input type="checkbox" class="chk-comodidad" value="garaje" onchange="applyFilters()"> Garaje / Park</label>
+              <label class="checkbox-label"><input type="checkbox" class="chk-comodidad" value="ascensor" onchange="applyFilters()"> Ascensor</label>
+              <label class="checkbox-label"><input type="checkbox" class="chk-comodidad" value="balcon" onchange="applyFilters()"> Balcón / Terr</label>
+              <label class="checkbox-label"><input type="checkbox" class="chk-comodidad" value="deposito" onchange="applyFilters()"> Depósito</label>
+              <label class="checkbox-label"><input type="checkbox" class="chk-comodidad" value="piscina" onchange="applyFilters()"> Piscina</label>
+              <label class="checkbox-label"><input type="checkbox" class="chk-comodidad" value="gimnasio" onchange="applyFilters()"> Gimnasio</label>
+              <label class="checkbox-label"><input type="checkbox" class="chk-comodidad" value="conjunto" onchange="applyFilters()"> Conjunto cerr.</label>
+              <label class="checkbox-label"><input type="checkbox" class="chk-comodidad" value="vigilancia" onchange="applyFilters()"> Vigilancia</label>
+            </div>
+          </div>
+
+          <button class="btn btn-secondary btn-sm" style="width: 100%; margin-top: 6px;" onclick="resetFilters()">Restablecer Filtros</button>
+        </div>
       </div>
 
-      <div class="gis-layer-row">
-        <label for="chk_layer_pois_transporte">
-          <input type="checkbox" id="chk_layer_pois_transporte" onchange="toggleGisLayer('transporte', this.checked)">
-          🚌 TransMilenio / SITP
-        </label>
-        <span class="gis-badge" style="background:#EF4444;">POI</span>
+      <!-- Sección 3: Características del territorio -->
+      <div class="accordion-item" id="sec-territorio">
+        <div class="accordion-header" onclick="toggleAccordion('sec-territorio')">
+          <span>3. Características del territorio</span>
+          <i data-lucide="chevron-down" style="width:14px; height:14px;"></i>
+        </div>
+        <div class="accordion-content">
+          
+          <div class="form-group-sm">
+            <label class="checkbox-label" style="font-size:12px; font-weight:700;">
+              <input type="checkbox" id="chk_layer_h3" onchange="toggleGisLayer('h3', this.checked)">
+              Mostrar Capa de Hexágonos H3
+            </label>
+          </div>
+
+          <!-- Selector con TODAS las variables del hexágono agrupadas por dimensión -->
+          <div class="form-group-sm">
+            <label for="select_h3_metric">Variable Territorial H3</label>
+            <select id="select_h3_metric" onchange="updateH3Metric(this.value)">
+              
+              <optgroup label="Puntuación Global">
+                <option value="score_h3_global">Score H3 Global (Calidad Sector)</option>
+              </optgroup>
+
+              <optgroup label="Socioeconómico y Catastro">
+                <option value="estrato_promedio_200m" selected>Estrato Socioeconómico Promedio</option>
+                <option value="val_avaluo_catastral_m2">Avalúo Catastral ($/m²)</option>
+                <option value="uso_suelo_predominante">Uso de Suelo Predominante</option>
+              </optgroup>
+
+              <optgroup label="Seguridad y Convivencia">
+                <option value="val_hurtos_upz">Hurtos Totales en UPZ</option>
+                <option value="val_hurtos_personas">Hurtos a Personas</option>
+                <option value="val_hurtos_comercios">Hurtos a Comercios</option>
+                <option value="val_hurtos_residencias">Hurtos a Residencias</option>
+                <option value="val_hurtos_vehiculos">Hurtos a Vehículos</option>
+                <option value="val_dist_cai">Distancia a CAI Policía (m)</option>
+                <option value="val_dist_est_policia">Distancia a Estación Policía (m)</option>
+                <option value="val_dist_equipamiento_justicia">Distancia a Equipamiento Justicia (m)</option>
+              </optgroup>
+
+              <optgroup label="Transporte y Movilidad">
+                <option value="val_dist_brt">Distancia a TransMilenio BRT (m)</option>
+                <option value="val_dist_sitp">Distancia a Paradero SITP (m)</option>
+                <option value="val_dist_metro">Distancia a Estación Metro Futuro (m)</option>
+                <option value="val_dist_ciclo">Distancia a Ciclorruta (m)</option>
+                <option value="val_brt_500m">Estaciones BRT a &lt; 500m</option>
+                <option value="val_sitp_300m">Paraderos SITP a &lt; 300m</option>
+                <option value="val_siniestros_viales_300m">Siniestros Viales a &lt; 300m</option>
+                <option value="val_siniestros_graves_500m">Siniestros Graves a &lt; 500m</option>
+              </optgroup>
+
+              <optgroup label="Comercio y Servicios">
+                <option value="val_dist_d1_ara">Distancia a D1 / Ara (m)</option>
+                <option value="val_dist_centro_comercial">Distancia a Centro Comercial (m)</option>
+                <option value="val_dist_supermercado_premium">Distancia a Supermercado Premium (m)</option>
+                <option value="val_conteo_hard_discount_500m">Tiendas D1/Ara a &lt; 500m</option>
+              </optgroup>
+
+              <optgroup label="Salud y Educación">
+                <option value="val_dist_hospital">Distancia a Hospital / Clínica (m)</option>
+                <option value="val_hospitales_500m">Hospitales a &lt; 500m</option>
+                <option value="val_dist_colegio">Distancia a Colegio / Univ (m)</option>
+                <option value="val_colegios_500m">Colegios a &lt; 500m</option>
+              </optgroup>
+
+              <optgroup label="Ambiente y Recreación">
+                <option value="val_dist_parque">Distancia a Parque / Z. Verde (m)</option>
+                <option value="val_dist_recreacion_deporte">Distancia a Ctr Deportivo (m)</option>
+                <option value="val_arboles_300m">Árboles a &lt; 300m</option>
+                <option value="val_dist_basura">Distancia a Punto de Basura (m)</option>
+                <option value="val_pm25">Calidad del Aire PM2.5</option>
+                <option value="val_temperatura">Temperatura Promedio (°C)</option>
+                <option value="val_precipitacion">Precipitación</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <hr style="border:0; border-top:1px solid var(--color-border); margin:10px 0;">
+
+          <!-- Capas de Equipamiento POI -->
+          <label style="font-weight:700; font-size:11px; color:var(--color-text-muted); text-transform:uppercase;">Equipamientos e Interés (POIs)</label>
+          <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+            <label class="checkbox-label"><input type="checkbox" id="chk_layer_pois_transporte" onchange="toggleGisLayer('transporte', this.checked)"> Transporte (TM / SITP)</label>
+            <label class="checkbox-label"><input type="checkbox" id="chk_layer_pois_educacion" onchange="toggleGisLayer('educacion', this.checked)"> Educación (Colegios / Univ)</label>
+            <label class="checkbox-label"><input type="checkbox" id="chk_layer_pois_salud" onchange="toggleGisLayer('salud', this.checked)"> Salud (Hospitales / Clínicas)</label>
+            <label class="checkbox-label"><input type="checkbox" id="chk_layer_pois_comercio" onchange="toggleGisLayer('comercio', this.checked)"> Comercio (D1, Ara, Malls)</label>
+            <label class="checkbox-label"><input type="checkbox" id="chk_layer_pois_parques" onchange="toggleGisLayer('parques', this.checked)"> Parques y Zonas Verdes</label>
+          </div>
+
+        </div>
       </div>
 
-      <div class="gis-layer-row">
-        <label for="chk_layer_pois_educacion">
-          <input type="checkbox" id="chk_layer_pois_educacion" onchange="toggleGisLayer('educacion', this.checked)">
-          🏫 Educación
-        </label>
-        <span class="gis-badge" style="background:#3B82F6;">POI</span>
+      <!-- Sección 4: Organización territorial -->
+      <div class="accordion-item" id="sec-organizacion">
+        <div class="accordion-header" onclick="toggleAccordion('sec-organizacion')">
+          <span>4. Organización territorial</span>
+          <i data-lucide="chevron-down" style="width:14px; height:14px;"></i>
+        </div>
+        <div class="accordion-content">
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <label class="checkbox-label" style="font-weight:600;">
+              <input type="checkbox" id="chk_layer_localidades" onchange="toggleGisLayer('localidades', this.checked)">
+              Límites de Localidades (Bogotá)
+            </label>
+            <label class="checkbox-label" style="font-weight:600;">
+              <input type="checkbox" id="chk_layer_upzs" onchange="toggleGisLayer('upzs', this.checked)">
+              Límites de UPZ (Bogotá)
+            </label>
+          </div>
+        </div>
       </div>
 
-      <div class="gis-layer-row">
-        <label for="chk_layer_pois_salud">
-          <input type="checkbox" id="chk_layer_pois_salud" onchange="toggleGisLayer('salud', this.checked)">
-          🏥 Salud
-        </label>
-        <span class="gis-badge" style="background:#10B981;">POI</span>
-      </div>
-
-      <div class="gis-layer-row">
-        <label for="chk_layer_pois_comercio">
-          <input type="checkbox" id="chk_layer_pois_comercio" onchange="toggleGisLayer('comercio', this.checked)">
-          🛒 Comercio / Supermercados
-        </label>
-        <span class="gis-badge" style="background:#F59E0B;">POI</span>
-      </div>
-
-      <div class="gis-layer-row">
-        <label for="chk_layer_pois_parques">
-          <input type="checkbox" id="chk_layer_pois_parques" onchange="toggleGisLayer('parques', this.checked)">
-          🌳 Zonas Verdes / Parques
-        </label>
-        <span class="gis-badge" style="background:#22C55E;">POI</span>
-      </div>
     </div>
-
-    <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 14px 0;">
-
-    <h3 style="margin-top: 0; font-size: 15px; display: flex; align-items: center; gap: 8px;">
-      <i data-lucide="sliders" style="width: 16px; height: 16px;"></i> Filtros de Inmuebles
-    </h3>
-    
-    <!-- Filtro por Cliente (Compatibilidad) -->
-    <div class="form-group">
-      <label for="filter_client">Simular Cliente</label>
-      <select id="filter_client" onchange="applyFilters()">
-        <option value="">Ninguno (Mostrar todos)</option>
-        {% for c in clientes %}
-        <option value="{{ c.nombre }}">{{ c.nombre }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <!-- Filtro por Búsqueda Específica -->
-    <div class="form-group">
-      <label for="filter_busqueda">Ver Búsqueda Específica</label>
-      <select id="filter_busqueda" onchange="applyFilters()">
-        <option value="">Todas las búsquedas</option>
-        {% for b in busquedas %}
-        <option value="{{ b.id }}" {% if busqueda_id == b.id %}selected{% endif %}>
-          #{{ b.id }} - {{ b.cliente_nombre }} ({{ b.tipo_vivienda | capitalize }})
-        </option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label for="filter_localidad">Localidad (Bogotá)</label>
-      <select id="filter_localidad" onchange="applyFilters()">
-        <option value="">Todas las localidades</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label for="filter_upz">UPZ / Barrio (Bogotá)</label>
-      <select id="filter_upz" onchange="applyFilters()">
-        <option value="">Todas las UPZ / Barrios</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label for="filter_tipo">Tipo de Inmueble</label>
-      <select id="filter_tipo" onchange="applyFilters()">
-        <option value="">Todos</option>
-        <option value="apartamento">Apartamento</option>
-        <option value="casa">Casa</option>
-        <option value="apartaestudio">Apartaestudio</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label for="filter_estado">Estado</label>
-      <select id="filter_estado" onchange="applyFilters()">
-        <option value="">Todos</option>
-        <option value="usado">Usado</option>
-        <option value="nuevo">Nuevo</option>
-        <option value="proyecto">Proyecto</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label for="filter_estrato">Estrato</label>
-      <select id="filter_estrato" onchange="applyFilters()">
-        <option value="">Todos</option>
-        {% for e in range(1, 7) %}<option value="{{ e }}">{{ e }}</option>{% endfor %}
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label for="filter_habitaciones_min">Habitaciones mínimas</label>
-      <input type="number" id="filter_habitaciones_min" placeholder="Ej: 2" min="1" oninput="applyFilters()">
-    </div>
-
-    <div class="form-group">
-      <label for="filter_banos_min">Baños mínimos</label>
-      <input type="number" id="filter_banos_min" placeholder="Ej: 1" min="1" oninput="applyFilters()">
-    </div>
-
-    <div class="form-group">
-      <label for="filter_precio_min">Precio Mín (Millones)</label>
-      <input type="number" id="filter_precio_min" placeholder="Ej: 150" oninput="applyFilters()">
-    </div>
-
-    <div class="form-group">
-      <label for="filter_precio_max">Precio Máx (Millones)</label>
-      <input type="number" id="filter_precio_max" placeholder="Ej: 500" oninput="applyFilters()">
-    </div>
-
-    <div class="form-group">
-      <label for="filter_area_min">Área Mín (m²)</label>
-      <input type="number" id="filter_area_min" placeholder="Ej: 60" oninput="applyFilters()">
-    </div>
-
-    <div class="form-group">
-      <label for="filter_area_max">Área Máx (m²)</label>
-      <input type="number" id="filter_area_max" placeholder="Ej: 200" oninput="applyFilters()">
-    </div>
-
-    <button class="btn btn-secondary btn-sm" style="width: 100%; margin-top: 10px;" onclick="resetFilters()">Restablecer Filtros</button>
   </div>
 
-  <!-- Contenedor del Mapa -->
-  <div class="card" style="padding: 0; overflow: hidden; margin: 0; border: 1px solid var(--color-border); position: sticky; top: 20px;">
-    <div id="map" style="height: 680px; width: 100%;"></div>
-  </div>
-</div>
-
-<!-- Leyenda de Compatibilidad (Solo visible si hay cliente seleccionado) -->
-<div id="map-legend" class="card" style="margin-top: 20px; display: none; padding: 12px 20px;">
-  <h4 style="margin: 0 0 10px 0; font-size: 13px; text-transform: uppercase; color: var(--color-text-muted);">Leyenda de Compatibilidad por Cliente</h4>
-  <div style="display: flex; gap: 20px; font-size: 13px; font-weight: 600;">
-    <div style="display: flex; align-items: center; gap: 8px;">
-      <span style="display: inline-block; width: 12px; height: 12px; background: #23C55E; border-radius: 50%;"></span>
-      Alta (&ge; 75%)
-    </div>
-    <div style="display: flex; align-items: center; gap: 8px;">
-      <span style="display: inline-block; width: 12px; height: 12px; background: #F3D143; border-radius: 50%;"></span>
-      Media (40% &ndash; 74%)
-    </div>
-    <div style="display: flex; align-items: center; gap: 8px;">
-      <span style="display: inline-block; width: 12px; height: 12px; background: #EF4444; border-radius: 50%;"></span>
-      Baja (&lt; 40%)
+  <!-- Leyenda de Métricas H3 -->
+  <div id="h3-legend" class="h3-legend" style="display:none;">
+    <div style="font-weight:700;" id="legend-metric-title">Estrato Socioeconómico</div>
+    <div class="legend-bar"></div>
+    <div style="display:flex; justify-content:space-between; color:var(--color-text-muted);" id="legend-metric-range">
+      <span id="legend-min">Min</span>
+      <span id="legend-max">Max</span>
     </div>
   </div>
 </div>
@@ -274,13 +492,11 @@
       estrato: {{ a.estrato or 0 }},
       localidad: {{ a.localidad | tojson }},
       upz: {{ a.upz | tojson }},
-      dist_tm: {{ a.dist_tm if a.dist_tm is not none else 'null' }},
-      dist_sitp: {{ a.dist_sitp if a.dist_sitp is not none else 'null' }},
-      dist_ciclo: {{ a.dist_ciclo if a.dist_ciclo is not none else 'null' }},
       ubicacion: {{ a.ubicacion_texto | tojson }},
       lat: {{ a.latitud }},
       lng: {{ a.longitud }},
       url: {{ a.url | tojson }},
+      comodidades: {{ (a.comodidades or []) | tojson }},
       compatibilidades: {{ a.compatibilidades | tojson | safe }}
     },
     {% endfor %}
@@ -288,10 +504,11 @@
 
   const focusId = {{ focus_id if focus_id else 'null' }};
   
-  // Leaflet Map Initialization
-  const map = L.map('map').setView([4.65, -74.08], 12);
+  // ── Inicialización de Leaflet ───────────────────
+  const map = L.map('map', { zoomControl: false }).setView([4.65, -74.08], 12);
+  L.control.zoom({ position: 'topright' }).addTo(map);
 
-  // Define Tile Providers
+  // Capas de Mapa Base
   const baseTileLayers = {
     carto_voyager: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 20
@@ -322,10 +539,12 @@
     currentTileLayer.addTo(map);
   }
 
-  // Layer Groups
-  let markerLayerGroup = L.layerGroup().addTo(map);
-  let h3LayerGroup     = L.layerGroup();
-  let poiLayerGroups   = {
+  // Grupos de Capas
+  let markerLayerGroup     = L.layerGroup().addTo(map);
+  let h3LayerGroup         = L.layerGroup();
+  let localidadesLayerGroup= L.layerGroup();
+  let upzsLayerGroup       = L.layerGroup();
+  let poiLayerGroups       = {
     transporte: L.layerGroup(),
     educacion: L.layerGroup(),
     salud: L.layerGroup(),
@@ -334,89 +553,196 @@
   };
 
   let activeMarkers = {};
-  let h3GeojsonLoaded = false;
+  let h3GeojsonData = null;
+  let h3LeafletLayer = null;
+  let currentH3Metric = "estrato_promedio_200m";
 
+  // Control Acordeón y Minimizar
+  function toggleFloatingPanel(e) {
+    if (e.target.closest('button') || e.target.closest('.panel-header')) {
+      const panel = document.getElementById('floating-panel');
+      panel.classList.toggle('minimized');
+      const icon = document.getElementById('icon-panel-toggle');
+      if (icon) {
+        icon.setAttribute('data-lucide', panel.classList.contains('minimized') ? 'chevron-down' : 'chevron-up');
+        if (window.lucide) lucide.createIcons();
+      }
+    }
+  }
+
+  function toggleAccordion(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const isAlreadyActive = el.classList.contains('active');
+    document.querySelectorAll('.accordion-item').forEach(item => item.classList.remove('active'));
+    if (!isAlreadyActive) el.classList.add('active');
+  }
+
+  // Toggle de Capas GIS
   function toggleGisLayer(layerName, visible) {
     if (layerName === 'inmuebles') {
       if (visible) map.addLayer(markerLayerGroup); else map.removeLayer(markerLayerGroup);
     } else if (layerName === 'h3') {
       if (visible) {
-        if (!h3GeojsonLoaded) cargarCapaH3();
-        map.addLayer(h3LayerGroup);
+        if (!h3GeojsonData) cargarCapaH3();
+        else map.addLayer(h3LayerGroup);
+        document.getElementById('h3-legend').style.display = 'block';
       } else {
         map.removeLayer(h3LayerGroup);
+        document.getElementById('h3-legend').style.display = 'none';
       }
+    } else if (layerName === 'localidades') {
+      if (visible) {
+        cargarCapaBoundary('localidades');
+        map.addLayer(localidadesLayerGroup);
+      } else map.removeLayer(localidadesLayerGroup);
+    } else if (layerName === 'upzs') {
+      if (visible) {
+        cargarCapaBoundary('upzs');
+        map.addLayer(upzsLayerGroup);
+      } else map.removeLayer(upzsLayerGroup);
     } else if (poiLayerGroups[layerName]) {
       if (visible) {
         cargarPoisCategoria(layerName);
         map.addLayer(poiLayerGroups[layerName]);
-      } else {
-        map.removeLayer(poiLayerGroups[layerName]);
-      }
+      } else map.removeLayer(poiLayerGroups[layerName]);
     }
   }
 
+  // ── Capas de Polígonos de Organización Territorial ──
+  const _boundariesLoaded = {};
+  async function cargarCapaBoundary(tipo) {
+    if (_boundariesLoaded[tipo]) return;
+    _boundariesLoaded[tipo] = true;
+    const endpoint = tipo === 'localidades' ? '/api/boundaries/localidades' : '/api/boundaries/upz';
+    const targetGroup = tipo === 'localidades' ? localidadesLayerGroup : upzsLayerGroup;
+    const strokeColor = tipo === 'localidades' ? '#1E293B' : '#64748B';
+    const fillOpacity = tipo === 'localidades' ? 0.05 : 0.08;
+
+    try {
+      const res = await fetch(endpoint);
+      if (!res.ok) return;
+      const data = await res.json();
+
+      L.geoJSON(data, {
+        style: {
+          color: strokeColor,
+          weight: tipo === 'localidades' ? 2 : 1,
+          dashArray: tipo === 'upzs' ? '3, 3' : null,
+          fillColor: strokeColor,
+          fillOpacity: fillOpacity
+        },
+        onEachFeature: (feature, layer) => {
+          const p = feature.properties || {};
+          const nombre = p.NOMBRE || p.nombre || p.Nombre || p.LOCALIDAD || 'Sector';
+          layer.bindTooltip(`<strong>${tipo === 'localidades' ? 'Localidad' : 'UPZ'}:</strong> ${nombre}`);
+        }
+      }).addTo(targetGroup);
+    } catch (e) { console.error(`Error cargando polígonos ${tipo}:`, e); }
+  }
+
+  // ── Capa H3 y Recálculo Dinámico de Métricas ──
   async function cargarCapaH3() {
     try {
       const res = await fetch("/api/h3/geojson");
       if (!res.ok) return;
-      const data = await res.json();
-      h3GeojsonLoaded = true;
-
-      L.geoJSON(data, {
-        style: feature => {
-          const props = feature.properties || {};
-          const estrato = props.estrato_promedio_200m || 3;
-          let color = '#3B82F6';
-          if (estrato >= 5) color = '#8B5CF6';
-          else if (estrato >= 4) color = '#10B981';
-          else if (estrato >= 3) color = '#F59E0B';
-          else color = '#EF4444';
-          return { color: color, weight: 1, opacity: 0.5, fillOpacity: 0.15 };
-        },
-        onEachFeature: (feature, layer) => {
-          const p = feature.properties || {};
-          layer.bindTooltip(`
-            <div class="h3-tooltip">
-              <strong>Hexágono H3:</strong> ${p.h3_index || 'N/A'}<br>
-              <strong>Estrato Sector:</strong> ${p.estrato_promedio_200m ? p.estrato_promedio_200m.toFixed(1) : 'N/D'}<br>
-              <strong>Dist. SITP:</strong> ${p.dist_sitp ? Math.round(p.dist_sitp) + 'm' : 'N/D'}<br>
-              <strong>Dist. TransMilenio:</strong> ${p.dist_tm ? Math.round(p.dist_tm) + 'm' : 'N/D'}
-            </div>
-          `);
-        }
-      }).addTo(h3LayerGroup);
-    } catch (e) {
-      console.error("Error cargando GeoJSON H3", e);
-    }
+      h3GeojsonData = await res.json();
+      renderH3Choropleth();
+      map.addLayer(h3LayerGroup);
+      document.getElementById('h3-legend').style.display = 'block';
+    } catch (e) { console.error("Error cargando GeoJSON H3", e); }
   }
 
-  const _poiCategoryIcons = {
-    transporte: { color: '#EF4444', emoji: '🚌' },
-    educacion:  { color: '#3B82F6', emoji: '🎓' },
-    salud:      { color: '#10B981', emoji: '🏥' },
-    comercio:   { color: '#F59E0B', emoji: '🛒' },
-    parques:    { color: '#22C55E', emoji: '🌳' }
+  function updateH3Metric(metricKey) {
+    currentH3Metric = metricKey;
+    if (h3GeojsonData) renderH3Choropleth();
+  }
+
+  function getColorForMetricValue(val, min, max, isReverse = false) {
+    if (val === null || val === undefined || isNaN(val)) return '#94A3B8';
+    let ratio = (val - min) / (max - min || 1);
+    ratio = Math.max(0, Math.min(1, ratio));
+    if (isReverse) ratio = 1 - ratio;
+
+    // Gradiente suave 5 niveles: Azul → Verde → Amarillo → Rojo
+    if (ratio < 0.25) return '#3B82F6';
+    if (ratio < 0.50) return '#10B981';
+    if (ratio < 0.75) return '#F59E0B';
+    return '#EF4444';
+  }
+
+  function renderH3Choropleth() {
+    if (!h3GeojsonData) return;
+    h3LayerGroup.clearLayers();
+
+    // Determinar min/max de la métrica activa
+    let values = [];
+    h3GeojsonData.features.forEach(f => {
+      const v = f.properties ? f.properties[currentH3Metric] : null;
+      if (typeof v === 'number' && !isNaN(v)) values.push(v);
+    });
+
+    const minVal = values.length ? Math.min(...values) : 0;
+    const maxVal = values.length ? Math.max(...values) : 1;
+    const isDistance = currentH3Metric.startsWith('val_dist_') || currentH3Metric.includes('hurtos');
+
+    // Actualizar Leyenda Flotante
+    const selectOpt = document.querySelector(`#select_h3_metric option[value="${currentH3Metric}"]`);
+    const labelTitle = selectOpt ? selectOpt.textContent : currentH3Metric;
+    document.getElementById('legend-metric-title').textContent = labelTitle;
+    document.getElementById('legend-min').textContent = isDistance ? `${Math.round(maxVal)}m (Lejos)` : `${minVal.toFixed(1)}`;
+    document.getElementById('legend-max').textContent = isDistance ? `${Math.round(minVal)}m (Cerca)` : `${maxVal.toFixed(1)}`;
+
+    h3LeafletLayer = L.geoJSON(h3GeojsonData, {
+      style: feature => {
+        const p = feature.properties || {};
+        const val = p[currentH3Metric];
+        const color = getColorForMetricValue(val, minVal, maxVal, isDistance);
+        return { color: color, weight: 1, opacity: 0.4, fillOpacity: 0.25 };
+      },
+      onEachFeature: (feature, layer) => {
+        const p = feature.properties || {};
+        const val = p[currentH3Metric];
+        let valFormatted = val !== null && val !== undefined ? (typeof val === 'number' ? (val > 100 ? Math.round(val) : val.toFixed(1)) : val) : 'N/D';
+        if (currentH3Metric.startsWith('val_dist_')) valFormatted += ' m';
+
+        layer.bindTooltip(`
+          <div style="font-size:12px; padding:4px;">
+            <strong>Hexágono:</strong> ${p.h3_index || ''}<br>
+            <strong>Localidad:</strong> ${p.localidad || 'Bogotá'}<br>
+            <strong>${labelTitle}:</strong> <span style="font-weight:700; color:var(--color-primary);">${valFormatted}</span>
+          </div>
+        `);
+      }
+    }).addTo(h3LayerGroup);
+  }
+
+  // ── Capas de POIs (Sin Emojis) ────────────────────
+  const _poiCategoryConfig = {
+    transporte: { color: '#EF4444', text: 'T' },
+    educacion:  { color: '#3B82F6', text: 'E' },
+    salud:      { color: '#10B981', text: 'S' },
+    comercio:   { color: '#F59E0B', text: 'C' },
+    parques:    { color: '#22C55E', text: 'P' }
   };
 
   const _poisCargados = {};
   function cargarPoisCategoria(cat) {
     if (_poisCargados[cat]) return;
     _poisCargados[cat] = true;
-    const cfg = _poiCategoryIcons[cat] || { color: '#6B7280', emoji: '📍' };
+    const cfg = _poiCategoryConfig[cat] || { color: '#6B7280', text: 'P' };
 
-    // Generar marcadores sintéticos alrededor de las coordenadas de inmuebles
     anuncios.forEach(a => {
       if (!a.lat || !a.lng) return;
-      const jitterLat = (Math.random() - 0.5) * 0.006;
-      const jitterLng = (Math.random() - 0.5) * 0.006;
+      const jitterLat = (Math.random() - 0.5) * 0.005;
+      const jitterLng = (Math.random() - 0.5) * 0.005;
       const icon = L.divIcon({
         className: 'poi-icon',
-        html: `<div style="background:${cfg.color}; color:#fff; font-size:11px; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.3);">${cfg.emoji}</div>`,
-        iconSize: [22, 22], iconAnchor: [11, 11]
+        html: `<div style="background:${cfg.color}; color:#fff; font-size:10px; font-weight:700; width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(0,0,0,0.25);">${cfg.text}</div>`,
+        iconSize: [20, 20], iconAnchor: [10, 10]
       });
       const m = L.marker([a.lat + jitterLat, a.lng + jitterLng], { icon: icon });
-      m.bindPopup(`<strong>${cat.toUpperCase()}</strong>: Punto cercano en sector ${a.ubicacion}`);
+      m.bindPopup(`<strong>${cat.toUpperCase()}</strong>: Equipamiento cercano en ${a.ubicacion}`);
       poiLayerGroups[cat].addLayer(m);
     });
   }
@@ -439,15 +765,67 @@
     return '#EF4444';
   }
 
+  // ── Poblado Dinámico de Localidades y UPZ ────────
+  const _locUpzMap = {};
+  function initSectoresDropdowns() {
+    const locSelect = document.getElementById("filter_localidad");
+    const upzSelect = document.getElementById("filter_upz");
+    if (!locSelect || !upzSelect) return;
+
+    anuncios.forEach(a => {
+      if (!a.localidad) return;
+      if (!_locUpzMap[a.localidad]) _locUpzMap[a.localidad] = new Set();
+      if (a.upz) _locUpzMap[a.localidad].add(a.upz);
+    });
+
+    locSelect.innerHTML = '<option value="">Todas las localidades</option>';
+    Object.keys(_locUpzMap).sort().forEach(loc => {
+      const opt = document.createElement("option");
+      opt.value = loc;
+      opt.textContent = loc;
+      locSelect.appendChild(opt);
+    });
+
+    populateUpzsDropdown();
+  }
+
+  function onLocalidadChange() {
+    populateUpzsDropdown();
+    applyFilters();
+  }
+
+  function populateUpzsDropdown() {
+    const locSelect = document.getElementById("filter_localidad");
+    const upzSelect = document.getElementById("filter_upz");
+    if (!locSelect || !upzSelect) return;
+    const selectedLoc = locSelect.value;
+    const currentVal = upzSelect.value;
+
+    upzSelect.innerHTML = '<option value="">Todas las UPZ</option>';
+    let upzSet = new Set();
+    if (selectedLoc && _locUpzMap[selectedLoc]) {
+      upzSet = _locUpzMap[selectedLoc];
+    } else {
+      Object.values(_locUpzMap).forEach(s => s.forEach(u => upzSet.add(u)));
+    }
+
+    [...upzSet].sort().forEach(u => {
+      const opt = document.createElement("option");
+      opt.value = u;
+      opt.textContent = u;
+      if (u === currentVal) opt.selected = true;
+      upzSelect.appendChild(opt);
+    });
+  }
+
+  // ── Renderizado de Marcadores Candidatos ─────────
   function renderMarkers() {
     markerLayerGroup.clearLayers();
     activeMarkers = {};
 
     const clientName = document.getElementById("filter_client").value;
-    const filterBusqueda = document.getElementById("filter_busqueda").value;
     const filterLocalidad = document.getElementById("filter_localidad") ? document.getElementById("filter_localidad").value.toLowerCase() : "";
     const filterUpz = document.getElementById("filter_upz") ? document.getElementById("filter_upz").value.toLowerCase() : "";
-
     const filterTipo = document.getElementById("filter_tipo").value;
     const filterEstado = document.getElementById("filter_estado").value;
     const filterEstrato = document.getElementById("filter_estrato").value;
@@ -458,15 +836,11 @@
     const filterAreaMin = parseFloat(document.getElementById("filter_area_min").value) || null;
     const filterAreaMax = parseFloat(document.getElementById("filter_area_max").value) || null;
 
-    const legend = document.getElementById("map-legend");
-    if (legend) legend.style.display = clientName ? 'block' : 'none';
-
-    const idsPermitidosBusqueda = filterBusqueda ? (busquedaResultadosMap[filterBusqueda] || []) : null;
+    // Comodidades seleccionadas
+    const chkComodidades = [...document.querySelectorAll('.chk-comodidad:checked')].map(c => c.value);
 
     let visCount = 0;
     anuncios.forEach(a => {
-      if (idsPermitidosBusqueda && !idsPermitidosBusqueda.includes(a.id)) return;
-
       const tipoLower = (a.tipo_inmueble || "").toLowerCase();
       const estadoLower = (a.estado || "").toLowerCase();
       const locLower = (a.localidad || "").toLowerCase();
@@ -483,6 +857,13 @@
       if (filterPrecioMax && a.precio > filterPrecioMax) return;
       if (filterAreaMin && a.area < filterAreaMin) return;
       if (filterAreaMax && a.area > filterAreaMax) return;
+
+      // Filtro de Comodidades
+      if (chkComodidades.length > 0) {
+        const comsStr = (a.comodidades || []).join(' ').toLowerCase();
+        const tieneTodas = chkComodidades.every(c => comsStr.includes(c));
+        if (!tieneTodas) return;
+      }
 
       visCount++;
       const color = getMarkerColor(a, clientName);
@@ -506,7 +887,7 @@
 
       const popupContent = `
         <div style="font-family: var(--font-base); font-size:13px; color:var(--color-text);">
-          <h4 style="margin:0 0 6px 0; color:var(--color-primary); font-size:14px; text-transform:capitalize;">${a.tipo_inmueble} en Venta (#${a.id})</h4>
+          <h4 style="margin:0 0 6px 0; color:var(--color-primary); font-size:14px; text-transform:capitalize;">${a.tipo_inmueble} (#${a.id})</h4>
           <p style="margin: 0 0 4px 0;"><strong>Dirección:</strong> ${a.ubicacion}</p>
           ${sectorBadges}
           <p style="margin: 0 0 4px 0;"><strong>Precio:</strong> $${(a.precio / 1000000).toFixed(0)}M COP ${a.area ? `($${Math.round(a.precio/a.area).toLocaleString('es-CO')}/m²)` : ''}</p>
@@ -523,18 +904,13 @@
       markerLayerGroup.addLayer(marker);
       activeMarkers[a.id] = marker;
     });
-
-    const badge = document.getElementById("badge-inmuebles-count");
-    if (badge) badge.textContent = visCount;
   }
 
   function applyFilters() { renderMarkers(); }
 
   function resetFilters() {
     document.getElementById("filter_client").value = "";
-    document.getElementById("filter_busqueda").value = "";
-    if (document.getElementById("filter_localidad")) document.getElementById("filter_localidad").value = "";
-    if (document.getElementById("filter_upz")) document.getElementById("filter_upz").value = "";
+    document.getElementById("filter_localidad").value = "";
     document.getElementById("filter_tipo").value = "";
     document.getElementById("filter_estado").value = "";
     document.getElementById("filter_estrato").value = "";
@@ -544,40 +920,13 @@
     document.getElementById("filter_precio_max").value = "";
     document.getElementById("filter_area_min").value = "";
     document.getElementById("filter_area_max").value = "";
+    document.querySelectorAll('.chk-comodidad').forEach(c => c.checked = false);
+    populateUpzsDropdown();
     renderMarkers();
   }
 
-  async function cargarFiltrosSectoresMapa() {
-    try {
-      const [resLoc, resUpz] = await Promise.all([
-        fetch("/api/bogota/localidades"),
-        fetch("/api/bogota/upzs")
-      ]);
-      if (resLoc.ok && resUpz.ok) {
-        const localidades = await resLoc.json();
-        const upzs = await resUpz.json();
-        const locSelect = document.getElementById("filter_localidad");
-        const upzSelect = document.getElementById("filter_upz");
-        if (locSelect) {
-          locSelect.innerHTML = '<option value="">Todas las localidades</option>';
-          localidades.forEach(loc => {
-            const opt = document.createElement("option"); opt.value = loc; opt.textContent = loc; locSelect.appendChild(opt);
-          });
-        }
-        if (upzSelect) {
-          upzSelect.innerHTML = '<option value="">Todas las UPZ / Barrios</option>';
-          upzs.forEach(upz => {
-            const opt = document.createElement("option"); opt.value = upz; opt.textContent = upz; upzSelect.appendChild(opt);
-          });
-        }
-      }
-    } catch (e) {
-      console.error("Error cargando sectores para filtros del mapa", e);
-    }
-  }
-
   window.addEventListener("DOMContentLoaded", () => {
-    cargarFiltrosSectoresMapa();
+    initSectoresDropdowns();
     renderMarkers();
 
     if (focusId && activeMarkers[focusId]) {
