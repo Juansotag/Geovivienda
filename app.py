@@ -4,8 +4,10 @@ import json
 import logging
 import threading
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from flask import Flask, render_template, request, jsonify, redirect, url_for, Response
+
+load_dotenv(find_dotenv(), override=True)
 
 import config
 from database import db
@@ -15,10 +17,6 @@ from services import reportes
 from services import busqueda
 from services import spatial_analysis
 from services.scheduler import iniciar_scheduler
-
-load_dotenv()
-
-
 
 app = Flask(__name__)
 # Con debug=False, Jinja2 cachea las plantillas compiladas en memoria y no
@@ -724,6 +722,7 @@ def inmueble_perfil(anuncio_id):
     # Metadatos de dimensiones para el template
     dimensiones = scoring.DIMENSIONES_H3
 
+    key = os.environ.get("GOOGLE_MAPS_API_KEY", "") or getattr(config, "GOOGLE_MAPS_API_KEY", "")
     return render_template(
         "inmueble_perfil.html",
         activo="inmuebles",
@@ -731,7 +730,7 @@ def inmueble_perfil(anuncio_id):
         sub_scores=sub_scores,
         pois=pois,
         dimensiones=dimensiones,
-        google_maps_api_key=os.environ.get("GOOGLE_MAPS_API_KEY", "") or getattr(config, "GOOGLE_MAPS_API_KEY", ""),
+        google_maps_api_key=key,
     )
 
 
