@@ -452,22 +452,15 @@
     <h2><i data-lucide="camera" style="width:15px; height:15px;"></i> Vista Street View del Barrio (Google Cloud)</h2>
     {% if google_maps_api_key and anuncio.latitud and anuncio.longitud %}
       <div style="position:relative; border-radius:10px; overflow:hidden; border:1px solid var(--color-border); background:#000;">
-        <!-- Street View Static API image HD -->
-        <img src="https://maps.googleapis.com/maps/api/streetview?size=800x380&location={{ anuncio.latitud }},{{ anuncio.longitud }}&fov=90&heading=210&pitch=10&key={{ google_maps_api_key }}"
-             alt="Vistas de la calle según Street View Static API"
-             style="width:100%; max-height:380px; object-fit:cover; display:block;"
-             onerror="this.style.display='none'; document.getElementById('streetview-iframe-fallback').style.display='block';">
+        <!-- Visor Interactivo 360° Embed API (Permite girar con mouse, mirar arriba/abajo y caminar por la calle) -->
+        <iframe width="100%" height="380" style="border:0;" loading="lazy" allowfullscreen
+                src="https://www.google.com/maps/embed/v1/streetview?key={{ google_maps_api_key }}&location={{ anuncio.latitud }},{{ anuncio.longitud }}&heading=210&pitch=10&fov=80">
+        </iframe>
         
-        <!-- Fallback iframe si prefiere Embed API -->
-        <div id="streetview-iframe-fallback" style="display:none;">
-          <iframe width="100%" height="340" style="border:0;" loading="lazy" allowfullscreen
-                  src="https://www.google.com/maps/embed/v1/streetview?key={{ google_maps_api_key }}&location={{ anuncio.latitud }},{{ anuncio.longitud }}&heading=210&pitch=10&fov=80">
-          </iframe>
-        </div>
-
-        <div style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.65); padding:4px 10px; border-radius:20px;">
-          <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={{ anuncio.latitud }},{{ anuncio.longitud }}" target="_blank" style="color:#fff; font-size:11px; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
-            <i data-lucide="external-link" style="width:12px; height:12px;"></i> Explorar en 360° interactivo &nearr;
+        <!-- Botón directo Google Maps -->
+        <div style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.7); padding:5px 12px; border-radius:20px; z-index:5;">
+          <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={{ anuncio.latitud }},{{ anuncio.longitud }}" target="_blank" style="color:#fff; font-size:11px; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:5px;">
+            <i data-lucide="external-link" style="width:12px; height:12px;"></i> Abrir pantalla completa en Google Maps &nearr;
           </a>
         </div>
       </div>
