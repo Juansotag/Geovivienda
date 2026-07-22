@@ -15,6 +15,9 @@
     <div><strong>Nombre completo:</strong> {{ cliente.nombre }}</div>
     <div><strong>Identificación:</strong> {{ cliente.tipo_identificacion or '—' }} ({{ cliente.numero_identificacion or '—' }})</div>
     <div><strong>Residencia actual:</strong> {{ cliente.ciudad_residencia }}, {{ cliente.pais_residencia }}</div>
+    <div><strong>Nacionalidad:</strong> {{ cliente.nacionalidad or '—' }}</div>
+    <div><strong>Tiempo en país actual:</strong> {{ cliente.anios_en_pais ~ ' años' if cliente.anios_en_pais is not none else '—' }}</div>
+    <div><strong>Estatus / Permiso:</strong> {{ cliente.tipo_permiso_residencia or '—' }}</div>
     <div><strong>Ingreso mensual neto:</strong> {{ "{:,.2f}".format(cliente.ingreso_mensual or 0) }} {{ cliente.ingreso_moneda }} (~${{ "{:,.0f}".format(cliente.ingreso_mensual_cop or 0) }} COP)</div>
     <div><strong>Ahorro disponible mensual:</strong> {{ "{:,.2f}".format(cliente.ahorro_mensual or 0) }} {{ cliente.ingreso_moneda }} (~${{ "{:,.0f}".format(cliente.ahorro_mensual_cop or 0) }} COP)</div>
   </div>

@@ -90,6 +90,9 @@ CREATE TABLE IF NOT EXISTS clientes (
     ingreso_mensual_cop REAL,
     ahorro_mensual REAL,
     ahorro_mensual_cop REAL,
+    nacionalidad TEXT,
+    anios_en_pais SMALLINT,
+    tipo_permiso_residencia TEXT,
     creado_en TIMESTAMPTZ DEFAULT now()
 );
 

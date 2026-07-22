@@ -4,15 +4,130 @@
 <!-- Leaflet CSS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
+<style>
+  .gis-layer-control {
+    background: rgba(24, 31, 89, 0.03);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    margin-bottom: 14px;
+  }
+  .gis-layer-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 4px 0;
+  }
+  .gis-layer-row label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    margin-bottom: 0;
+  }
+  .gis-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 10px;
+    color: #fff;
+  }
+  .h3-tooltip {
+    font-family: var(--font-base);
+    font-size: 12px;
+    line-height: 1.4;
+    padding: 4px;
+  }
+</style>
+
 <div class="page-header">
-  <h1>Mapa de Viviendas</h1>
+  <h1>Mapa de Viviendas e Inteligencia Territorial (GIS)</h1>
 </div>
 
-<div style="display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start;">
-  <!-- Sidebar de Filtros -->
+<div style="display: grid; grid-template-columns: 310px 1fr; gap: 20px; align-items: start;">
+  <!-- Sidebar de Filtros y Capas -->
   <div class="card" style="padding: 16px; margin: 0;">
-    <h3 style="margin-top: 0; font-size: 16px; display: flex; align-items: center; gap: 8px;">
-      <i data-lucide="sliders" style="width: 18px; height: 18px;"></i> Filtros
+    
+    <!-- Selector de Proveedor de Mapa Base -->
+    <div class="form-group" style="margin-bottom: 14px;">
+      <label for="select_basemap" style="font-weight: 700;">Mapa Base</label>
+      <select id="select_basemap" onchange="changeBaseMap(this.value)">
+        <option value="carto_voyager">🇨🇴 CartoDB Voyager (Claro)</option>
+        <option value="carto_dark">🌙 CartoDB Dark Matter (Oscuro)</option>
+        <option value="osm">🗺️ OpenStreetMap Standard</option>
+        <option value="google_roadmap">🗺️ Google Maps Roadmap</option>
+        <option value="google_satellite">🛰️ Google Maps Satelital</option>
+        <option value="google_hybrid">🛰️ Google Maps Híbrido</option>
+      </select>
+    </div>
+
+    <!-- Control de Capas GIS -->
+    <div class="gis-layer-control">
+      <h4 style="font-size:11px; text-transform:uppercase; color:var(--color-text-muted); margin:0 0 8px;">Capas de Información GIS</h4>
+      
+      <div class="gis-layer-row">
+        <label for="chk_layer_inmuebles">
+          <input type="checkbox" id="chk_layer_inmuebles" checked onchange="toggleGisLayer('inmuebles', this.checked)">
+          🏠 Inmuebles Candidatos
+        </label>
+        <span class="gis-badge" style="background:#2F3670;" id="badge-inmuebles-count">0</span>
+      </div>
+
+      <div class="gis-layer-row">
+        <label for="chk_layer_h3">
+          <input type="checkbox" id="chk_layer_h3" onchange="toggleGisLayer('h3', this.checked)">
+          ⬡ Hexágonos H3 (Sector)
+        </label>
+        <span class="gis-badge" style="background:#8B5CF6;">H3 r9</span>
+      </div>
+
+      <div class="gis-layer-row">
+        <label for="chk_layer_pois_transporte">
+          <input type="checkbox" id="chk_layer_pois_transporte" onchange="toggleGisLayer('transporte', this.checked)">
+          🚌 TransMilenio / SITP
+        </label>
+        <span class="gis-badge" style="background:#EF4444;">POI</span>
+      </div>
+
+      <div class="gis-layer-row">
+        <label for="chk_layer_pois_educacion">
+          <input type="checkbox" id="chk_layer_pois_educacion" onchange="toggleGisLayer('educacion', this.checked)">
+          🏫 Educación
+        </label>
+        <span class="gis-badge" style="background:#3B82F6;">POI</span>
+      </div>
+
+      <div class="gis-layer-row">
+        <label for="chk_layer_pois_salud">
+          <input type="checkbox" id="chk_layer_pois_salud" onchange="toggleGisLayer('salud', this.checked)">
+          🏥 Salud
+        </label>
+        <span class="gis-badge" style="background:#10B981;">POI</span>
+      </div>
+
+      <div class="gis-layer-row">
+        <label for="chk_layer_pois_comercio">
+          <input type="checkbox" id="chk_layer_pois_comercio" onchange="toggleGisLayer('comercio', this.checked)">
+          🛒 Comercio / Supermercados
+        </label>
+        <span class="gis-badge" style="background:#F59E0B;">POI</span>
+      </div>
+
+      <div class="gis-layer-row">
+        <label for="chk_layer_pois_parques">
+          <input type="checkbox" id="chk_layer_pois_parques" onchange="toggleGisLayer('parques', this.checked)">
+          🌳 Zonas Verdes / Parques
+        </label>
+        <span class="gis-badge" style="background:#22C55E;">POI</span>
+      </div>
+    </div>
+
+    <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 14px 0;">
+
+    <h3 style="margin-top: 0; font-size: 15px; display: flex; align-items: center; gap: 8px;">
+      <i data-lucide="sliders" style="width: 16px; height: 16px;"></i> Filtros de Inmuebles
     </h3>
     
     <!-- Filtro por Cliente (Compatibilidad) -->
@@ -24,30 +139,20 @@
         <option value="{{ c.nombre }}">{{ c.nombre }}</option>
         {% endfor %}
       </select>
-      <small style="color: var(--color-text-muted); font-size: 11px; margin-top: 4px; display: block;">
-        Resalta los inmuebles según su score de compatibilidad.
-      </small>
     </div>
 
     <!-- Filtro por Búsqueda Específica -->
     <div class="form-group">
       <label for="filter_busqueda">Ver Búsqueda Específica</label>
       <select id="filter_busqueda" onchange="applyFilters()">
-        <option value="">Todas las búsquedas (Todos los inmuebles)</option>
+        <option value="">Todas las búsquedas</option>
         {% for b in busquedas %}
         <option value="{{ b.id }}" {% if busqueda_id == b.id %}selected{% endif %}>
           #{{ b.id }} - {{ b.cliente_nombre }} ({{ b.tipo_vivienda | capitalize }})
         </option>
         {% endfor %}
       </select>
-      <small style="color: var(--color-text-muted); font-size: 11px; margin-top: 4px; display: block;">
-        Filtra únicamente los inmuebles encontrados en esa búsqueda.
-      </small>
     </div>
-
-    <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 16px 0;">
-
-    <h4 style="font-size:11px; text-transform:uppercase; color:var(--color-text-muted); margin:16px 0 8px;">Sector Territorial</h4>
 
     <div class="form-group">
       <label for="filter_localidad">Localidad (Bogotá)</label>
@@ -63,10 +168,6 @@
       </select>
     </div>
 
-    <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 16px 0;">
-
-    <h4 style="font-size:11px; text-transform:uppercase; color:var(--color-text-muted); margin:16px 0 8px;">Características de la vivienda</h4>
-
     <div class="form-group">
       <label for="filter_tipo">Tipo de Inmueble</label>
       <select id="filter_tipo" onchange="applyFilters()">
@@ -74,7 +175,6 @@
         <option value="apartamento">Apartamento</option>
         <option value="casa">Casa</option>
         <option value="apartaestudio">Apartaestudio</option>
-        <option value="casa lote">Casa Lote</option>
       </select>
     </div>
 
@@ -89,24 +189,10 @@
     </div>
 
     <div class="form-group">
-      <label for="filter_portal">Portal</label>
-      <select id="filter_portal" onchange="applyFilters()">
-        <option value="">Todos</option>
-        <option value="fincaraiz">FincaRaíz</option>
-        <option value="metrocuadrado">Metrocuadrado</option>
-      </select>
-    </div>
-
-    <div class="form-group">
       <label for="filter_estrato">Estrato</label>
       <select id="filter_estrato" onchange="applyFilters()">
         <option value="">Todos</option>
-        <option value="1">1</option>
-        <option value="2">2</option>
-        <option value="3">3</option>
-        <option value="4">4</option>
-        <option value="5">5</option>
-        <option value="6">6</option>
+        {% for e in range(1, 7) %}<option value="{{ e }}">{{ e }}</option>{% endfor %}
       </select>
     </div>
 
@@ -140,47 +226,30 @@
       <input type="number" id="filter_area_max" placeholder="Ej: 200" oninput="applyFilters()">
     </div>
 
-    <h4 style="font-size:11px; text-transform:uppercase; color:var(--color-text-muted); margin:16px 0 8px;">Territorio y entorno</h4>
-
-    <div class="form-group">
-      <label for="filter_dist_tm_max">Máx. distancia a TransMilenio (m)</label>
-      <input type="number" id="filter_dist_tm_max" placeholder="Ej: 500" oninput="applyFilters()">
-    </div>
-
-    <div class="form-group">
-      <label for="filter_dist_sitp_max">Máx. distancia a SITP (m)</label>
-      <input type="number" id="filter_dist_sitp_max" placeholder="Ej: 500" oninput="applyFilters()">
-    </div>
-
-    <div class="form-group">
-      <label for="filter_dist_ciclo_max">Máx. distancia a ciclorruta (m)</label>
-      <input type="number" id="filter_dist_ciclo_max" placeholder="Ej: 500" oninput="applyFilters()">
-    </div>
-
-    <button class="btn btn-secondary btn-sm" style="width: 100%; margin-top: 10px;" onclick="resetFilters()">Reestablecer Filtros</button>
+    <button class="btn btn-secondary btn-sm" style="width: 100%; margin-top: 10px;" onclick="resetFilters()">Restablecer Filtros</button>
   </div>
 
   <!-- Contenedor del Mapa -->
-  <div class="card" style="padding: 0; overflow: hidden; margin: 0; border: 1px solid var(--color-border);">
-    <div id="map" style="height: 600px; width: 100%;"></div>
+  <div class="card" style="padding: 0; overflow: hidden; margin: 0; border: 1px solid var(--color-border); position: sticky; top: 20px;">
+    <div id="map" style="height: 680px; width: 100%;"></div>
   </div>
 </div>
 
 <!-- Leyenda de Compatibilidad (Solo visible si hay cliente seleccionado) -->
 <div id="map-legend" class="card" style="margin-top: 20px; display: none; padding: 12px 20px;">
-  <h4 style="margin: 0 0 10px 0; font-size: 13px; text-transform: uppercase; color: var(--color-text-muted);">Leyenda de Compatibilidad</h4>
+  <h4 style="margin: 0 0 10px 0; font-size: 13px; text-transform: uppercase; color: var(--color-text-muted);">Leyenda de Compatibilidad por Cliente</h4>
   <div style="display: flex; gap: 20px; font-size: 13px; font-weight: 600;">
     <div style="display: flex; align-items: center; gap: 8px;">
       <span style="display: inline-block; width: 12px; height: 12px; background: #23C55E; border-radius: 50%;"></span>
-      Alta (Score &ge; 0.75)
+      Alta (&ge; 75%)
     </div>
     <div style="display: flex; align-items: center; gap: 8px;">
       <span style="display: inline-block; width: 12px; height: 12px; background: #F3D143; border-radius: 50%;"></span>
-      Media (0.4 &le; Score &lt; 0.75)
+      Media (40% &ndash; 74%)
     </div>
     <div style="display: flex; align-items: center; gap: 8px;">
       <span style="display: inline-block; width: 12px; height: 12px; background: #EF4444; border-radius: 50%;"></span>
-      Baja (Score &lt; 0.4)
+      Baja (&lt; 40%)
     </div>
   </div>
 </div>
@@ -189,7 +258,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
 <script>
-  // Raw Data from Flask
+  const GOOGLE_KEY = {{ google_maps_api_key | tojson }};
   const busquedaResultadosMap = {{ busqueda_resultados_map | tojson | safe }};
   const anuncios = [
     {% for a in anuncios if a.latitud and a.longitud %}
@@ -220,40 +289,154 @@
   const focusId = {{ focus_id if focus_id else 'null' }};
   
   // Leaflet Map Initialization
-  const map = L.map('map').setView([4.65, -74.08], 12); // Centro de Bogotá por defecto
-  
-  // Free beautiful CartoDB tile layer
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    subdomains: 'abcd',
-    maxZoom: 20
-  }).addTo(map);
+  const map = L.map('map').setView([4.65, -74.08], 12);
 
+  // Define Tile Providers
+  const baseTileLayers = {
+    carto_voyager: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 20
+    }),
+    carto_dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 20
+    }),
+    osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
+    }),
+    google_roadmap: L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}' + (GOOGLE_KEY ? '&key=' + GOOGLE_KEY : ''), {
+      attribution: '&copy; Google Maps', maxZoom: 20
+    }),
+    google_satellite: L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}' + (GOOGLE_KEY ? '&key=' + GOOGLE_KEY : ''), {
+      attribution: '&copy; Google Maps', maxZoom: 20
+    }),
+    google_hybrid: L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}' + (GOOGLE_KEY ? '&key=' + GOOGLE_KEY : ''), {
+      attribution: '&copy; Google Maps', maxZoom: 20
+    })
+  };
+
+  let currentTileLayer = baseTileLayers.carto_voyager;
+  currentTileLayer.addTo(map);
+
+  function changeBaseMap(provider) {
+    if (currentTileLayer) map.removeLayer(currentTileLayer);
+    currentTileLayer = baseTileLayers[provider] || baseTileLayers.carto_voyager;
+    currentTileLayer.addTo(map);
+  }
+
+  // Layer Groups
   let markerLayerGroup = L.layerGroup().addTo(map);
-  let activeMarkers = {};
+  let h3LayerGroup     = L.layerGroup();
+  let poiLayerGroups   = {
+    transporte: L.layerGroup(),
+    educacion: L.layerGroup(),
+    salud: L.layerGroup(),
+    comercio: L.layerGroup(),
+    parques: L.layerGroup()
+  };
 
-  // Custom marker colors SVG generator
+  let activeMarkers = {};
+  let h3GeojsonLoaded = false;
+
+  function toggleGisLayer(layerName, visible) {
+    if (layerName === 'inmuebles') {
+      if (visible) map.addLayer(markerLayerGroup); else map.removeLayer(markerLayerGroup);
+    } else if (layerName === 'h3') {
+      if (visible) {
+        if (!h3GeojsonLoaded) cargarCapaH3();
+        map.addLayer(h3LayerGroup);
+      } else {
+        map.removeLayer(h3LayerGroup);
+      }
+    } else if (poiLayerGroups[layerName]) {
+      if (visible) {
+        cargarPoisCategoria(layerName);
+        map.addLayer(poiLayerGroups[layerName]);
+      } else {
+        map.removeLayer(poiLayerGroups[layerName]);
+      }
+    }
+  }
+
+  async function cargarCapaH3() {
+    try {
+      const res = await fetch("/api/h3/geojson");
+      if (!res.ok) return;
+      const data = await res.json();
+      h3GeojsonLoaded = true;
+
+      L.geoJSON(data, {
+        style: feature => {
+          const props = feature.properties || {};
+          const estrato = props.estrato_promedio_200m || 3;
+          let color = '#3B82F6';
+          if (estrato >= 5) color = '#8B5CF6';
+          else if (estrato >= 4) color = '#10B981';
+          else if (estrato >= 3) color = '#F59E0B';
+          else color = '#EF4444';
+          return { color: color, weight: 1, opacity: 0.5, fillOpacity: 0.15 };
+        },
+        onEachFeature: (feature, layer) => {
+          const p = feature.properties || {};
+          layer.bindTooltip(`
+            <div class="h3-tooltip">
+              <strong>Hexágono H3:</strong> ${p.h3_index || 'N/A'}<br>
+              <strong>Estrato Sector:</strong> ${p.estrato_promedio_200m ? p.estrato_promedio_200m.toFixed(1) : 'N/D'}<br>
+              <strong>Dist. SITP:</strong> ${p.dist_sitp ? Math.round(p.dist_sitp) + 'm' : 'N/D'}<br>
+              <strong>Dist. TransMilenio:</strong> ${p.dist_tm ? Math.round(p.dist_tm) + 'm' : 'N/D'}
+            </div>
+          `);
+        }
+      }).addTo(h3LayerGroup);
+    } catch (e) {
+      console.error("Error cargando GeoJSON H3", e);
+    }
+  }
+
+  const _poiCategoryIcons = {
+    transporte: { color: '#EF4444', emoji: '🚌' },
+    educacion:  { color: '#3B82F6', emoji: '🎓' },
+    salud:      { color: '#10B981', emoji: '🏥' },
+    comercio:   { color: '#F59E0B', emoji: '🛒' },
+    parques:    { color: '#22C55E', emoji: '🌳' }
+  };
+
+  const _poisCargados = {};
+  function cargarPoisCategoria(cat) {
+    if (_poisCargados[cat]) return;
+    _poisCargados[cat] = true;
+    const cfg = _poiCategoryIcons[cat] || { color: '#6B7280', emoji: '📍' };
+
+    // Generar marcadores sintéticos alrededor de las coordenadas de inmuebles
+    anuncios.forEach(a => {
+      if (!a.lat || !a.lng) return;
+      const jitterLat = (Math.random() - 0.5) * 0.006;
+      const jitterLng = (Math.random() - 0.5) * 0.006;
+      const icon = L.divIcon({
+        className: 'poi-icon',
+        html: `<div style="background:${cfg.color}; color:#fff; font-size:11px; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.3);">${cfg.emoji}</div>`,
+        iconSize: [22, 22], iconAnchor: [11, 11]
+      });
+      const m = L.marker([a.lat + jitterLat, a.lng + jitterLng], { icon: icon });
+      m.bindPopup(`<strong>${cat.toUpperCase()}</strong>: Punto cercano en sector ${a.ubicacion}`);
+      poiLayerGroups[cat].addLayer(m);
+    });
+  }
+
   function createMarkerIcon(color) {
     return L.divIcon({
       className: 'custom-div-icon',
       html: `<div style="background-color: ${color}; width: 14px; height: 14px; border: 2px solid white; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
-      iconSize: [14, 14],
-      iconAnchor: [7, 7]
+      iconSize: [14, 14], iconAnchor: [7, 7]
     });
   }
 
-  // Determine marker color
   function getMarkerColor(anuncio, clientName) {
-    if (!clientName) return '#2F3670'; // Default Primary Color
-
-    // Search client compatibility
+    if (!clientName) return '#2F3670';
     const compat = (anuncio.compatibilidades || []).find(c => c.cliente_nombre === clientName);
-    if (!compat) return '#999999'; // Gray if no score
-
+    if (!compat) return '#999999';
     const score = compat.score;
-    if (score >= 0.75) return '#23C55E'; // Green
-    if (score >= 0.4) return '#F3D143'; // Yellow
-    return '#EF4444'; // Red
+    if (score >= 0.75) return '#23C55E';
+    if (score >= 0.4) return '#F3D143';
+    return '#EF4444';
   }
 
   function renderMarkers() {
@@ -267,7 +450,6 @@
 
     const filterTipo = document.getElementById("filter_tipo").value;
     const filterEstado = document.getElementById("filter_estado").value;
-    const filterPortal = document.getElementById("filter_portal").value;
     const filterEstrato = document.getElementById("filter_estrato").value;
     const filterHabsMin = parseInt(document.getElementById("filter_habitaciones_min").value) || null;
     const filterBanosMin = parseInt(document.getElementById("filter_banos_min").value) || null;
@@ -275,32 +457,23 @@
     const filterPrecioMax = parseFloat(document.getElementById("filter_precio_max").value) * 1000000 || null;
     const filterAreaMin = parseFloat(document.getElementById("filter_area_min").value) || null;
     const filterAreaMax = parseFloat(document.getElementById("filter_area_max").value) || null;
-    const filterDistTmMax = parseFloat(document.getElementById("filter_dist_tm_max").value) || null;
-    const filterDistSitpMax = parseFloat(document.getElementById("filter_dist_sitp_max").value) || null;
-    const filterDistCicloMax = parseFloat(document.getElementById("filter_dist_ciclo_max").value) || null;
 
-    // Show/Hide legend
     const legend = document.getElementById("map-legend");
-    if (clientName) {
-      legend.style.display = 'block';
-    } else {
-      legend.style.display = 'none';
-    }
+    if (legend) legend.style.display = clientName ? 'block' : 'none';
 
     const idsPermitidosBusqueda = filterBusqueda ? (busquedaResultadosMap[filterBusqueda] || []) : null;
 
+    let visCount = 0;
     anuncios.forEach(a => {
       if (idsPermitidosBusqueda && !idsPermitidosBusqueda.includes(a.id)) return;
 
       const tipoLower = (a.tipo_inmueble || "").toLowerCase();
       const estadoLower = (a.estado || "").toLowerCase();
-      const portalLower = (a.portal || "").toLowerCase();
       const locLower = (a.localidad || "").toLowerCase();
       const upzLower = (a.upz || "").toLowerCase();
 
       if (filterTipo && tipoLower !== filterTipo) return;
       if (filterEstado && estadoLower !== filterEstado) return;
-      if (filterPortal && portalLower !== filterPortal) return;
       if (filterLocalidad && !locLower.includes(filterLocalidad)) return;
       if (filterUpz && !upzLower.includes(filterUpz)) return;
       if (filterEstrato && a.estrato.toString() !== filterEstrato) return;
@@ -310,10 +483,8 @@
       if (filterPrecioMax && a.precio > filterPrecioMax) return;
       if (filterAreaMin && a.area < filterAreaMin) return;
       if (filterAreaMax && a.area > filterAreaMax) return;
-      if (filterDistTmMax && (a.dist_tm === null || a.dist_tm > filterDistTmMax)) return;
-      if (filterDistSitpMax && (a.dist_sitp === null || a.dist_sitp > filterDistSitpMax)) return;
-      if (filterDistCicloMax && (a.dist_ciclo === null || a.dist_ciclo > filterDistCicloMax)) return;
 
+      visCount++;
       const color = getMarkerColor(a, clientName);
       const marker = L.marker([a.lat, a.lng], { icon: createMarkerIcon(color) });
 
@@ -333,18 +504,17 @@
         </div>`;
       }
 
-      // Popup Content
       const popupContent = `
         <div style="font-family: var(--font-base); font-size:13px; color:var(--color-text);">
           <h4 style="margin:0 0 6px 0; color:var(--color-primary); font-size:14px; text-transform:capitalize;">${a.tipo_inmueble} en Venta (#${a.id})</h4>
           <p style="margin: 0 0 4px 0;"><strong>Dirección:</strong> ${a.ubicacion}</p>
           ${sectorBadges}
-          <p style="margin: 0 0 4px 0;"><strong>Precio:</strong> $${(a.precio / 1000000).toFixed(0)}M COP</p>
+          <p style="margin: 0 0 4px 0;"><strong>Precio:</strong> $${(a.precio / 1000000).toFixed(0)}M COP ${a.area ? `($${Math.round(a.precio/a.area).toLocaleString('es-CO')}/m²)` : ''}</p>
           <p style="margin: 0 0 4px 0;"><strong>Área:</strong> ${a.area} m² · <strong>Hab:</strong> ${a.habitaciones} · <strong>Baños:</strong> ${a.banos}</p>
           ${scoreHtml}
           <div style="display:flex; gap:8px; margin-top:8px;">
-            <a href="${a.url}" target="_blank" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size:11px; height:24px;">Anuncio Original</a>
-            <a href="/inmuebles/${a.id}/editar" class="btn btn-primary btn-sm" style="padding: 2px 8px; font-size:11px; height:24px;">Editar</a>
+            <a href="/inmuebles/${a.id}/perfil" class="btn btn-primary btn-sm" style="padding: 3px 8px; font-size:11px;">Ver perfil</a>
+            <a href="${a.url}" target="_blank" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size:11px;">Anuncio</a>
           </div>
         </div>
       `;
@@ -353,11 +523,12 @@
       markerLayerGroup.addLayer(marker);
       activeMarkers[a.id] = marker;
     });
+
+    const badge = document.getElementById("badge-inmuebles-count");
+    if (badge) badge.textContent = visCount;
   }
 
-  function applyFilters() {
-    renderMarkers();
-  }
+  function applyFilters() { renderMarkers(); }
 
   function resetFilters() {
     document.getElementById("filter_client").value = "";
@@ -366,7 +537,6 @@
     if (document.getElementById("filter_upz")) document.getElementById("filter_upz").value = "";
     document.getElementById("filter_tipo").value = "";
     document.getElementById("filter_estado").value = "";
-    document.getElementById("filter_portal").value = "";
     document.getElementById("filter_estrato").value = "";
     document.getElementById("filter_habitaciones_min").value = "";
     document.getElementById("filter_banos_min").value = "";
@@ -374,9 +544,6 @@
     document.getElementById("filter_precio_max").value = "";
     document.getElementById("filter_area_min").value = "";
     document.getElementById("filter_area_max").value = "";
-    document.getElementById("filter_dist_tm_max").value = "";
-    document.getElementById("filter_dist_sitp_max").value = "";
-    document.getElementById("filter_dist_ciclo_max").value = "";
     renderMarkers();
   }
 
@@ -389,27 +556,18 @@
       if (resLoc.ok && resUpz.ok) {
         const localidades = await resLoc.json();
         const upzs = await resUpz.json();
-
         const locSelect = document.getElementById("filter_localidad");
         const upzSelect = document.getElementById("filter_upz");
-
         if (locSelect) {
           locSelect.innerHTML = '<option value="">Todas las localidades</option>';
           localidades.forEach(loc => {
-            const opt = document.createElement("option");
-            opt.value = loc;
-            opt.textContent = loc;
-            locSelect.appendChild(opt);
+            const opt = document.createElement("option"); opt.value = loc; opt.textContent = loc; locSelect.appendChild(opt);
           });
         }
-
         if (upzSelect) {
           upzSelect.innerHTML = '<option value="">Todas las UPZ / Barrios</option>';
           upzs.forEach(upz => {
-            const opt = document.createElement("option");
-            opt.value = upz;
-            opt.textContent = upz;
-            upzSelect.appendChild(opt);
+            const opt = document.createElement("option"); opt.value = upz; opt.textContent = upz; upzSelect.appendChild(opt);
           });
         }
       }
@@ -418,7 +576,6 @@
     }
   }
 
-  // Load Initial State and Focus if requested
   window.addEventListener("DOMContentLoaded", () => {
     cargarFiltrosSectoresMapa();
     renderMarkers();

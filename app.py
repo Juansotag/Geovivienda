@@ -184,8 +184,16 @@ def clientes():
 
 @app.route("/clientes/nuevo", methods=["GET", "POST"])
 def cliente_nuevo():
+    from services import paises_onu
     if request.method == "GET":
-        return render_template("cliente_form.html", activo="clientes", ciudades=CIUDADES, cliente=None)
+        return render_template(
+            "cliente_form.html",
+            activo="clientes",
+            ciudades=CIUDADES,
+            cliente=None,
+            paises_onu=paises_onu.PAISES_ONU,
+            tipos_permiso=paises_onu.TIPOS_PERMISO_RESIDENCIA,
+        )
 
     moneda = request.form["ingreso_moneda"]
     ingreso = float(request.form["ingreso_mensual"])
@@ -195,6 +203,9 @@ def cliente_nuevo():
         "nombre": request.form["nombre"],
         "pais_residencia": request.form["pais_residencia"],
         "ciudad_residencia": request.form["ciudad_residencia"],
+        "nacionalidad": request.form.get("nacionalidad"),
+        "anios_en_pais": _int_opcional(request.form.get("anios_en_pais")),
+        "tipo_permiso_residencia": request.form.get("tipo_permiso_residencia"),
         "tipo_identificacion": request.form["tipo_identificacion"],
         "numero_identificacion": request.form["numero_identificacion"],
         "ingreso_mensual": ingreso,
@@ -212,8 +223,16 @@ def cliente_editar(cliente_id):
     if not cliente:
         return "Cliente no encontrado", 404
         
+    from services import paises_onu
     if request.method == "GET":
-        return render_template("cliente_form.html", activo="clientes", ciudades=CIUDADES, cliente=cliente)
+        return render_template(
+            "cliente_form.html",
+            activo="clientes",
+            ciudades=CIUDADES,
+            cliente=cliente,
+            paises_onu=paises_onu.PAISES_ONU,
+            tipos_permiso=paises_onu.TIPOS_PERMISO_RESIDENCIA,
+        )
 
     moneda = request.form["ingreso_moneda"]
     ingreso = float(request.form["ingreso_mensual"])
@@ -223,6 +242,9 @@ def cliente_editar(cliente_id):
         "nombre": request.form["nombre"],
         "pais_residencia": request.form["pais_residencia"],
         "ciudad_residencia": request.form["ciudad_residencia"],
+        "nacionalidad": request.form.get("nacionalidad"),
+        "anios_en_pais": _int_opcional(request.form.get("anios_en_pais")),
+        "tipo_permiso_residencia": request.form.get("tipo_permiso_residencia"),
         "tipo_identificacion": request.form["tipo_identificacion"],
         "numero_identificacion": request.form["numero_identificacion"],
         "ingreso_mensual": ingreso,
@@ -288,7 +310,22 @@ def mapa():
         focus_id=focus_id,
         busqueda_id=busqueda_id,
         busqueda_resultados_map=busqueda_resultados_map,
+        google_maps_api_key=os.environ.get("GOOGLE_MAPS_API_KEY", "") or getattr(config, "GOOGLE_MAPS_API_KEY", ""),
     )
+
+
+@app.route("/api/h3/geojson")
+def api_h3_geojson():
+    """Sirve el archivo GeoJSON de hexágonos H3 de Bogotá para la capa GIS del mapa."""
+    geo_path = os.path.join(BASE_DIR, "geodata", "mapa_h3_bogota.geojson")
+    if not os.path.exists(geo_path):
+        return jsonify({"error": "GeoJSON de hexágonos H3 no encontrado"}), 404
+    with open(geo_path, encoding="utf-8") as f:
+        data = json.load(f)
+    resp = jsonify(data)
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
 
 
 ESTADO_INMUEBLE_VALORES_VALIDOS = ("usado", "nuevo", "proyecto")

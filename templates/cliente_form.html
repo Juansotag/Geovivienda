@@ -27,25 +27,43 @@
       <input type="text" id="numero_identificacion" name="numero_identificacion" required placeholder="Ej: 1020304050" value="{{ cliente.numero_identificacion if cliente else '' }}">
     </div>
     <div class="form-group">
-      <label for="pais_residencia">País de residencia</label>
+      <label for="nacionalidad">Nacionalidad</label>
+      <select id="nacionalidad" name="nacionalidad">
+        <option value="">Selecciona un país...</option>
+        {% for p in paises_onu %}
+        <option value="{{ p.nombre }}" {% if cliente and cliente.nacionalidad == p.nombre %}selected{% elif not cliente and p.nombre == 'Colombia' %}selected{% endif %}>
+          {{ p.flag }} {{ p.nombre }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="pais_residencia">País de residencia (193 Países ONU)</label>
       <select id="pais_residencia" name="pais_residencia" required>
-        <option value="España" {% if cliente and cliente.pais_residencia == 'España' %}selected{% endif %}>España</option>
-        <option value="Estados Unidos" {% if cliente and cliente.pais_residencia == 'Estados Unidos' %}selected{% endif %}>Estados Unidos</option>
-        <option value="Canadá" {% if cliente and cliente.pais_residencia == 'Canadá' %}selected{% endif %}>Canadá</option>
-        <option value="Reino Unido" {% if cliente and cliente.pais_residencia == 'Reino Unido' %}selected{% endif %}>Reino Unido</option>
-        <option value="Australia" {% if cliente and cliente.pais_residencia == 'Australia' %}selected{% endif %}>Australia</option>
-        <option value="Francia" {% if cliente and cliente.pais_residencia == 'Francia' %}selected{% endif %}>Francia</option>
-        <option value="Alemania" {% if cliente and cliente.pais_residencia == 'Alemania' %}selected{% endif %}>Alemania</option>
-        <option value="Chile" {% if cliente and cliente.pais_residencia == 'Chile' %}selected{% endif %}>Chile</option>
-        <option value="México" {% if cliente and cliente.pais_residencia == 'México' %}selected{% endif %}>México</option>
-        <option value="Panamá" {% if cliente and cliente.pais_residencia == 'Panamá' %}selected{% endif %}>Panamá</option>
-        <option value="Ecuador" {% if cliente and cliente.pais_residencia == 'Ecuador' %}selected{% endif %}>Ecuador</option>
-        <option value="Perú" {% if cliente and cliente.pais_residencia == 'Perú' %}selected{% endif %}>Perú</option>
+        <option value="">Selecciona un país...</option>
+        {% for p in paises_onu %}
+        <option value="{{ p.nombre }}" {% if cliente and cliente.pais_residencia == p.nombre %}selected{% elif not cliente and p.nombre == 'España' %}selected{% endif %}>
+          {{ p.flag }} {{ p.nombre }}
+        </option>
+        {% endfor %}
       </select>
     </div>
     <div class="form-group">
       <label for="ciudad_residencia">Ciudad de residencia</label>
-      <input type="text" id="ciudad_residencia" name="ciudad_residencia" required placeholder="Ej: Madrid, Miami, Toronto" value="{{ cliente.ciudad_residencia if cliente else '' }}">
+      <input type="text" id="ciudad_residencia" name="ciudad_residencia" required placeholder="Ej: Madrid, Miami, Toronto, Bogotá" value="{{ cliente.ciudad_residencia if cliente else '' }}">
+    </div>
+    <div class="form-group">
+      <label for="anios_en_pais">Años de residencia en este país</label>
+      <input type="number" id="anios_en_pais" name="anios_en_pais" min="0" placeholder="Ej: 5" value="{{ cliente.anios_en_pais if cliente and cliente.anios_en_pais is not none else '' }}">
+    </div>
+    <div class="form-group">
+      <label for="tipo_permiso_residencia">Estatus Migratorio / Tipo de Permiso</label>
+      <select id="tipo_permiso_residencia" name="tipo_permiso_residencia">
+        <option value="">Selecciona una opción...</option>
+        {% for tp in tipos_permiso %}
+        <option value="{{ tp }}" {% if cliente and cliente.tipo_permiso_residencia == tp %}selected{% endif %}>{{ tp }}</option>
+        {% endfor %}
+      </select>
     </div>
   </div>
 

@@ -111,3 +111,10 @@ ALTER TABLE resultados_busqueda ADD COLUMN IF NOT EXISTS sub_scores JSONB;
 -- ── Migración 007: Fase 1 — rango de área en búsquedas ───────────────────────
 ALTER TABLE busquedas ADD COLUMN IF NOT EXISTS area_metros_min REAL;
 ALTER TABLE busquedas ADD COLUMN IF NOT EXISTS area_metros_max REAL;
+
+
+-- ── Migración 008: Fase 2 — perfil ampliado de clientes ──────────────────────
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS nacionalidad TEXT;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS anios_en_pais SMALLINT;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS tipo_permiso_residencia TEXT;
+
