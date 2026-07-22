@@ -42,7 +42,7 @@ def test_crear_busqueda_con_upz_de_localidades_distintas(client, cliente_tempora
     r = client.post(f"/busquedas/nueva?cliente_id={cliente_temporal}", data=form)
     assert r.status_code in (302, 200)
 
-    import db
+    from database import db
     busquedas = db.obtener_busquedas_cliente(cliente_temporal)
     assert busquedas, "la busqueda no se creo"
     nueva = max(busquedas, key=lambda b: b["id"])
