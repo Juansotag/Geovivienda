@@ -1,6 +1,7 @@
 import os
 import csv
 import json
+import logging
 import threading
 
 from dotenv import load_dotenv
@@ -15,11 +16,27 @@ from scheduler import iniciar_scheduler
 
 load_dotenv()
 
+
+
 app = Flask(__name__)
 # Con debug=False, Jinja2 cachea las plantillas compiladas en memoria y no
 # detecta cambios en disco por si solo - sin esto hay que reiniciar el
 # proceso despues de cada edicion a un .html para ver el cambio reflejado.
 app.config["TEMPLATES_AUTO_RELOAD"] = True
+
+
+@app.errorhandler(Exception)
+def handle_all_errors(e):
+    import traceback
+    tb = traceback.format_exc()
+    logging.error(f"UNHANDLED EXCEPTION: {tb}")
+    # Also write to a simple file so we can read it easily
+    with open('last_500_error.txt', 'w', encoding='utf-8') as f:
+        f.write(tb)
+    if request.path.startswith('/api/'):
+        return jsonify({'error': str(e)}), 500
+    return f"<pre style='color:red;padding:20px;font-size:13px;'>[500 ERROR]\n{tb}</pre>", 500
+
 
 # Filtro personalizado: deserializar JSONB que llega como string desde PostgreSQL
 @app.template_filter("from_json")
@@ -126,7 +143,10 @@ def api_bogota_upzs():
 
 @app.context_processor
 def inject_perfil():
-    return dict(perfil=db.obtener_perfil())
+    try:
+        return dict(perfil=db.obtener_perfil())
+    except Exception:
+        return dict(perfil=None)
 
 
 @app.route("/")
@@ -214,7 +234,7 @@ def cliente_editar(cliente_id):
     return redirect(url_for("cliente_detalle", cliente_id=cliente_id))
 
 
-@app.route("/clientes/<int:cliente_id>/eliminar", methods=["POST", "GET"])
+@app.route("/clientes/<int:cliente_id>/eliminar", methods=["POST"])
 def cliente_eliminar(cliente_id):
     db.eliminar_cliente(cliente_id)
     return redirect(url_for("clientes"))
@@ -226,7 +246,7 @@ def busquedas():
     return render_template("busquedas.html", activo="busquedas", busquedas=all_b)
 
 
-@app.route("/busquedas/<int:busqueda_id>/eliminar", methods=["POST", "GET"])
+@app.route("/busquedas/<int:busqueda_id>/eliminar", methods=["POST"])
 def busqueda_eliminar(busqueda_id):
     busqueda_obj = db.obtener_busqueda(busqueda_id)
     cliente_id = busqueda_obj["cliente_id"] if busqueda_obj else None
@@ -243,7 +263,7 @@ def inmuebles():
     return render_template("inmuebles.html", activo="inmuebles", anuncios=all_a, clientes=clientes)
 
 
-@app.route("/inmuebles/<int:anuncio_id>/eliminar", methods=["POST", "GET"])
+@app.route("/inmuebles/<int:anuncio_id>/eliminar", methods=["POST"])
 def anuncio_eliminar(anuncio_id):
     db.eliminar_anuncio(anuncio_id)
     return redirect(url_for("inmuebles"))
@@ -257,14 +277,7 @@ def mapa():
     clientes = db.listar_clientes()
     all_b = db.obtener_todas_busquedas()
 
-    busqueda_resultados_map = {}
-    with db.get_cursor() as cur:
-        cur.execute("SELECT busqueda_id, anuncio_id FROM resultados_busqueda")
-        for r in cur.fetchall():
-            b_id = str(r["busqueda_id"])
-            if b_id not in busqueda_resultados_map:
-                busqueda_resultados_map[b_id] = []
-            busqueda_resultados_map[b_id].append(r["anuncio_id"])
+    busqueda_resultados_map = db.obtener_mapa_busqueda_resultados()
 
     return render_template(
         "mapa.html",
@@ -405,22 +418,29 @@ def cliente_detalle(cliente_id):
 
 @app.route("/clientes/<int:cliente_id>/resultados")
 def cliente_resultados(cliente_id):
-    cliente = db.obtener_cliente(cliente_id)
-    busqueda_id = request.args.get("busqueda_id", type=int)
-    if not busqueda_id:
-        return "Búsqueda no encontrada", 404
-    busqueda_obj = db.obtener_busqueda(busqueda_id)
-    if not busqueda_obj:
-        return "Búsqueda no encontrada", 404
-    resultados = db.obtener_resultados_busqueda(busqueda_id)
-    return render_template(
-        "resultados.html",
-        activo="clientes",
-        cliente=cliente,
-        resultados=resultados,
-        status=busqueda_obj["status"],
-        busqueda_id=busqueda_id
-    )
+    try:
+        cliente = db.obtener_cliente(cliente_id)
+        busqueda_id = request.args.get("busqueda_id", type=int)
+        if not busqueda_id:
+            return "Búsqueda no encontrada", 404
+        busqueda_obj = db.obtener_busqueda(busqueda_id)
+        if not busqueda_obj:
+            return "Búsqueda no encontrada", 404
+        resultados = db.obtener_resultados_busqueda(busqueda_id)
+        return render_template(
+            "resultados.html",
+            activo="clientes",
+            cliente=cliente,
+            resultados=resultados,
+            status=busqueda_obj["status"],
+            busqueda_id=busqueda_id
+        )
+    except Exception as _e:
+        import traceback as _tb
+        err = _tb.format_exc()
+        print(f"\n[RESULTADOS 500 ERROR]\n{err}\n", flush=True)
+        return f"<pre style='color:red;padding:20px;font-size:13px;'>[RESULTADOS ERROR]\n{err}</pre>", 500
+
 
 
 def _int_opcional(valor):
@@ -476,6 +496,7 @@ def _parse_busqueda_form(form) -> dict:
         "comodidades_indispensables": form.getlist("comodidades_indispensables"),
         "upz": form.getlist("upz"),
         "pregunta_abierta": form["pregunta_abierta"],
+        "usar_normalizacion_llm": form.get("usar_normalizacion_llm") == "true",
     }
 
 

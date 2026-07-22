@@ -377,6 +377,22 @@
       </label>
     </div>
 
+    <div class="form-group" style="margin-bottom:0; display:inline-flex; flex-direction:column; gap:6px;">
+      <label style="font-size:12px; font-weight:600; color:var(--color-text-muted); margin-bottom:0;">Normalización IA</label>
+      <label class="checkbox-label {% if not busqueda or busqueda.get('usar_normalizacion_llm', True) != False %}checked{% endif %}"
+        id="label-normalizacion"
+        style="display:inline-flex; align-items:center; padding:6px 12px; gap:8px; width:fit-content; cursor:pointer;"
+        title="Cuando está activa, un modelo de IA clasifica las comodidades del anuncio contra un catálogo cerrado para que el filtro de comodidades indispensables funcione correctamente. Desactívala si quieres saltarte ese paso (más rápido, pero el filtro de comodidades usa campos estructurados solamente).">
+        <input type="checkbox" name="usar_normalizacion_llm" id="check_normalizacion_llm" value="true"
+          onchange="toggleCheckboxClass(this)"
+          {% if not busqueda or busqueda.get('usar_normalizacion_llm', True) != False %}checked{% endif %}>
+        Usar IA para comodidades
+      </label>
+      <p style="font-size:10px; color:var(--color-text-muted); margin:0; max-width:180px;">
+        Desactivar si el filtro descarta demasiados anuncios.
+      </p>
+    </div>
+
     <div class="form-group" style="margin-bottom:0; max-width:220px; display:inline-flex;">
       <label for="cantidad" style="margin-bottom:4px; font-size:11px;">Cantidad mínima de anuncios</label>
       <input type="number" id="cantidad" name="cantidad" value="{{ busqueda.cantidad_solicitada if busqueda else 30 }}"

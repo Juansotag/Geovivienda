@@ -100,7 +100,12 @@
                 {% endif %}
               </a>
             {% endif %}
-            <a href="{{ url_for('mapa', busqueda_id=b.id) }}" class="btn btn-secondary btn-sm" style="display:inline-flex; align-items:center; gap:4px;" title="Ver resultados de esta búsqueda en el mapa">
+             {% if b.status != 'running' %}
+               <a href="{{ url_for('busqueda_lanzar', busqueda_id=b.id) }}" class="btn btn-secondary btn-sm" style="display:inline-flex; align-items:center; gap:4px;" title="Volver a ejecutar esta búsqueda">
+                 <i data-lucide="rotate-cw" style="width:12px; height:12px;"></i> Reintentar
+               </a>
+             {% endif %}
+             <a href="{{ url_for('mapa', busqueda_id=b.id) }}" class="btn btn-secondary btn-sm" style="display:inline-flex; align-items:center; gap:4px;" title="Ver resultados de esta búsqueda en el mapa">
               <i data-lucide="map-pin" style="width:12px; height:12px;"></i> Mapa
             </a>
             {% if b.status == 'running' %}
@@ -108,9 +113,11 @@
                 <i data-lucide="square" style="width:12px; height:12px;"></i> Detener
               </button>
             {% endif %}
-            <a href="{{ url_for('busqueda_eliminar', busqueda_id=b.id) }}" class="btn btn-secondary btn-sm" style="color:var(--color-danger); border-color:rgba(197,51,54,0.2);" onclick="return confirm('¿Seguro que deseas eliminar esta búsqueda?')">
-              <i data-lucide="trash-2" style="width:12px; height:12px;"></i>
-            </a>
+            <form action="{{ url_for('busqueda_eliminar', busqueda_id=b.id) }}" method="post" style="display:inline;" onsubmit="return confirm('¿Seguro que deseas eliminar esta búsqueda?')">
+              <button type="submit" class="btn btn-secondary btn-sm" style="color:var(--color-danger); border-color:rgba(197,51,54,0.2);">
+                <i data-lucide="trash-2" style="width:12px; height:12px;"></i>
+              </button>
+            </form>
           </div>
         </td>
       </tr>

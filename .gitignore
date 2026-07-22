@@ -20,3 +20,9 @@ geodata/*
 geodata/entorno/*
 !geodata/entorno/poi/
 !geodata/entorno/poi/**
+
+# Backups y logs temporales de desarrollo
+anuncios_backup_*.csv
+last_500_error.txt
+resultado_prueba_suba.*
+

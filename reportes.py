@@ -5,6 +5,7 @@ import markdown
 from dotenv import load_dotenv
 from xhtml2pdf import pisa
 
+import config
 import db
 
 load_dotenv()
@@ -97,8 +98,8 @@ def generar_reporte(cliente: dict, anuncio: dict, score: dict) -> str:
     prompt = PROMPT_TEMPLATE.format(**contexto)
 
     respuesta = _client.messages.create(
-        model="claude-sonnet-5",
-        max_tokens=1600,
+        model=config.CLAUDE_SMART,
+        max_tokens=config.MAX_TOKENS_REPORTE,
         messages=[{"role": "user", "content": prompt}],
     )
     # respuesta.content puede traer bloques que no son de texto (ej. thinking)

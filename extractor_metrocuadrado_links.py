@@ -126,7 +126,13 @@ def extraer_links_metrocuadrado(
     try:
         for pagina in range(paginas_a_extraer):
             url_actual = url_base if pagina == 0 else f"{url_base}?from={pagina * 24}"
-            driver.get(url_actual)
+            try:
+                driver.get(url_actual)
+            except Exception:
+                try:
+                    driver.execute_script("window.stop();")
+                except Exception:
+                    pass
             time.sleep(3)  # esperar hidratacion de Next.js (los datos cargan del lado del cliente)
             html = driver.page_source
             registros_pagina = _parse_resultados(html)

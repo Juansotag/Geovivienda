@@ -3,6 +3,9 @@ import geopandas as gpd
 from shapely.geometry import Point
 import os
 import json
+import math
+
+import numpy as np
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 GEO_DIR  = os.path.join(BASE_DIR, 'static', 'geo')
@@ -12,6 +15,30 @@ CRS_WGS84   = 'EPSG:4326'
 
 
 import h3
+
+
+def _limpiar_h3_row(row_dict: dict) -> dict:
+    """Convierte valores numpy a tipos Python nativos para que json.dumps()
+    funcione al guardar h3_data como JSONB en la DB.
+    - numpy.floating  → float (NaN → None)
+    - numpy.integer   → int
+    - numpy.bool_     → bool
+    - str/None        → sin cambio
+    """
+    out = {}
+    for k, v in row_dict.items():
+        if isinstance(v, np.floating):
+            out[k] = None if math.isnan(float(v)) else float(v)
+        elif isinstance(v, np.integer):
+            out[k] = int(v)
+        elif isinstance(v, np.bool_):
+            out[k] = bool(v)
+        elif isinstance(v, float):
+            out[k] = None if math.isnan(v) else v
+        else:
+            out[k] = v
+    return out
+
 
 def _cargar_capas():
     sitp        = gpd.read_file(os.path.join(GEO_DIR, 'estaciones_sitp.geojson')).to_crs(CRS_METRICO)
@@ -43,7 +70,11 @@ def _cargar_capas():
     if os.path.exists(parques_path):
         try:
             pois_parques = gpd.read_file(parques_path)
-            if pois_parques.crs and str(pois_parques.crs).upper() in ('EPSG:6247', 'None'):
+            # pois_parques.crs puede ser None si el archivo no tiene CRS declarado;
+            # str(None).upper() devolvería 'NONE', no 'None' — y el .upper() sobre
+            # el objeto None lanzaría AttributeError. Se verifica is None primero.
+            crs_val = pois_parques.crs
+            if crs_val is None or str(crs_val).upper() == 'EPSG:6247':
                 pois_parques = pois_parques.set_crs('EPSG:6247', allow_override=True).to_crs(CRS_METRICO)
             else:
                 pois_parques = pois_parques.to_crs(CRS_METRICO)
@@ -73,7 +104,7 @@ def _cargar_capas():
             for _, row in h3_gdf.iterrows():
                 idx = str(row.get('h3_index', ''))
                 if idx:
-                    h3_lookup[idx] = {c: row[c] for c in prop_cols}
+                    h3_lookup[idx] = _limpiar_h3_row({c: row[c] for c in prop_cols})
             print(f"[spatial_analysis] GeoJSON H3 cargado: {len(h3_lookup)} hexágonos en memoria")
         except Exception as e:
             print(f"[spatial_analysis] Advertencia: no se pudo cargar el GeoJSON H3: {e}")
@@ -128,6 +159,18 @@ def _capas():
     if _CAPAS_CACHE is None:
         _CAPAS_CACHE = _cargar_capas()
     return _CAPAS_CACHE
+
+
+# Pre-cargar las capas geográficas al importar el módulo (no de forma lazy).
+# _cargar_capas() tarda 5-30s en el primer call (carga GeoJSON H3 de Bogotá
+# completo + GeoPandas de varias capas). Si se hace lazy en el primer request
+# de un usuario, ese request experimenta esa latencia sin motivo.
+# Con Flask (debug=False) el import se ejecuta al arrancar el proceso.
+try:
+    _capas()
+except Exception as _e:
+    print(f"[spatial_analysis] Advertencia: no se pudieron precargar capas geográficas: {_e}")
+    print("[spatial_analysis] Las capas se cargarán en el primer request que las necesite.")
 
 
 def upz_a_localidad_map() -> dict:
@@ -198,42 +241,80 @@ def pois_cercanos(lat: float, lon: float, radio_m: int = 700) -> dict:
 
 
 def enriquecer_inmueble(lat: float, lon: float) -> dict:
+    """
+    Enriquece un punto geográfico con datos del hexágono H3 y contexto espacial.
+
+    FAST PATH (~1ms): si el punto cae en un hexágono del GeoJSON maestro, todos
+    los valores (distancias, estrato, localidad, UPZ) se leen directamente del
+    h3_lookup en memoria — sin GeoPandas, sin .distance().min(), sin overlays.
+    El error máximo es la mitad del diámetro del hexágono res-9 (~87m), aceptable
+    para el scoring geoespacial.
+
+    FALLBACK (~5s): si el punto no está cubierto por el H3 (municipios de
+    Cundinamarca fuera de Bogotá urbana), se calculan los valores con GeoPandas
+    — más lento pero correcto para cualquier coordenada.
+    """
     (
         sitp, tm, ciclo, estratos, col_estrato, localidades, upzs, metro, municipios, _,
         pois_d1_ara, pois_malls, pois_salud, pois_educacion,
         pois_parques, h3_lookup
     ) = _capas()
 
+    h3_index = h3.latlng_to_cell(lat, lon, 9)
+    h3_data  = h3_lookup.get(h3_index)
+
+    if h3_data:
+        # ── FAST PATH ────────────────────────────────────────────────────────
+        # Todas las distancias y atributos del sector vienen del hexágono
+        # precomputado. Las columnas val_* contienen metros reales al POI más
+        # cercano para el centroide del hexágono.
+        # Mapeo explícito de nombre en GeoJSON → nombre usado internamente:
+        #   val_dist_brt  → dist_tm  (BRT = Bus Rapid Transit = TransMilenio)
+        return {
+            "h3_index":             h3_index,
+            "h3_data":              h3_data,
+            "dist_sitp":            h3_data.get("val_dist_sitp"),
+            "dist_tm":              h3_data.get("val_dist_brt"),
+            "dist_ciclo":           h3_data.get("val_dist_ciclo"),
+            "dist_metro":           h3_data.get("val_dist_metro"),
+            "dist_d1_ara":          h3_data.get("val_dist_d1_ara"),
+            "dist_centro_comercial":h3_data.get("val_dist_centro_comercial"),
+            "dist_hospital":        h3_data.get("val_dist_hospital"),
+            "dist_colegio":         h3_data.get("val_dist_colegio"),
+            "estrato_promedio_200m":h3_data.get("estrato_promedio_200m"),
+            "localidad":            h3_data.get("localidad"),
+            "upz":                  h3_data.get("upz"),
+            # Si el H3 no tiene campo 'municipio' (solo cubre Bogotá urbana),
+            # el municipio es Bogotá D.C. por definición de cobertura.
+            "municipio":            h3_data.get("municipio") or "Bogotá D.C.",
+        }
+
+    # ── FALLBACK: fuera de la cobertura del H3 ───────────────────────────────
+    # Inmuebles en Chía, La Calera u otros municipios de Cundinamarca donde el
+    # GeoJSON maestro no tiene hexágonos. Se calculan los valores directamente.
     punto = gpd.GeoSeries([Point(lon, lat)], crs=CRS_WGS84).to_crs(CRS_METRICO).iloc[0]
 
-    dist_sitp = sitp.distance(punto).min()
-    dist_tm = tm.distance(punto).min()
-    dist_ciclo = ciclo.distance(punto).min()
-    dist_metro = metro.distance(punto).min()
+    dist_sitp  = float(round(sitp.distance(punto).min(), 1))
+    dist_tm    = float(round(tm.distance(punto).min(), 1))
+    dist_ciclo = float(round(ciclo.distance(punto).min(), 1))
+    dist_metro = float(round(metro.distance(punto).min(), 1))
 
-    dist_d1_ara = pois_d1_ara.distance(punto).min() if pois_d1_ara is not None and not pois_d1_ara.empty else None
-    dist_centro_comercial = pois_malls.distance(punto).min() if pois_malls is not None and not pois_malls.empty else None
-    dist_hospital = pois_salud.distance(punto).min() if pois_salud is not None and not pois_salud.empty else None
-    dist_colegio = pois_educacion.distance(punto).min() if pois_educacion is not None and not pois_educacion.empty else None
+    dist_d1_ara           = float(round(pois_d1_ara.distance(punto).min(), 1)) if pois_d1_ara is not None and not pois_d1_ara.empty else None
+    dist_centro_comercial = float(round(pois_malls.distance(punto).min(), 1)) if pois_malls is not None and not pois_malls.empty else None
+    dist_hospital         = float(round(pois_salud.distance(punto).min(), 1)) if pois_salud is not None and not pois_salud.empty else None
+    dist_colegio          = float(round(pois_educacion.distance(punto).min(), 1)) if pois_educacion is not None and not pois_educacion.empty else None
 
-    # H3 Cell Index (Resolución 9 — micro-urbana ~300m, coincide con mapa_h3_bogota.geojson)
-    h3_index = h3.latlng_to_cell(lat, lon, 9)
+    loc_match  = localidades[localidades.contains(punto)]
+    localidad  = str(loc_match.iloc[0]['LOCNOMBRE']).strip() if not loc_match.empty else None
 
-    # Lookup de los 72 atributos del hexágono en el dict en memoria
-    h3_data = h3_lookup.get(h3_index)
-
-    # Point-in-polygon para localidad, UPZ y municipio
-    loc_match = localidades[localidades.contains(punto)]
-    localidad = str(loc_match.iloc[0]['LOCNOMBRE']).strip() if not loc_match.empty else None
-
-    upz_match = upzs[upzs.contains(punto)]
-    upz = str(upz_match.iloc[0]['NOMBRE']).strip() if not upz_match.empty else None
+    upz_match  = upzs[upzs.contains(punto)]
+    upz        = str(upz_match.iloc[0]['NOMBRE']).strip() if not upz_match.empty else None
 
     mpio_match = municipios[municipios.contains(punto)]
-    municipio = str(mpio_match.iloc[0]['MPIO_CNMBR']).strip().title() if not mpio_match.empty else None
+    municipio  = str(mpio_match.iloc[0]['MPIO_CNMBR']).strip().title() if not mpio_match.empty else None
 
-    buffer_geom = punto.buffer(200)
-    buffer_gdf = gpd.GeoDataFrame({'geometry': [buffer_geom]}, crs=CRS_METRICO)
+    buffer_geom  = punto.buffer(200)
+    buffer_gdf   = gpd.GeoDataFrame({'geometry': [buffer_geom]}, crs=CRS_METRICO)
     interseccion = gpd.overlay(estratos, buffer_gdf, how='intersection')
     if col_estrato and not interseccion.empty:
         interseccion = interseccion[interseccion[col_estrato].isin([1, 2, 3, 4, 5, 6])]
@@ -244,24 +325,79 @@ def enriquecer_inmueble(lat: float, lon: float) -> dict:
         interseccion['area'] = interseccion.geometry.area
         total = interseccion['area'].sum()
         if total > 0:
-            estrato_promedio = float(round((interseccion[col_estrato] * interseccion['area']).sum() / total, 2))
+            estrato_promedio = float(round(
+                (interseccion[col_estrato] * interseccion['area']).sum() / total, 2
+            ))
 
     return {
-        "dist_sitp": float(round(dist_sitp, 1)),
-        "dist_tm": float(round(dist_tm, 1)),
-        "dist_ciclo": float(round(dist_ciclo, 1)),
-        "dist_metro": float(round(dist_metro, 1)),
-        "dist_d1_ara": float(round(dist_d1_ara, 1)) if dist_d1_ara is not None else None,
-        "dist_centro_comercial": float(round(dist_centro_comercial, 1)) if dist_centro_comercial is not None else None,
-        "dist_hospital": float(round(dist_hospital, 1)) if dist_hospital is not None else None,
-        "dist_colegio": float(round(dist_colegio, 1)) if dist_colegio is not None else None,
-        "h3_index": h3_index,
-        "h3_data": h3_data,
-        "estrato_promedio_200m": estrato_promedio,
-        "localidad": localidad,
-        "upz": upz,
-        "municipio": municipio,
+        "h3_index":             h3_index,
+        "h3_data":              None,
+        "dist_sitp":            dist_sitp,
+        "dist_tm":              dist_tm,
+        "dist_ciclo":           dist_ciclo,
+        "dist_metro":           dist_metro,
+        "dist_d1_ara":          dist_d1_ara,
+        "dist_centro_comercial":dist_centro_comercial,
+        "dist_hospital":        dist_hospital,
+        "dist_colegio":         dist_colegio,
+        "estrato_promedio_200m":estrato_promedio,
+        "localidad":            localidad,
+        "upz":                  upz,
+        "municipio":            municipio,
     }
+
+
+def verificar_ubicacion_rapida(lat: float, lon: float) -> dict:
+    """Verifica la ubicación de un punto usando solo H3 lookup + point-in-polygon
+    para UPZ y municipio. NO calcula distancias a capas de transporte/comercio.
+
+    ~1-5ms vs ~5s de enriquecer_inmueble completo.
+
+    Se usa como pre-filtro en busqueda.py para descartar anuncios fuera de las
+    UPZ o municipios pedidos ANTES de gastar tiempo en el enriquecimiento completo.
+
+    Retorna: {"upz": str|None, "municipio": str|None, "localidad": str|None, "h3_index": str|None}
+    """
+    try:
+        (
+            _sitp, _tm, _ciclo, _estratos, _col_estrato, localidades, upzs, _metro, municipios, _,
+            _pois_d1_ara, _pois_malls, _pois_salud, _pois_educacion,
+            _pois_parques, h3_lookup
+        ) = _capas()
+
+        punto = gpd.GeoSeries([Point(lon, lat)], crs=CRS_WGS84).to_crs(CRS_METRICO).iloc[0]
+
+        # H3 lookup (O(1), instantáneo)
+        h3_index = h3.latlng_to_cell(lat, lon, 9)
+        h3_data = h3_lookup.get(h3_index, {})
+
+        # Si el H3 lookup ya tiene upz/municipio guardados, usarlos directamente
+        upz = h3_data.get("upz") if h3_data else None
+        municipio_from_h3 = h3_data.get("municipio") if h3_data else None
+
+        # Fallback: point-in-polygon solo si el H3 no tiene datos (solo para zonas no cubiertas)
+        if not upz:
+            upz_match = upzs[upzs.contains(punto)]
+            upz = str(upz_match.iloc[0]['NOMBRE']).strip() if not upz_match.empty else None
+
+        loc_match = localidades[localidades.contains(punto)]
+        localidad = str(loc_match.iloc[0]['LOCNOMBRE']).strip() if not loc_match.empty else None
+
+        if not municipio_from_h3:
+            mpio_match = municipios[municipios.contains(punto)]
+            municipio_from_h3 = str(mpio_match.iloc[0]['MPIO_CNMBR']).strip().title() if not mpio_match.empty else None
+
+        return {
+            "upz": upz,
+            "localidad": localidad,
+            "municipio": municipio_from_h3,
+            "h3_index": h3_index,
+        }
+    except Exception as e:
+        print(f"[verificar_ubicacion_rapida] Error: {e}")
+        return {"upz": None, "localidad": None, "municipio": None, "h3_index": None}
+
+
 
 
 def run_analysis(input_csv, output_csv, log_callback=print):

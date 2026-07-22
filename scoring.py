@@ -4,6 +4,8 @@ import os
 import anthropic
 from dotenv import load_dotenv
 
+import config
+
 load_dotenv()
 _client = anthropic.Anthropic()
 
@@ -177,8 +179,8 @@ Responde ÚNICAMENTE con un objeto JSON, sin texto adicional:
 
     try:
         respuesta = _client.messages.create(
-            model="claude-sonnet-4-5",
-            max_tokens=250,
+            model=config.CLAUDE_FAST,
+            max_tokens=config.MAX_TOKENS_PESOS,
             messages=[{"role": "user", "content": prompt}],
         )
         texto = "".join(b.text for b in respuesta.content if b.type == "text").strip()
@@ -283,7 +285,9 @@ def calcular_score_inmueble(cliente: dict, anuncio: dict) -> float:
 
 
 def calcular_score(cliente: dict, anuncio: dict) -> dict:
-    """Retrocompatibilidad: igual que antes pero llama a calcular_score_inmueble."""
+    """API pública de scoring clásico — devuelve {total, componentes}.
+    Usada por reportes.py y el botón 'Recalcular score'.
+    Delega en calcular_score_inmueble para no duplicar la lógica de componentes."""
     componentes = {
         "presupuesto": _score_presupuesto(cliente, anuncio),
         "estrato": _score_estrato(cliente, anuncio),
@@ -293,7 +297,7 @@ def calcular_score(cliente: dict, anuncio: dict) -> dict:
         "antiguedad_estado": _score_antiguedad_estado(anuncio),
     }
     total = sum(componentes[k] * PESOS[k] for k in PESOS)
-    return {"total": round(total, 3), "componentes": componentes}
+    return {"total": round(total, 4), "componentes": componentes}
 
 
 def rankear_candidatos(cliente: dict, anuncios: list[dict]) -> list[dict]:
@@ -308,6 +312,18 @@ def top_n(candidatos_rankeados: list[dict], n: int = 5) -> list[dict]:
     return candidatos_rankeados[:n]
 
 
+def _fmt_score(val, decimales: int = 2) -> str:
+    """Formatea un sub-score numérico a `decimales` cifras decimales.
+    Devuelve 'N/D' si val es None (pasa cuando el hexágono H3 no tiene datos),
+    evitando el TypeError que lanzaba `:.2f` sobre None."""
+    if val is None:
+        return "N/D"
+    try:
+        return f"{float(val):.{decimales}f}"
+    except (TypeError, ValueError):
+        return "N/D"
+
+
 def _resumir_anuncio_para_prompt(a: dict) -> str:
     precio = a.get("precio_venta") or 0
     admin = a.get("administracion")
@@ -316,11 +332,11 @@ def _resumir_anuncio_para_prompt(a: dict) -> str:
     sub_txt = ""
     if sub:
         sub_txt = (
-            f" | Sub-Scores del sector: Seguridad={sub.get('s_seguridad', 'N/D'):.2f}, "
-            f"Transporte={sub.get('s_transporte', 'N/D'):.2f}, "
-            f"Comercio={sub.get('s_comercio', 'N/D'):.2f}, "
-            f"Entorno Verde={sub.get('s_entorno_verde', 'N/D'):.2f}, "
-            f"Estrato/Valor={sub.get('s_estrato_valor', 'N/D'):.2f}"
+            f" | Sub-Scores del sector: Seguridad={_fmt_score(sub.get('s_seguridad'))}, "
+            f"Transporte={_fmt_score(sub.get('s_transporte'))}, "
+            f"Comercio={_fmt_score(sub.get('s_comercio'))}, "
+            f"Entorno Verde={_fmt_score(sub.get('s_entorno_verde'))}, "
+            f"Estrato/Valor={_fmt_score(sub.get('s_estrato_valor'))}"
         )
     pois = a.get("_pois_cercanos") or {}
     pois_txt = ""
@@ -417,8 +433,8 @@ formato exacto:
 
     try:
         respuesta = _client.messages.create(
-            model="claude-sonnet-4-5",
-            max_tokens=4000,
+            model=config.CLAUDE_SMART,
+            max_tokens=config.MAX_TOKENS_SCORING,
             messages=[{"role": "user", "content": prompt}],
         )
         texto = "".join(b.text for b in respuesta.content if b.type == "text").strip()

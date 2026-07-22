@@ -1,28 +1,74 @@
 import json
+import math
 import os
 from contextlib import contextmanager
 
+import psycopg2
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import ThreadedConnectionPool
 
 load_dotenv()
 
-_pool = ThreadedConnectionPool(minconn=1, maxconn=10, dsn=os.environ["DATABASE_URL"])
+db_url = os.environ.get("DATABASE_URL")
+if not db_url:
+    raise RuntimeError("La variable de entorno DATABASE_URL no está configurada.")
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+_pool = ThreadedConnectionPool(minconn=1, maxconn=10, dsn=db_url, connect_timeout=3)
+
+
+
+def _obtener_conexion_viva():
+    """Descarta conexiones muertas del pool hasta encontrar una viva."""
+    for _ in range(3):
+        try:
+            conn = _pool.getconn()
+        except Exception:
+            break
+
+        if conn.closed != 0:
+            try:
+                _pool.putconn(conn, close=True)
+            except Exception:
+                pass
+            continue
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+            conn.rollback()
+            return conn
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            try:
+                _pool.putconn(conn, close=True)
+            except Exception:
+                pass
+    return _pool.getconn()
 
 
 @contextmanager
 def get_cursor():
-    conn = _pool.getconn()
+    """Obtiene una conexion viva del pool y la devuelve al terminar."""
+    conn = _obtener_conexion_viva()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             yield cur
         conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
         _pool.putconn(conn)
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        try:
+            _pool.putconn(conn, close=True)
+        except Exception:
+            pass
+        raise
+    except Exception:
+        try:
+            conn.rollback()
+            _pool.putconn(conn)
+        except Exception:
+            pass
+        raise
 
 
 def buscar_anuncio_por_url(url: str) -> dict | None:
@@ -50,27 +96,47 @@ def obtener_hexagono(h3_index: str) -> dict | None:
 
 
 def insertar_hexagono(datos: dict):
-    columnas = list(datos.keys())
-    placeholders = [f"%({c})s" for c in columnas]
+    preparados, columnas_jsonb = _preparar_datos(datos)
+    columnas = list(preparados.keys())
+    placeholders = [f"%({c})s::jsonb" if c in columnas_jsonb else f"%({c})s" for c in columnas]
     query = f"""
         INSERT INTO hexagonos ({', '.join(columnas)})
         VALUES ({', '.join(placeholders)})
         ON CONFLICT (h3_index) DO NOTHING
     """
     with get_cursor() as cur:
-        cur.execute(query, datos)
+        cur.execute(query, preparados)
 
 
 def _preparar_datos(datos: dict) -> tuple[dict, list[str]]:
     """Convierte valores list/dict a JSON (para columnas JSONB) y devuelve
     tambien la lista de columnas que necesitan el cast ::jsonb en el SQL,
     porque psycopg2 adaptaria una lista de Python a un array nativo de
-    Postgres por defecto, no a JSON."""
+    Postgres por defecto, no a JSON.
+
+    Usa _NumpyEncoder para tolerar valores numpy.float64/int64 que puedan
+    llegar en h3_data u otras columnas JSONB sin lanzar TypeError."""
+
+    class _NumpyEncoder(json.JSONEncoder):
+        """Convierte tipos numpy a Python nativo; NaN → null JSON."""
+        def default(self, obj):  # noqa: D102
+            try:
+                import numpy as np
+                if isinstance(obj, np.floating):
+                    return None if math.isnan(float(obj)) else float(obj)
+                if isinstance(obj, np.integer):
+                    return int(obj)
+                if isinstance(obj, np.bool_):
+                    return bool(obj)
+            except ImportError:
+                pass
+            return super().default(obj)
+
     preparados = {}
     columnas_jsonb = []
     for k, v in datos.items():
         if isinstance(v, (list, dict)):
-            preparados[k] = json.dumps(v)
+            preparados[k] = json.dumps(v, cls=_NumpyEncoder)
             columnas_jsonb.append(k)
         else:
             preparados[k] = v
@@ -78,8 +144,9 @@ def _preparar_datos(datos: dict) -> tuple[dict, list[str]]:
 
 
 def insertar_anuncio(datos: dict) -> int:
-    columnas = list(datos.keys())
-    placeholders = [f"%({c})s" for c in columnas]
+    preparados, columnas_jsonb = _preparar_datos(datos)
+    columnas = list(preparados.keys())
+    placeholders = [f"%({c})s::jsonb" if c in columnas_jsonb else f"%({c})s" for c in columnas]
     query = f"""
         INSERT INTO anuncios ({', '.join(columnas)})
         VALUES ({', '.join(placeholders)})
@@ -88,7 +155,7 @@ def insertar_anuncio(datos: dict) -> int:
         RETURNING id
     """
     with get_cursor() as cur:
-        cur.execute(query, datos)
+        cur.execute(query, preparados)
         return cur.fetchone()["id"]
 
 
@@ -357,17 +424,20 @@ def obtener_todos_anuncios_con_scores() -> list[dict]:
         cur.execute(
             """
             SELECT a.*, h.dist_sitp, h.dist_tm, h.dist_ciclo, h.estrato_promedio_200m,
-                   jsonb_agg(
-                       jsonb_build_object(
-                           'cliente_nombre', c.nombre,
-                           'score', rb.score
-                       )
+                   COALESCE(
+                       jsonb_agg(
+                           jsonb_build_object(
+                               'cliente_nombre', c.nombre,
+                               'score', rb.score
+                           )
+                       ) FILTER (WHERE rb.anuncio_id IS NOT NULL),
+                       '[]'::jsonb
                    ) AS compatibilidades
             FROM anuncios a
             LEFT JOIN hexagonos h ON h.h3_index = a.h3_index
-            JOIN resultados_busqueda rb ON rb.anuncio_id = a.id
-            JOIN busquedas b ON b.id = rb.busqueda_id
-            JOIN clientes c ON c.id = b.cliente_id
+            LEFT JOIN resultados_busqueda rb ON rb.anuncio_id = a.id
+            LEFT JOIN busquedas b ON b.id = rb.busqueda_id
+            LEFT JOIN clientes c ON c.id = b.cliente_id
             GROUP BY a.id, h.h3_index, h.dist_sitp, h.dist_tm, h.dist_ciclo, h.estrato_promedio_200m
             ORDER BY a.primera_vez_visto DESC
             """
@@ -441,9 +511,9 @@ def obtener_busquedas_cliente(cliente_id: int) -> list[dict]:
         return cur.fetchall()
 
 
-def eliminar_busqueda(busqueda_id: int):
-    with get_cursor() as cur:
-        cur.execute("DELETE FROM busquedas WHERE id = %s", (busqueda_id,))
+# NOTA: la definición correcta de eliminar_busqueda está en la línea ~305 (borra
+# resultados_busqueda + busquedas). Esta segunda definición incompleta fue eliminada
+# para evitar que Python la sobrescribiera silenciosamente.
 
 
 def actualizar_busqueda(busqueda_id: int, datos: dict):
@@ -473,6 +543,25 @@ def actualizar_busqueda_status(busqueda_id: int, status: str):
             (status, busqueda_id),
         )
 
+
+def obtener_mapa_busqueda_resultados(limite: int = 5000) -> dict[str, list[int]]:
+    """Devuelve un mapa {busqueda_id_str: [anuncio_id, ...]} para renderizar
+    el filtro de búsquedas en la vista del mapa. Se limita a 'limite' filas
+    para evitar cargar toda la tabla en memoria si hay muchos resultados.
+    La clave del dict es str porque JS/Jinja2 convierten las claves numéricas
+    de JSON a strings al hacer la comparación."""
+    resultado: dict[str, list[int]] = {}
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT busqueda_id, anuncio_id FROM resultados_busqueda ORDER BY busqueda_id LIMIT %s",
+            (limite,),
+        )
+        for r in cur.fetchall():
+            b_id = str(r["busqueda_id"])
+            if b_id not in resultado:
+                resultado[b_id] = []
+            resultado[b_id].append(r["anuncio_id"])
+    return resultado
 
 
 

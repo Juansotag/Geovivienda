@@ -1,15 +1,18 @@
 import json
 import re
 import time
+from datetime import datetime
 
 import anthropic
+import h3
 import requests
 from dotenv import load_dotenv
 
+import config
 import db
 from portales import buscar_portal, extraer_detalle
 from extractor_links import configurar_driver
-from spatial_analysis import enriquecer_inmueble
+from spatial_analysis import enriquecer_inmueble, verificar_ubicacion_rapida
 from scoring import rankear_candidatos_llm, top_n
 
 load_dotenv()
@@ -132,8 +135,8 @@ Responde ÚNICAMENTE con un array JSON, sin texto adicional, con este formato ex
 
     try:
         respuesta = _client.messages.create(
-            model="claude-sonnet-5",
-            max_tokens=4000,
+            model=config.CLAUDE_SMART,
+            max_tokens=config.MAX_TOKENS_SCORING,
             messages=[{"role": "user", "content": prompt}],
         )
         texto = "".join(b.text for b in respuesta.content if b.type == "text").strip()
@@ -247,25 +250,18 @@ def _cumple_upz(busqueda: dict, anuncio: dict) -> bool:
     misma busqueda - localidad ya no es un criterio propio, cada UPZ trae
     su localidad solo como etiqueta informativa en el formulario). El
     anuncio pasa si cae en AL MENOS UNA de las UPZ pedidas, mismo patron
-    OR que _cumple_municipios."""
+    OR que _cumple_municipios.
+
+    IMPORTANTE: NO se llama enriquecer_inmueble aqui. La UPZ ya se carga
+    en procesar_anuncio_nuevo. Si no llegó (anuncio sin coordenadas o
+    fuera de Bogotá), pasamos el filtro (no descartamos por falta de dato)."""
     upz_pedidas = busqueda.get("upz") or []
     if not upz_pedidas:
         return True
 
     a_upz = anuncio.get("upz")
     if not a_upz:
-        lat, lng = anuncio.get("latitud"), anuncio.get("longitud")
-        if lat and lng:
-            try:
-                geo = enriquecer_inmueble(float(lat), float(lng))
-                a_upz = geo.get("upz")
-                if a_upz:
-                    db.actualizar_anuncio(anuncio["id"], {"upz": a_upz})
-                    anuncio["upz"] = a_upz
-            except Exception:
-                pass
-    if not a_upz:
-        return True  # sin coordenadas o fuera de Bogota - no descartar por falta de dato
+        return True  # sin dato: no descartamos por falta de UPZ
 
     a_norm = _sin_tildes(str(a_upz).strip().lower())
     for upz_pedida in upz_pedidas:
@@ -275,13 +271,18 @@ def _cumple_upz(busqueda: dict, anuncio: dict) -> bool:
     return False
 
 
+
 def _cumple_municipios(busqueda: dict, anuncio: dict) -> bool:
     """A diferencia de localidad/upz (un valor opcional), 'municipios' es
     una lista ORDENADA que toda busqueda trae obligatoriamente - el
     anuncio pasa si cae geograficamente en AL MENOS UNO de los municipios
     pedidos (no tiene que coincidir con todos). Esto es la verificacion
     real de que el anuncio quedo donde el portal deberia haberlo filtrado
-    por URL - a veces un portal se cuela con un resultado de otra zona."""
+    por URL - a veces un portal se cuela con un resultado de otra zona.
+
+    IMPORTANTE: NO se llama enriquecer_inmueble aqui. Eso ya se hizo en
+    procesar_anuncio_nuevo y municipio_geo ya debe estar en la DB. Si no
+    esta, pasamos el filtro (no descartamos por falta de dato)."""
     municipios_pedidos = busqueda.get("municipios") or []
     nombres_pedidos = [m.get("municipio") for m in municipios_pedidos if m.get("municipio")]
     if not nombres_pedidos:
@@ -289,22 +290,16 @@ def _cumple_municipios(busqueda: dict, anuncio: dict) -> bool:
 
     a_mpio = anuncio.get("municipio_geo")
     if not a_mpio:
-        lat, lng = anuncio.get("latitud"), anuncio.get("longitud")
-        if lat and lng:
-            try:
-                geo = enriquecer_inmueble(float(lat), float(lng))
-                a_mpio = geo.get("municipio")
-                if a_mpio:
-                    db.actualizar_anuncio(anuncio["id"], {"municipio_geo": a_mpio})
-                    anuncio["municipio_geo"] = a_mpio
-            except Exception:
-                pass
-    if not a_mpio:
-        return True  # sin coordenadas o fuera de Bogota+Cundinamarca - no descartar por falta de dato
+        return True  # sin dato: no descartamos (municipio_geo se carga al enriquecer)
 
     a_norm = _sin_tildes(str(a_mpio).strip().lower())
+    # Normalizar variantes de Bogotá: 'bogota d.c.', 'bogota dc', 'bogota d c' -> 'bogota'
+    a_norm = a_norm.replace(".", "").replace(",", " ")
+    a_norm = " ".join(a_norm.split())  # colapsar espacios
     for nombre in nombres_pedidos:
         b_norm = _sin_tildes(str(nombre).strip().lower())
+        b_norm = b_norm.replace(".", "").replace(",", " ")
+        b_norm = " ".join(b_norm.split())
         if b_norm in a_norm or a_norm in b_norm:
             return True
     return False
@@ -324,25 +319,71 @@ def _cumple_filtros_duros(busqueda: dict, anuncio: dict) -> bool:
 
 
 def filtrar_urls_nuevas(urls: list[str]) -> list[str]:
-    """Consulta la tabla maestra y devuelve solo las URLs que nunca se han visto."""
-    return [u for u in urls if db.buscar_anuncio_por_url(u) is None]
+    """Consulta la tabla maestra y devuelve solo las URLs que nunca se han visto.
+    Deduplica la lista de entrada para que el mismo URL no se procese dos veces
+    aunque el portal lo haya devuelto múltiples veces (paginación solapada)."""
+    urls_unicas = list(dict.fromkeys(urls))  # preserva orden, elimina duplicados
+    return [u for u in urls_unicas if db.buscar_anuncio_por_url(u) is None]
 
 
 def anuncio_sigue_activo(url: str, timeout: int = 6) -> bool:
     try:
         r = requests.head(url, timeout=timeout, allow_redirects=True)
         if r.status_code == 405:  # algunos portales no aceptan HEAD, reintentar con GET
-            r = requests.get(url, timeout=timeout, stream=True)
+            r_get = requests.get(url, timeout=timeout, stream=True)
+            status = r_get.status_code
+            r_get.close()
+            return status < 400
         return r.status_code < 400
     except requests.RequestException:
         return False
 
 
 def revalidar_anuncios_existentes(urls: list[str]):
-    """Marca como inactivos en la tabla maestra los anuncios que ya no existen."""
+    """Marca como inactivos los anuncios que ya no existen en el portal.
+    Además, re-enriquece geoespacialmente los anuncios que existen en la DB
+    pero no tienen h3_index (fantasmas viejos de antes de implementar H3)."""
     for url in urls:
+        a = db.buscar_anuncio_por_url(url)
+        if a is None:
+            continue
+
+        # Revalidar si sigue activo en el portal
         if not anuncio_sigue_activo(url):
             db.marcar_inactivo(url)
+            continue
+
+        # Re-enriquecer si no tiene H3 (anuncio fantasma sin geodatos)
+        if not a.get("h3_index") and a.get("latitud") and a.get("longitud"):
+            try:
+                lat = float(a["latitud"])
+                lng = float(a["longitud"])
+                geo = enriquecer_inmueble(lat, lng)
+                actualizaciones = {}
+                if geo.get("h3_data"):
+                    actualizaciones["h3_data"] = geo["h3_data"]
+                if geo.get("upz"):
+                    actualizaciones["upz"] = geo["upz"]
+                if geo.get("localidad"):
+                    actualizaciones["localidad"] = geo["localidad"]
+                if geo.get("municipio"):
+                    actualizaciones["municipio_geo"] = geo["municipio"]
+                # Calcular y guardar h3_index
+                import h3 as h3lib
+                h3_index = h3lib.latlng_to_cell(lat, lng, 9)
+                actualizaciones["h3_index"] = h3_index
+                if not db.obtener_hexagono(h3_index):
+                    db.insertar_hexagono({
+                        "h3_index": h3_index,
+                        "dist_sitp": geo.get("dist_sitp"),
+                        "dist_tm": geo.get("dist_tm"),
+                        "dist_ciclo": geo.get("dist_ciclo"),
+                        "estrato_promedio_200m": geo.get("estrato_promedio_200m"),
+                    })
+                if actualizaciones:
+                    db.actualizar_anuncio(a["id"], actualizaciones)
+            except Exception:
+                pass  # Si falla el re-enriquecimiento, el anuncio sigue en DB pero sin H3
 
 
 def _portal_desde_url(url: str) -> str:
@@ -391,20 +432,37 @@ def _filtros_desde_cliente(busqueda: dict, portal: str, cantidad: int, municipio
     estratos = busqueda.get("estrato_objetivo") or None
     paginas = max(1, cantidad // 20)
 
+    # UPZs pedidas: si se especificaron y el municipio es Bogotá, las usamos
+    # para orientar la URL del portal al sector correcto. El portal muestra
+    # todos los anuncios de ese sector (incluyendo los que el vendedor etiquetó
+    # con el nombre del barrio en vez de la UPZ) — la verificación geográfica
+    # real se hace después con coordenadas.
+    upzs_pedidas = busqueda.get("upz") or []
+    es_bogota = ciudad == "bogota"
+
     if portal == "fincaraiz":
-        # habitaciones/banos NO se pasan aca a proposito: FincaRaiz trata esos
-        # segmentos de URL (/N-habitaciones/N-banos) como coincidencia EXACTA,
-        # no como minimo - una busqueda de "2+ habitaciones" para una casa de
-        # estrato 5-6 (que tipicamente tiene 3+) volvia con 0 resultados reales
-        # en el sitio. El filtro de minimo ya lo aplica el prompt del LLM al
-        # puntuar (ver task #44), asi que aca solo se acota por lo que si es
-        # coincidencia exacta en FincaRaiz: tipo, estado, precio y estrato.
+        # habitaciones_min y banos_min se pasan como "N-o-mas-habitaciones" /
+        # "N-o-mas-banos" en la URL de FincaRaiz — formato confirmado en el sitio
+        # real (ej: fincaraiz.com.co/venta/apartamentos/usaquen/bogota/2-o-mas-habitaciones/2-o-mas-banos).
+        # construir_url_fincaraiz aplica el sufijo correcto automaticamente cuando se pasa un int.
+        if es_bogota and upzs_pedidas:
+            # Una búsqueda por UPZ en FincaRaíz: si hay múltiples UPZs, hacemos
+            # una corrida por cada una (se manejan arriba en ejecutar_busqueda).
+            # Aquí se pasa la primera; para múltiples UPZs se llamará esta
+            # función varias veces — el dedup de URLs evita duplicados.
+            # Formato FincaRaíz: bogota/usaquen-bogota-dc
+            upz_slug = _sin_tildes(upzs_pedidas[0].strip().lower()).replace(" ", "-")
+            ubicacion = f"bogota/{upz_slug}-bogota-dc"
+        else:
+            ubicacion = f"{ciudad}/{ciudad}-dc" if ciudad == "bogota" else ciudad
         return {
             "paginas_a_extraer": paginas,
             "operacion": "venta",
             "tipos_inmueble": tipos,
-            "ubicacion": f"{ciudad}/{ciudad}-dc" if ciudad == "bogota" else ciudad,
+            "ubicacion": ubicacion,
             "estado": estado,
+            "habitaciones": busqueda.get("habitaciones_min"),
+            "banos": busqueda.get("banos_min"),
             "precio_min": busqueda.get("presupuesto_min"),
             "precio_max": busqueda.get("presupuesto_max"),
             "estratos": estratos,
@@ -490,7 +548,13 @@ def buscar_administracion_metrocuadrado(url: str) -> int | None:
     deploy, donde si hay Selenium Grid disponible)."""
     driver = configurar_driver()
     try:
-        driver.get(url)
+        try:
+            driver.get(url)
+        except Exception:
+            try:
+                driver.execute_script("window.stop();")
+            except Exception:
+                pass
         time.sleep(3)  # esperar hidratacion de Next.js, igual que en la busqueda masiva
         html = driver.page_source
     finally:
@@ -503,18 +567,32 @@ def buscar_administracion_metrocuadrado(url: str) -> int | None:
     return int(numero) if numero else None
 
 
-def procesar_anuncio_nuevo(url: str) -> int:
-    """Visita (si hace falta), extrae, enriquece geoespacialmente e inserta
-    un anuncio nuevo en la tabla maestra. Devuelve el id insertado."""
+def procesar_anuncio_nuevo(url: str, upz_pedidas: list = None, municipios_pedidos: list = None, driver=None) -> int | None:
+    """Visita (si hace falta), extrae, verifica ubicación geográfica, enriquece
+    geoespacialmente e inserta un anuncio nuevo en la tabla maestra.
+    """
     portal = _portal_desde_url(url)
 
     if portal == "fincaraiz":
-        driver = configurar_driver()
+        driver_propio = False
+        if driver is None:
+            driver = configurar_driver()
+            driver_propio = True
         try:
-            driver.get(url)
+            try:
+                driver.get(url)
+            except Exception:
+                try:
+                    driver.execute_script("window.stop();")
+                except Exception:
+                    pass
             html = driver.page_source
         finally:
-            driver.quit()
+            if driver_propio:
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
     else:
         html = ""  # metrocuadrado ya tiene el detalle cacheado desde la busqueda
 
@@ -525,13 +603,68 @@ def procesar_anuncio_nuevo(url: str) -> int:
     try:
         lat = float(detalle["Latitud"])
         lng = float(detalle["Longitud"])
-        geo = enriquecer_inmueble(lat, lng)
     except (TypeError, ValueError, KeyError):
-        geo = {"dist_sitp": None, "dist_tm": None, "dist_ciclo": None, "estrato_promedio_200m": None}
+        pass
+
+    # --- VERIFICACIÓN RÁPIDA DE UBICACIÓN (~1ms) ---
+    # Verifica MUNICIPIO y UPZ de forma instantánea mediante H3 lookup / point-in-polygon.
+    # Si el inmueble cae en un municipio o UPZ distinto a los solicitados, se descarta
+    # en 1ms, evitando gastar tiempo/recursos en enriquecer o guardar inmuebles fuera de zona.
+    ubi_rapida = None
+    if lat is not None and lng is not None:
+        try:
+            ubi_rapida = verificar_ubicacion_rapida(lat, lng)
+
+            # 1. Filtro rápido por municipio
+            if municipios_pedidos:
+                a_mpio = ubi_rapida.get("municipio") or ""
+                a_norm = _sin_tildes(a_mpio.strip().lower()).replace(".", "").replace(",", " ")
+                a_norm = " ".join(a_norm.split())
+                pasa_mpio = False
+                for nombre in municipios_pedidos:
+                    b_norm = _sin_tildes(str(nombre).strip().lower()).replace(".", "").replace(",", " ")
+                    b_norm = " ".join(b_norm.split())
+                    if b_norm in a_norm or a_norm in b_norm:
+                        pasa_mpio = True
+                        break
+                if not pasa_mpio and a_mpio:
+                    return None  # fuera del municipio
+
+            # 2. Filtro rápido por UPZ
+            if upz_pedidas:
+                a_upz = ubi_rapida.get("upz") or ""
+                if a_upz:
+                    a_upz_norm = _sin_tildes(str(a_upz).strip().lower())
+                    pasa_upz = False
+                    for upz_pedida in upz_pedidas:
+                        u_norm = _sin_tildes(str(upz_pedida).strip().lower())
+                        if u_norm in a_upz_norm or a_upz_norm in u_norm:
+                            pasa_upz = True
+                            break
+                    if not pasa_upz:
+                        return None  # fuera de las UPZ pedidas (descarte instantaneo)
+        except Exception:
+            pass  # error en verificación: dejar pasar
+
+    # --- ENRIQUECIMIENTO COMPLETO (~5s, solo si pasó la verificación) ---
+    geo = {"dist_sitp": None, "dist_tm": None, "dist_ciclo": None, "estrato_promedio_200m": None}
+    if lat is not None and lng is not None:
+        try:
+            geo = enriquecer_inmueble(lat, lng)
+        except Exception:
+            # Si ubi_rapida ya tiene upz/municipio, copiarlos al geo fallback
+            if ubi_rapida:
+                geo["upz"] = ubi_rapida.get("upz")
+                geo["municipio"] = ubi_rapida.get("municipio")
+                geo["localidad"] = ubi_rapida.get("localidad")
 
     h3_index = None
     if lat is not None and lng is not None:
-        h3_index = f"hex_{int(lat*200)}_{int(lng*200)}"
+        # Usar h3.latlng_to_cell (resolución 9) igual que enriquecer_inmueble en
+        # spatial_analysis.py, para que el JOIN con la tabla hexagonos funcione
+        # y los sub-scores H3 tengan datos reales. El código anterior usaba un
+        # pseudo-índice "hex_{lat*200}_{lng*200}" que nunca coincidía.
+        h3_index = h3.latlng_to_cell(lat, lng, 9)
         if not db.obtener_hexagono(h3_index):
             db.insertar_hexagono({
                 "h3_index": h3_index,
@@ -547,6 +680,10 @@ def procesar_anuncio_nuevo(url: str) -> int:
         datos_anuncio["localidad"] = geo["localidad"]
     if geo.get("upz"):
         datos_anuncio["upz"] = geo["upz"]
+    if geo.get("municipio"):
+        datos_anuncio["municipio_geo"] = geo["municipio"]
+    if geo.get("h3_data"):
+        datos_anuncio["h3_data"] = geo["h3_data"]
     return db.insertar_anuncio(datos_anuncio)
 
 
@@ -569,8 +706,19 @@ def ejecutar_busqueda(busqueda: dict, portales: list[str], cantidad: int, munici
         if _fue_cancelada(busqueda_id):
             db.actualizar_busqueda_log(busqueda_id, "Búsqueda cancelada por el usuario.", "info")
             return []
-        filtros = _filtros_desde_cliente(busqueda, portal, cantidad, municipio_nombre)
-        urls = buscar_portal(portal, filtros)
+
+        upzs_pedidas = busqueda.get("upz") or []
+        if portal == "fincaraiz" and municipio_nombre == "Bogotá, D.C." and len(upzs_pedidas) > 1:
+            urls = []
+            for u_item in upzs_pedidas:
+                filtros = _filtros_desde_cliente(busqueda, portal, max(1, cantidad // len(upzs_pedidas)), municipio_nombre)
+                upz_slug = _sin_tildes(u_item.strip().lower()).replace(" ", "-")
+                filtros["ubicacion"] = f"bogota/{upz_slug}-bogota-dc"
+                urls.extend(buscar_portal(portal, filtros))
+        else:
+            filtros = _filtros_desde_cliente(busqueda, portal, cantidad, municipio_nombre)
+            urls = buscar_portal(portal, filtros)
+
         todas_urls.extend(urls)
         db.actualizar_busqueda_log(busqueda_id, f"{municipio_nombre} / {portal}: {len(urls)} anuncios encontrados", "ok")
 
@@ -578,20 +726,87 @@ def ejecutar_busqueda(busqueda: dict, portales: list[str], cantidad: int, munici
         db.actualizar_busqueda_log(busqueda_id, "Búsqueda cancelada por el usuario.", "info")
         return []
 
+    # Deduplicar todas_urls antes de usarlas (el mismo portal puede devolver
+    # la misma URL en páginas solapadas; esto evita duplicados en candidatos_activos)
+    todas_urls = list(dict.fromkeys(todas_urls))
+
     urls_existentes = [u for u in todas_urls if db.buscar_anuncio_por_url(u) is not None]
     revalidar_anuncios_existentes(urls_existentes)
 
     urls_nuevas = filtrar_urls_nuevas(todas_urls)
     db.actualizar_busqueda_log(busqueda_id, f"{municipio_nombre}: {len(urls_nuevas)} anuncios nuevos por procesar", "info")
 
-    for url in urls_nuevas:
-        if _fue_cancelada(busqueda_id):
-            db.actualizar_busqueda_log(busqueda_id, f"Búsqueda cancelada por el usuario ({len(todas_urls) - urls_nuevas.index(url)} anuncios sin procesar).", "info")
-            break
+    upz_pedidas = busqueda.get("upz") or []
+    nombres_municipios = [m.get("municipio") for m in (busqueda.get("municipios") or []) if m.get("municipio")]
+
+    descartados_ubicacion = 0
+    insertados = 0
+    fallidos = 0
+    total_nuevos = len(urls_nuevas)
+
+    driver_compartido = None
+    if any(_portal_desde_url(u) == "fincaraiz" for u in urls_nuevas):
         try:
-            procesar_anuncio_nuevo(url)
-        except Exception as e:
-            db.actualizar_busqueda_log(busqueda_id, f"Error procesando {url}: {e}", "error")
+            driver_compartido = configurar_driver()
+        except Exception:
+            driver_compartido = None
+
+    try:
+        for i, url in enumerate(urls_nuevas, 1):
+            if _fue_cancelada(busqueda_id):
+                db.actualizar_busqueda_log(busqueda_id, f"Búsqueda cancelada por el usuario ({total_nuevos - i + 1} anuncios sin procesar).", "info")
+                break
+            prefijo = f"[{i}/{total_nuevos}]"
+            url_corta = url.split("/")[-2] if "/" in url else url[-40:]
+            db.actualizar_busqueda_log(busqueda_id, f"{prefijo} ⏳ Cargando anuncio: {url_corta}...", "info")
+            t_anuncio = time.perf_counter()
+            try:
+                resultado = procesar_anuncio_nuevo(
+                    url,
+                    upz_pedidas=upz_pedidas or None,
+                    municipios_pedidos=nombres_municipios or None,
+                    driver=driver_compartido
+                )
+                elapsed = _fmt_s(time.perf_counter() - t_anuncio)
+                if resultado is None:
+                    descartados_ubicacion += 1
+                    db.actualizar_busqueda_log(busqueda_id, f"{prefijo} ⏭ Descartado zona ({elapsed}): {url_corta}", "info")
+                else:
+                    insertados += 1
+                    anuncio = db.buscar_anuncio_por_url(url)
+                    detalle = ""
+                    if anuncio:
+                        tipo  = anuncio.get("tipo_inmueble") or "?"
+                        upz_  = anuncio.get("upz") or "?"
+                        prec  = anuncio.get("precio_venta")
+                        prec_s = f"${prec/1_000_000:.0f}M" if prec else "precio N/D"
+                        h3ok  = "🔵" if anuncio.get("h3_data") else "🟡"  # azul = H3 fast path; amarillo = fallback
+                        detalle = f" — {h3ok} {tipo} en {upz_} {prec_s}"
+                    db.actualizar_busqueda_log(busqueda_id, f"{prefijo} ✅ Insertado ({elapsed}){detalle}", "ok")
+            except Exception as e:
+                import traceback
+                elapsed = _fmt_s(time.perf_counter() - t_anuncio)
+                fallidos += 1
+                tb_lines = traceback.format_exc().strip().splitlines()
+                tb_resumen = " | ".join(l.strip() for l in tb_lines[-3:] if l.strip())
+                db.actualizar_busqueda_log(
+                    busqueda_id,
+                    f"{prefijo} ❌ Error ({elapsed}) en {url_corta}: {e} → {tb_resumen}",
+                    "error"
+                )
+    finally:
+        if driver_compartido:
+            try:
+                driver_compartido.quit()
+            except Exception:
+                pass
+
+    resumen_scraping = f"{municipio_nombre}: scraping listo — {insertados} insertados"
+    if descartados_ubicacion:
+        resumen_scraping += f", {descartados_ubicacion} fuera de zona"
+    if fallidos:
+        resumen_scraping += f", {fallidos} con error"
+    db.actualizar_busqueda_log(busqueda_id, resumen_scraping, "ok" if fallidos == 0 else "warn")
 
     candidatos_activos = []
     for url in todas_urls:
@@ -607,25 +822,62 @@ def ejecutar_busqueda(busqueda: dict, portales: list[str], cantidad: int, munici
     # feature) - los ya clasificados no se vuelven a mandar al LLM.
     sin_normalizar = [a for a in candidatos_activos if a.get("comodidades_normalizadas") is None]
     if sin_normalizar:
-        db.actualizar_busqueda_log(busqueda_id, f"{municipio_nombre}: estandarizando comodidades de {len(sin_normalizar)} anuncios...", "info")
-        normalizadas = normalizar_comodidades_llm(sin_normalizar)
+        usar_llm = busqueda.get("usar_normalizacion_llm", True)
+        if usar_llm:
+            db.actualizar_busqueda_log(busqueda_id, f"{municipio_nombre}: estandarizando comodidades de {len(sin_normalizar)} anuncios...", "info")
+            normalizadas = normalizar_comodidades_llm(sin_normalizar)
+        else:
+            db.actualizar_busqueda_log(busqueda_id, f"{municipio_nombre}: normalización IA desactivada — usando campos estructurados ({len(sin_normalizar)} anuncios).", "info")
+            normalizadas = {}  # sin LLM, solo fallback estructural
+            # ADVERTENCIA: si la búsqueda tiene comodidades indispensables, el filtro
+            # duro (_cumple_comodidades_indispensables) compara contra
+            # comodidades_normalizadas, que quedará [] para estos anuncios — todos
+            # pasarán el filtro aunque no tengan las comodidades requeridas.
+            indispensables = busqueda.get("comodidades_indispensables") or []
+            if indispensables:
+                db.actualizar_busqueda_log(
+                    busqueda_id,
+                    f"⚠️ ADVERTENCIA: la búsqueda tiene {len(indispensables)} comodidad(es) indispensable(s) "
+                    f"({', '.join(indispensables[:3])}{'...' if len(indispensables) > 3 else ''}) "
+                    f"pero la normalización IA está desactivada. El filtro de indispensables NO "
+                    f"funcionará correctamente para los {len(sin_normalizar)} anuncios sin clasificar.",
+                    "error",
+                )
+
         for a in sin_normalizar:
             lista = normalizadas.get(a["id"])
-            if lista is not None:
-                db.actualizar_anuncio(a["id"], {"comodidades_normalizadas": lista})
-                a["comodidades_normalizadas"] = lista
+            if lista is None:
+                lista = []  # LLM fallo o desactivado - usamos lista vacia para que no quede None
+            # --- Fallback estructural: inferir comodidades de campos directos ---
+            lista_set = set(lista)
+            if (a.get("parqueaderos") or 0) > 0 and "Parqueadero" not in lista_set:
+                lista.append("Parqueadero")
+            db.actualizar_anuncio(a["id"], {"comodidades_normalizadas": lista})
+            a["comodidades_normalizadas"] = lista
+
 
     resultados = []
-    descartados_duro = 0
+    d_antiguedad = d_comods = d_upz = d_municipio = 0
     for a in candidatos_activos:
-        if not _cumple_filtros_duros(busqueda, a):
-            descartados_duro += 1
-            continue
+        if not _cumple_antiguedad(busqueda, a):
+            d_antiguedad += 1; continue
+        if not _cumple_comodidades_indispensables(busqueda, a):
+            d_comods += 1; continue
+        if not _cumple_upz(busqueda, a):
+            d_upz += 1; continue
+        if not _cumple_municipios(busqueda, a):
+            d_municipio += 1; continue
         resultados.append(a)
-    if descartados_duro:
+
+    razones = []
+    if d_antiguedad: razones.append(f"{d_antiguedad} por antigüedad")
+    if d_comods:    razones.append(f"{d_comods} por comodidades")
+    if d_upz:       razones.append(f"{d_upz} por UPZ")
+    if d_municipio: razones.append(f"{d_municipio} por municipio")
+    if razones:
         db.actualizar_busqueda_log(
             busqueda_id,
-            f"{municipio_nombre}: {descartados_duro} anuncios descartados por no cumplir antigüedad/comodidades indispensables",
+            f"{municipio_nombre}: {sum([d_antiguedad, d_comods, d_upz, d_municipio])} descartados — " + ", ".join(razones),
             "info",
         )
     return resultados
@@ -704,19 +956,6 @@ def ejecutar_busqueda_multi_municipio(
     total_encontrado = sum(len(v) for v in encontrados_por_municipio.values())
     faltante = cantidad - total_encontrado
 
-    if n == 1:
-        nombre = nombres[0]
-        if faltante > 0 and not _fue_cancelada(busqueda_id):
-            db.actualizar_busqueda_log(
-                busqueda_id,
-                f"{nombre}: solo se encontraron {total_encontrado}/{cantidad}, reintentando una vez más con más páginas...",
-                "info",
-            )
-            objetivo_acumulado[nombre] += max(faltante * 2, 10)
-            nuevo_resultado = ejecutar_busqueda(busqueda, portales, objetivo_acumulado[nombre], nombre, busqueda_id)
-            encontrados_por_municipio[nombre] = _merge_nuevos(encontrados_por_municipio[nombre], nuevo_resultado)
-        return _aplanar(encontrados_por_municipio)
-
     iteracion = 0
     while faltante > 0 and iteracion < max_iteraciones and not _fue_cancelada(busqueda_id):
         iteracion += 1
@@ -755,6 +994,20 @@ def ejecutar_busqueda_multi_municipio(
     return _aplanar(encontrados_por_municipio)
 
 
+
+def _fmt_s(segundos: float) -> str:
+    """Formatea una duracion en segundos a texto legible.
+    Ej: 0.3 -> '0.3s', 90.5 -> '1m 30s', 3700 -> '1h 1m'."""
+    s = int(segundos)
+    if s < 60:
+        return f"{segundos:.1f}s"
+    m, s = divmod(s, 60)
+    if m < 60:
+        return f"{m}m {s:02d}s"
+    h, m = divmod(m, 60)
+    return f"{h}h {m:02d}m"
+
+
 def ejecutar_busqueda_completa(busqueda_id: int, top: int = 5):
     """Orquesta el flujo completo de un click en 'Buscar': scraping + dedup
     (ejecutar_busqueda), scoring de todos los candidatos con el LLM (un
@@ -764,6 +1017,7 @@ def ejecutar_busqueda_completa(busqueda_id: int, top: int = 5):
     un inmueble especifico en la tabla de resultados (ver /api/reportes/generar
     en app.py), asi no se gasta tiempo/costo de Claude en reportes que
     nadie va a pedir."""
+    t_total = time.perf_counter()
     try:
         busqueda_obj = db.obtener_busqueda(busqueda_id)
         if not busqueda_obj:
@@ -777,37 +1031,81 @@ def ejecutar_busqueda_completa(busqueda_id: int, top: int = 5):
         portales = busqueda_obj["portales"]
         cantidad = busqueda_obj["cantidad_solicitada"]
         municipios = busqueda_obj.get("municipios") or []
+        nombres_mpios = ", ".join(m.get("municipio","") for m in municipios)
 
         if not municipios:
             raise ValueError("La búsqueda no tiene ningún municipio configurado")
 
+        ts = datetime.now().strftime("%d/%m/%Y %H:%M")
+        db.actualizar_busqueda_log(busqueda_id, f"--- Nueva corrida · {ts} ---", "separator")
+        db.actualizar_busqueda_log(
+            busqueda_id,
+            f"Buscando {cantidad} inmuebles en {nombres_mpios} via {', '.join(portales)}",
+            "info"
+        )
+
+        # ── Fase 1: Scraping + dedup + enriquecimiento ───────────────────────
+        db.actualizar_busqueda_log(busqueda_id, "▶ Fase 1/4: Scraping y enriquecimiento geoespacial...", "info")
+        t1 = time.perf_counter()
         candidatos = ejecutar_busqueda_multi_municipio(busqueda_obj, portales, cantidad, municipios, busqueda_id)
+        db.actualizar_busqueda_log(busqueda_id, f"✔ Fase 1/4 completada ({_fmt_s(time.perf_counter()-t1)}) — {len(candidatos)} candidatos activos", "ok")
 
         if _fue_cancelada(busqueda_id):
             db.finalizar_busqueda(busqueda_id, "cancelada")
             return
 
-        db.actualizar_busqueda_log(busqueda_id, f"{len(candidatos)} anuncios activos encontrados", "ok")
+        # ── Fase 2: Filtros duros (ya aplicados dentro de ejecutar_busqueda) ─
+        # (Los filtros duros se aplican POR municipio en ejecutar_busqueda;
+        #  lo que llega aqui ya paso por antiguedad, comodidades, UPZ y municipio)
 
         if busqueda_obj.get("cantidad_exacta") and len(candidatos) > cantidad:
             db.actualizar_busqueda_log(
                 busqueda_id,
-                f"Número exacto activado: se toman los primeros {cantidad} de {len(candidatos)} encontrados.",
+                f"▶ Fase 2/4: Número exacto activado — recortando de {len(candidatos)} a {cantidad} candidatos",
                 "info",
             )
             candidatos = candidatos[:cantidad]
+        else:
+            db.actualizar_busqueda_log(
+                busqueda_id,
+                f"▶ Fase 2/4: Filtros duros aplicados — {len(candidatos)} candidatos pasan al scoring",
+                "info",
+            )
 
-        if candidatos:
-            db.actualizar_busqueda_log(busqueda_id, "Calculando compatibilidad con IA...", "info")
-        rankeados = rankear_candidatos_llm(busqueda_obj, candidatos)
-        mejores = top_n(rankeados, top)
-        ids_top = {a["id"] for a in mejores}
+        # ── Fase 3: Scoring hibrido H3 + LLM ────────────────────────────────
+        top_n_valor = int(busqueda_obj.get("top_n") or 5)
+        db.actualizar_busqueda_log(
+            busqueda_id,
+            f"▶ Fase 3/4: Scoring híbrido (sub-scores H3 + pesos LLM + top-{top_n_valor} evaluación cualitativa)...",
+            "info"
+        )
+        t3 = time.perf_counter()
+        rankeados = rankear_candidatos_llm(busqueda_obj, candidatos, n=top_n_valor)
+        db.actualizar_busqueda_log(
+            busqueda_id,
+            f"✔ Fase 3/4 completada ({_fmt_s(time.perf_counter()-t3)}) — {len(rankeados)} inmuebles rankeados",
+            "ok"
+        )
 
+        # ── Fase 4: Persistir resultados ─────────────────────────────────────
+        db.actualizar_busqueda_log(busqueda_id, "▶ Fase 4/4: Guardando resultados...", "info")
+        mejores_ids = {a["id"] for a in rankeados[:top_n_valor]}
         for a in rankeados:
-            db.guardar_resultado_busqueda(busqueda_id, a["id"], a["score"], a["id"] in ids_top)
+            sub = a.get("score_desglose", {}).get("sub_scores")
+            db.guardar_resultado_busqueda(
+                busqueda_id, a["id"], a["score"], a["id"] in mejores_ids, sub_scores=sub
+            )
 
-        db.actualizar_busqueda_log(busqueda_id, "Busqueda completada", "ok")
+        t_total_s = _fmt_s(time.perf_counter() - t_total)
+        db.actualizar_busqueda_log(
+            busqueda_id,
+            f"✔ Búsqueda completada en {t_total_s} — {len(rankeados)} resultados (top {top_n_valor} marcados)",
+            "ok"
+        )
         db.finalizar_busqueda(busqueda_id, "done")
+
     except Exception as e:
-        db.actualizar_busqueda_log(busqueda_id, f"Error: {e}", "error")
+        import traceback
+        tb = traceback.format_exc()
+        db.actualizar_busqueda_log(busqueda_id, f"Error fatal: {e}\n{tb[-500:]}", "error")
         db.finalizar_busqueda(busqueda_id, "error")

@@ -14,14 +14,12 @@ CRITERIOS_BASE = {
 }
 
 
-def test_fincaraiz_no_recibe_habitaciones_ni_banos():
-    """Regresion: FincaRaiz trata /N-habitaciones/N-banos como coincidencia
-    EXACTA, no como minimo - confirmado en vivo (busqueda #14, casa
-    estrato 5-6 200-800M: 0 resultados con esos segmentos, 79 sin ellos).
-    Por eso _filtros_desde_cliente no debe pasarlos para este portal."""
+def test_fincaraiz_recibe_habitaciones_min_y_banos_min():
+    """FincaRaiz recibe habitaciones y banos formateados como minimo (N-o-mas-...)
+    en _filtros_desde_cliente."""
     filtros = busqueda._filtros_desde_cliente(CRITERIOS_BASE, "fincaraiz", 10, "Bogotá, D.C.")
-    assert "habitaciones" not in filtros
-    assert "banos" not in filtros
+    assert filtros["habitaciones"] == 2
+    assert filtros["banos"] == 2
 
 
 def test_metrocuadrado_si_recibe_habitaciones_min_y_banos_min():
@@ -51,10 +49,10 @@ def test_construir_url_fincaraiz_sin_habitaciones_banos_no_aparecen_en_path():
 
 
 def test_construir_url_fincaraiz_con_habitaciones_banos_si_aparecen_en_path():
-    """Si en el futuro se decide pasarlos a proposito para otro portal o
-    caso de uso, confirma que siguen siendo un simple segmento de ruta."""
+    """Confirma que las habitaciones y banos se formatean con la sintaxis de minimo N-o-mas-."""
     url = construir_url_fincaraiz(
         operacion="venta", tipos_inmueble=["apartamento"], ubicacion="bogota/bogota-dc",
         habitaciones=3, banos=2,
     )
-    assert "/3-habitaciones/2-banos" in url
+    assert "/3-o-mas-habitaciones/2-o-mas-banos" in url
+

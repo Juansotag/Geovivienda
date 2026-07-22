@@ -5,6 +5,9 @@
   <h1>Resultados de búsqueda</h1>
   <div style="display:flex; align-items:center; gap:10px;">
     {% if busqueda_id %}
+    <a href="{{ url_for('busqueda_lanzar', busqueda_id=busqueda_id) }}" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:6px;">
+      <i data-lucide="rotate-cw" style="width:16px; height:16px;"></i> Volver a ejecutar
+    </a>
     <a href="{{ url_for('mapa', busqueda_id=busqueda_id) }}" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:6px;">
       <i data-lucide="map-pin" style="width:16px; height:16px;"></i> Ver resultados en mapa
     </a>
@@ -247,13 +250,24 @@
   {% else %}
     {% if status == 'running' %}
     <div style="text-align:center; padding:20px; color:var(--color-text-muted);">
-      <div style="margin-bottom:15px; display:inline-flex; align-items:center; gap:8px; justify-content:center;">
+      <div style="margin-bottom:15px; display:inline-flex; align-items:center; gap:12px; justify-content:center;">
         <i data-lucide="loader" style="width:24px; height:24px; animation: spin 1.5s linear infinite; color:var(--color-primary);"></i>
         <h3 style="margin:0; font-size:16px; color:var(--color-text);">Extrayendo inmuebles en tiempo real...</h3>
+        <span id="search-timer" style="
+          background: rgba(99,102,241,0.15);
+          border: 1px solid rgba(99,102,241,0.35);
+          color: #A5B4FC;
+          font-family: monospace;
+          font-size: 13px;
+          font-weight: 600;
+          padding: 3px 10px;
+          border-radius: 20px;
+          letter-spacing: 0.05em;
+        ">&#9201; 00:00</span>
       </div>
       <p style="font-size:13px;">Esta operación puede tardar unos minutos. Los registros del scraper se mostrarán abajo:</p>
       
-      <div id="log-busqueda" style="margin-top:20px; text-align:left; background:#1A1D35; color:#FFF; padding:15px; border-radius:8px; font-family:monospace; font-size:13px; max-height:300px; overflow-y:auto; line-height:1.6;">
+      <div id="log-busqueda" style="margin-top:20px; text-align:left; background:#1A1D35; color:#FFF; padding:15px; border-radius:8px; font-family:monospace; font-size:13px; max-height:420px; overflow-y:auto; line-height:1.6;">
         <p style="color:#C7C5D1; margin:0;">[INFO] Conectando con los portales inmobiliarios...</p>
       </div>
 
@@ -374,60 +388,138 @@
   const busquedaId = {{ busqueda_id if busqueda_id else 'null' }};
   const currentStatus = "{{ status if status else '' }}";
   
-  if ((currentStatus === "running" || currentStatus === "cancelando") && busquedaId) {
-    let since = 0;
-    const interval = setInterval(() => {
-      fetch(`/api/status?busqueda_id=${busquedaId}&since=${since}`)
-        .then(res => res.json())
-        .then(data => {
-          const logDiv = document.getElementById("log-busqueda");
-          if (logDiv && data.logs) {
-            data.logs.forEach(log => {
-              const p = document.createElement("p");
-              p.style.margin = "4px 0";
-              if (log.level === "ok") p.style.color = "#8AFFA8";
-              if (log.level === "error") p.style.color = "#FF8A8A";
-              p.textContent = `[${log.level.toUpperCase()}] ${log.msg}`;
-              logDiv.appendChild(p);
-              logDiv.scrollTop = logDiv.scrollHeight;
-            });
-            since += data.logs.length;
-          }
-          
-          if (data.status === "done" || data.status === "cancelada") {
-            clearInterval(interval);
-            setTimeout(() => {
-              window.location.reload();
-            }, 1000);
-          } else if (data.status === "cancelando") {
-            const btn = document.getElementById("btn-detener");
-            if (btn) { btn.disabled = true; btn.textContent = "Deteniendo..."; }
-          } else if (data.status === "error") {
-            clearInterval(interval);
-            if (logDiv) {
-              const p = document.createElement("p");
-              p.style.color = "#FF8A8A";
-              p.style.fontWeight = "bold";
-              p.style.marginTop = "10px";
-              p.textContent = "[ERROR] La ejecución del scraper falló o fue cancelada.";
-              logDiv.appendChild(p);
-            }
-            const btnDetener = document.getElementById("btn-detener");
-            if (btnDetener) {
-              const btnReintentar = document.createElement("a");
-              btnReintentar.href = `/busquedas/${busquedaId}/lanzar`;
-              btnReintentar.className = "btn btn-primary btn-sm";
-              btnReintentar.style.marginTop = "16px";
-              btnReintentar.textContent = "Reintentar búsqueda";
-              btnDetener.replaceWith(btnReintentar);
-            }
-          }
-        })
-        .catch(err => {
-          console.error("Error polling status:", err);
-        });
-    }, 1500);
+  function renderLogEntry(log, logDiv) {
+    if (log.level === "separator") {
+      // Línea divisoria con fecha/hora de inicio del run
+      const sep = document.createElement("div");
+      sep.style.cssText = "display:flex;align-items:center;gap:8px;margin:12px 0 8px;opacity:0.6;";
+      sep.innerHTML = `
+        <div style="flex:1;height:1px;background:rgba(255,255,255,0.2);"></div>
+        <span style="font-size:11px;color:#8B8FA8;white-space:nowrap;">🔄 ${log.msg.replace(/---/g,'').trim()}</span>
+        <div style="flex:1;height:1px;background:rgba(255,255,255,0.2);"></div>
+      `;
+      logDiv.appendChild(sep);
+    } else {
+      const p = document.createElement("p");
+      p.style.margin = "3px 0";
+      p.style.fontSize = "12.5px";
+      if (log.level === "ok")    { p.style.color = "#8AFFA8"; }
+      if (log.level === "error") { p.style.color = "#FF8A8A"; }
+      if (log.level === "info")  { p.style.color = "#C7C5D1"; }
+      p.textContent = `[${log.level.toUpperCase()}] ${log.msg}`;
+      logDiv.appendChild(p);
+    }
+    logDiv.scrollTop = logDiv.scrollHeight;
   }
+
+  if ((currentStatus === "running" || currentStatus === "cancelando") && busquedaId) {
+
+    // ── Timer en vivo ────────────────────────────────────────────
+    const timerEl = document.getElementById("search-timer");
+    const startTs = Date.now();
+    let timerInterval = null;
+
+    function formatElapsed(ms) {
+      const totalSec = Math.floor(ms / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+
+    function startTimer() {
+      if (!timerEl) return;
+      timerInterval = setInterval(() => {
+        timerEl.textContent = `⏱ ${formatElapsed(Date.now() - startTs)}`;
+      }, 1000);
+    }
+
+    function stopTimer(finalStatus) {
+      clearInterval(timerInterval);
+      if (timerEl) {
+        const elapsed = formatElapsed(Date.now() - startTs);
+        timerEl.textContent = `✔ ${elapsed}`;
+        timerEl.style.background  = finalStatus === 'done' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)';
+        timerEl.style.borderColor = finalStatus === 'done' ? 'rgba(34,197,94,0.35)' : 'rgba(239,68,68,0.35)';
+        timerEl.style.color       = finalStatus === 'done' ? '#86EFAC' : '#FCA5A5';
+      }
+    }
+
+    startTimer();
+
+    // ── Log inicial + polling ───────────────────────────────────
+    let since = 0;
+    fetch(`/api/status?busqueda_id=${busquedaId}&since=0`)
+      .then(res => res.json())
+      .then(data => {
+        const logDiv = document.getElementById("log-busqueda");
+        if (!logDiv || !data.logs) return;
+
+        // Encontrar el índice del último separator → empezar desde ahí
+        let lastSepIdx = -1;
+        data.logs.forEach((log, idx) => {
+          if (log.level === "separator") lastSepIdx = idx;
+        });
+
+        if (lastSepIdx >= 0) {
+          since = lastSepIdx;
+          data.logs.slice(lastSepIdx).forEach(log => renderLogEntry(log, logDiv));
+        } else {
+          since = data.logs.length;
+          data.logs.forEach(log => renderLogEntry(log, logDiv));
+        }
+
+        startPolling(since + (lastSepIdx >= 0 ? data.logs.slice(lastSepIdx).length : 0));
+      })
+      .catch(() => startPolling(0));
+
+    function startPolling(initialSince) {
+      let since = initialSince;
+      const interval = setInterval(() => {
+        fetch(`/api/status?busqueda_id=${busquedaId}&since=${since}`)
+          .then(res => res.json())
+          .then(data => {
+            const logDiv = document.getElementById("log-busqueda");
+            if (logDiv && data.logs) {
+              data.logs.forEach(log => renderLogEntry(log, logDiv));
+              since += data.logs.length;
+            }
+            
+            if (data.status === "done" || data.status === "cancelada") {
+              clearInterval(interval);
+              stopTimer(data.status === "done" ? "done" : "cancelled");
+              setTimeout(() => { window.location.reload(); }, 1000);
+            } else if (data.status === "cancelando") {
+              const btn = document.getElementById("btn-detener");
+              if (btn) { btn.disabled = true; btn.textContent = "Deteniendo..."; }
+            } else if (data.status === "error") {
+              clearInterval(interval);
+              stopTimer("error");
+              if (logDiv) {
+                const p = document.createElement("p");
+                p.style.color = "#FF8A8A";
+                p.style.fontWeight = "bold";
+                p.style.marginTop = "10px";
+                p.textContent = "[ERROR] La ejecución del scraper falló o fue cancelada.";
+                logDiv.appendChild(p);
+              }
+              const btnDetener = document.getElementById("btn-detener");
+              if (btnDetener) {
+                const btnReintentar = document.createElement("a");
+                btnReintentar.href = `/busquedas/${busquedaId}/lanzar`;
+                btnReintentar.className = "btn btn-primary btn-sm";
+                btnReintentar.style.marginTop = "16px";
+                btnReintentar.textContent = "Reintentar búsqueda";
+                btnDetener.replaceWith(btnReintentar);
+              }
+            }
+          })
+          .catch(err => { console.error("Error polling status:", err); });
+      }, 1500);
+    }
+  }
+
 </script>
 
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>

@@ -75,8 +75,10 @@
                   {% if b.status == 'running' %}Progreso{% else %}Resultados{% endif %}
                 </a>
               {% endif %}
-              {% if b.status in ('error', 'cancelada') %}
-                <a href="{{ url_for('busqueda_lanzar', busqueda_id=b.id) }}" class="btn btn-primary btn-sm">Reintentar</a>
+              {% if b.status != 'running' %}
+                <a href="{{ url_for('busqueda_lanzar', busqueda_id=b.id) }}" class="btn btn-primary btn-sm" title="Volver a ejecutar esta búsqueda">
+                  <i data-lucide="rotate-cw" style="width:12px; height:12px;"></i> Reintentar
+                </a>
               {% endif %}
               <a href="{{ url_for('mapa', busqueda_id=b.id) }}" class="btn btn-secondary btn-sm" title="Ver resultados de esta búsqueda en el mapa">
                 <i data-lucide="map-pin" style="width:12px; height:12px;"></i> Mapa
@@ -84,7 +86,9 @@
               {% if b.status == 'running' %}
                 <button type="button" class="btn btn-danger btn-sm" onclick="cancelarBusqueda({{ b.id }}, this)">Detener</button>
               {% endif %}
-              <a href="{{ url_for('busqueda_eliminar', busqueda_id=b.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('¿Seguro que deseas eliminar esta búsqueda?')">Eliminar</a>
+              <form action="{{ url_for('busqueda_eliminar', busqueda_id=b.id) }}" method="post" style="display:inline;" onsubmit="return confirm('¿Seguro que deseas eliminar esta búsqueda?')">
+                <button type="submit" class="btn btn-danger btn-sm">Eliminar</button>
+              </form>
             </div>
           </td>
         </tr>

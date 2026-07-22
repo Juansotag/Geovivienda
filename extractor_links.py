@@ -68,16 +68,19 @@ def construir_url_fincaraiz(operacion, tipos_inmueble, ubicacion="bogota/bogota-
     
     if habitaciones is not None:
         hab_str = str(habitaciones)
+        # Si ya viene con formato textual (ej. "2-o-mas-habitaciones") lo usamos tal cual.
+        # Si viene como entero, usamos el formato confirmado de FincaRaiz para minimo:
+        # /2-o-mas-habitaciones (no /2-habitaciones, que es coincidencia exacta)
         if "habitaciones" not in hab_str:
-            hab_str += "-habitaciones"
+            hab_str = f"{hab_str}-o-mas-habitaciones"
         path_extras += f"/{hab_str}"
         
     if banos is not None:
         banos_str = str(banos)
-        if "banos" not in banos_str and "baños" not in banos_str:
-            banos_str += "-banos"
-        # Limpiar por si escriben "baños" con eñe
-        banos_str = banos_str.replace("baños", "banos")
+        if "banos" not in banos_str and "banos" not in banos_str:
+            # Mismo patron: /2-o-mas-banos en vez de /2-banos
+            banos_str = f"{banos_str}-o-mas-banos"
+        banos_str = banos_str.replace("banos", "banos")
         path_extras += f"/{banos_str}"
         
     # Variables de extras/amenidades (FincaRaíz las encadena con '-y-')
@@ -135,18 +138,21 @@ def construir_url_fincaraiz(operacion, tipos_inmueble, ubicacion="bogota/bogota-
         
     return url_completa
 
-def configurar_driver(reintentos: int = 3, espera_segundos: int = 5):
+def configurar_driver(reintentos: int = 3, espera_segundos: int = 5, headless: bool = None):
     """
-    Configura y retorna el driver de Selenium. Si la variable de entorno
-    SELENIUM_REMOTE_URL esta definida, se conecta a un Selenium Grid remoto
-    en vez de lanzar Chrome localmente (asi el mismo codigo sirve para
-    desarrollo local con un contenedor propio y para produccion en Railway).
+    Configura y retorna el driver de Selenium.
     """
+    if headless is None:
+        headless = os.environ.get("HEADLESS", "true").lower() != "false"
+
     opts = Options()
-    opts.add_argument("--headless")
+    if headless:
+        opts.add_argument("--headless")
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1920,1080")
+    opts.add_argument("--blink-settings=imagesEnabled=false")
+    opts.page_load_strategy = "eager"
 
     remote_url = os.environ.get("SELENIUM_REMOTE_URL")
 
@@ -156,6 +162,7 @@ def configurar_driver(reintentos: int = 3, espera_segundos: int = 5):
                 driver = webdriver.Remote(command_executor=remote_url, options=opts)
             else:
                 driver = webdriver.Chrome(options=opts)
+            driver.set_page_load_timeout(15)  # Evita bloqueos si la pagina no responde
             return driver
         except WebDriverException:
             if intento == reintentos:
@@ -234,7 +241,13 @@ def extraer_links_fincaraiz(paginas_a_extraer=2, operacion="venta", tipos_inmueb
                 else:
                     url_actual = f"{url_base.rstrip('/')}/pagina{j}"
                 
-            driver.get(url_actual)
+            try:
+                driver.get(url_actual)
+            except Exception:
+                try:
+                    driver.execute_script("window.stop();")
+                except Exception:
+                    pass
             
             # 2. Breve pausa antes de empezar a scrollear
             time.sleep(2)
