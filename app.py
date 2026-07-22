@@ -7,6 +7,7 @@ import threading
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify, redirect, url_for, Response
 
+import config
 from database import db
 from services import fx
 from services import scoring
@@ -730,7 +731,7 @@ def inmueble_perfil(anuncio_id):
         sub_scores=sub_scores,
         pois=pois,
         dimensiones=dimensiones,
-        google_maps_api_key=config.GOOGLE_MAPS_API_KEY,
+        google_maps_api_key=os.environ.get("GOOGLE_MAPS_API_KEY", "") or getattr(config, "GOOGLE_MAPS_API_KEY", ""),
     )
 
 

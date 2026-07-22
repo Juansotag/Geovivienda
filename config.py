@@ -25,4 +25,7 @@ MAX_TOKENS_REPORTE = 1600
 
 # --- Integraciones externas --------------------------------------------------
 import os
+from dotenv import load_dotenv
+load_dotenv()
+
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
