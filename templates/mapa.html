@@ -544,7 +544,7 @@
       lat: {{ a.latitud }},
       lng: {{ a.longitud }},
       url: {{ a.url | tojson }},
-      comodidades: {{ (a.comodidades or []) | tojson }},
+      comodidades: {{ (a.comodidades.split(',') | map('trim') | list if a.comodidades is string else (a.comodidades or [])) | tojson }},
       compatibilidades: {{ a.compatibilidades | tojson | safe }}
     },
     {% endfor %}
@@ -1207,17 +1207,17 @@
       if (filterAreaMin && a.area < filterAreaMin) return;
       if (filterAreaMax && a.area > filterAreaMax) return;
 
-      // Filtro de Comodidades Seleccionadas mediante Chiclets (Match Flexible Acentos/Normalización)
+      // Filtro de Comodidades Seleccionadas mediante Chiclets (Match Exacto Normalizado)
       if (selectedChiclets.size > 0) {
-        let comsList = [];
-        if (Array.isArray(a.comodidades)) comsList = a.comodidades;
-        else if (typeof a.comodidades === 'string') comsList = a.comodidades.split(',').map(s => s.trim());
+        // comodidades ya es array de strings individuales gracias al split en Jinja2
+        const comsList = Array.isArray(a.comodidades) ? a.comodidades : [];
         const comsNorm = comsList.map(c => normalizeStr(c));
 
         let tieneTodas = true;
-        for (let c of selectedChiclets) {
-          const targetNorm = normalizeStr(c);
-          const match = comsNorm.some(cn => cn.includes(targetNorm) || targetNorm.includes(cn));
+        for (let selected of selectedChiclets) {
+          const targetNorm = normalizeStr(selected);
+          // Buscar si alguna comodidad del inmueble coincide (exacta o substring)
+          const match = comsNorm.some(cn => cn === targetNorm || cn.includes(targetNorm));
           if (!match) { tieneTodas = false; break; }
         }
         if (!tieneTodas) return;
