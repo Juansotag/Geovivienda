@@ -1,4 +1,4 @@
-- =============================================================================
+-- =============================================================================
 -- MIGRACIONES HISTÓRICAS DE GEOVIVIENDA
 -- =============================================================================
 -- Este archivo contiene solo las migraciones aplicadas al schema base (schema.sql).
@@ -106,3 +106,8 @@ ALTER TABLE anuncios ADD COLUMN IF NOT EXISTS h3_data JSONB;
 ALTER TABLE busquedas ADD COLUMN IF NOT EXISTS top_n SMALLINT DEFAULT 5;
 ALTER TABLE busquedas ADD COLUMN IF NOT EXISTS usar_normalizacion_llm BOOLEAN DEFAULT TRUE;
 ALTER TABLE resultados_busqueda ADD COLUMN IF NOT EXISTS sub_scores JSONB;
+
+
+-- ── Migración 007: Fase 1 — rango de área en búsquedas ───────────────────────
+ALTER TABLE busquedas ADD COLUMN IF NOT EXISTS area_metros_min REAL;
+ALTER TABLE busquedas ADD COLUMN IF NOT EXISTS area_metros_max REAL;

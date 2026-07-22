@@ -64,6 +64,32 @@
   /* Análisis LLM */
   #llm-analisis-box { background: rgba(24,31,89,0.03); border: 1px solid var(--color-border); border-radius: var(--radius-default); padding: 16px; font-size: 14px; line-height: 1.6; color: var(--color-text); min-height: 60px; }
   #llm-analisis-box.loading { color: var(--color-text-muted); font-style: italic; }
+
+  /* ── Galería de fotos ─────────────────────────────────── */
+  .galeria-container { position: relative; width: 100%; border-radius: 10px; overflow: hidden; margin-bottom: 16px; background: #000; }
+  .galeria-img { width: 100%; max-height: 240px; object-fit: cover; display: block; transition: opacity 0.3s ease; }
+  .galeria-nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.45); border: none; color: #fff; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; z-index: 2; transition: background 0.2s; }
+  .galeria-nav:hover { background: rgba(0,0,0,0.75); }
+  .galeria-nav.prev { left: 8px; }
+  .galeria-nav.next { right: 8px; }
+  .galeria-counter { position: absolute; bottom: 8px; right: 10px; background: rgba(0,0,0,0.5); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 12px; }
+  .galeria-dots { display: flex; justify-content: center; gap: 6px; margin-top: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .galeria-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-border); cursor: pointer; transition: background 0.2s; }
+  .galeria-dot.active { background: var(--color-primary); }
+
+  /* ── Calculadora Hipotecaria ──────────────────────────── */
+  .calc-box { background: rgba(24,31,89,0.04); border: 1px solid var(--color-border); border-radius: var(--radius-default); padding: 18px; margin-top: 16px; }
+  .calc-box h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); margin: 0 0 14px; display: flex; align-items: center; gap: 8px; }
+  .calc-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; }
+  .calc-label { font-size: 12px; color: var(--color-text-muted); font-weight: 600; }
+  .calc-val { font-size: 12px; font-weight: 700; color: var(--color-primary); min-width: 60px; text-align: right; }
+  .calc-slider { flex: 1; min-width: 120px; accent-color: var(--color-primary); }
+  .calc-result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .calc-result-card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: 10px; padding: 12px 14px; }
+  .calc-result-card .val { font-size: 18px; font-weight: 800; color: var(--color-primary); }
+  .calc-result-card .lbl { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
+  .calc-moneda-select { font-size: 12px; padding: 3px 8px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-card); color: var(--color-text); cursor: pointer; }
+  .calc-tasa-input { width: 70px; padding: 3px 8px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 12px; text-align: right; background: var(--color-card); color: var(--color-text); }
 </style>
 
 <div class="page-header">
@@ -84,8 +110,45 @@
   <!-- ============================== SECCIÓN A: EL INMUEBLE ============================== -->
   <div class="perfil-seccion">
     <h2><i data-lucide="home" style="width:15px; height:15px;"></i> El Inmueble</h2>
-    {% if anuncio.foto_url %}
-    <img src="{{ anuncio.foto_url }}" alt="Foto del inmueble" style="width:100%; border-radius:10px; max-height:220px; object-fit:cover; margin-bottom:16px;">
+    {# ── Galería de fotos ─────────────────────────────── #}
+    {% set fotos = [] %}
+    {% if anuncio.get('fotos_galeria') %}
+      {% set fotos = anuncio.fotos_galeria if anuncio.fotos_galeria is iterable and anuncio.fotos_galeria is not string else [] %}
+    {% endif %}
+    {% if fotos | length == 0 and anuncio.foto_url %}
+      {% set fotos = [anuncio.foto_url] %}
+    {% endif %}
+    {% if fotos %}
+    <div class="galeria-container" id="galeria">
+      <img class="galeria-img" id="galeria-img-main" src="{{ fotos[0] }}" alt="Foto del inmueble"
+           onerror="this.style.opacity='0.2'; this.alt='Imagen no disponible';">
+      {% if fotos | length > 1 %}
+      <button class="galeria-nav prev" onclick="galeriaNav(-1)" title="Anterior">&#8249;</button>
+      <button class="galeria-nav next" onclick="galeriaNav(+1)" title="Siguiente">&#8250;</button>
+      <span class="galeria-counter" id="galeria-counter">1 / {{ fotos | length }}</span>
+      {% endif %}
+    </div>
+    {% if fotos | length > 1 %}
+    <div class="galeria-dots" id="galeria-dots">
+      {% for f in fotos %}
+      <div class="galeria-dot {% if loop.first %}active{% endif %}" onclick="galeriaIr({{ loop.index0 }})" title="Foto {{ loop.index }}"></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <script>
+      const _FOTOS = {{ fotos | tojson }};
+      let _fotoIdx = 0;
+      function _galeriaRender() {
+        const img = document.getElementById('galeria-img-main');
+        const cnt = document.getElementById('galeria-counter');
+        const dots = document.querySelectorAll('.galeria-dot');
+        if (img) { img.style.opacity = '0'; setTimeout(() => { img.src = _FOTOS[_fotoIdx]; img.style.opacity = '1'; }, 150); }
+        if (cnt) cnt.textContent = (_fotoIdx + 1) + ' / ' + _FOTOS.length;
+        dots.forEach((d, i) => d.classList.toggle('active', i === _fotoIdx));
+      }
+      function galeriaNav(dir) { _fotoIdx = (_fotoIdx + dir + _FOTOS.length) % _FOTOS.length; _galeriaRender(); }
+      function galeriaIr(idx) { _fotoIdx = idx; _galeriaRender(); }
+    </script>
     {% endif %}
 
     <p style="font-size:16px; font-weight:700; color:var(--color-primary); margin:0 0 4px;">
@@ -142,6 +205,118 @@
     <div style="margin-top:16px; font-size:13px; color:var(--color-text); line-height:1.6; border-top:1px solid var(--color-border); padding-top:14px;">
       {{ anuncio.descripcion[:600] }}{% if anuncio.descripcion|length > 600 %}…{% endif %}
     </div>
+    {% endif %}
+
+    {# ══════════ CALCULADORA DE CRÉDITO HIPOTECARIO ══════════ #}
+    {% if anuncio.precio_venta %}
+    <div class="calc-box" id="calc-credito">
+      <h3><i data-lucide="calculator" style="width:14px; height:14px;"></i> Calculadora de Crédito Hipotecario</h3>
+
+      <div class="calc-row">
+        <span class="calc-label">Precio del inmueble</span>
+        <span class="calc-val" id="calc-precio-display">${{ "{:,.0f}".format(anuncio.precio_venta) }} COP</span>
+      </div>
+
+      <div class="calc-row">
+        <span class="calc-label">Cuota inicial: <b id="calc-ci-pct">30%</b></span>
+        <input type="range" class="calc-slider" id="calc-ci" min="10" max="50" step="1" value="30" oninput="calcular()">
+        <span class="calc-val" id="calc-ci-val"></span>
+      </div>
+
+      <div class="calc-row">
+        <span class="calc-label">Plazo: <b id="calc-anios">10 años</b></span>
+        <input type="range" class="calc-slider" id="calc-plazo" min="5" max="30" step="1" value="10" oninput="calcular()">
+      </div>
+
+      <div class="calc-row">
+        <span class="calc-label">Tasa efectiva anual (%)</span>
+        <input type="number" class="calc-tasa-input" id="calc-tasa" value="11" min="1" max="40" step="0.1" oninput="calcular()">
+      </div>
+
+      <div class="calc-row" style="margin-top:6px;">
+        <span class="calc-label">Ver resultados en</span>
+        <select class="calc-moneda-select" id="calc-moneda" onchange="calcular()">
+          <option value="COP">🇨🇴 COP</option>
+          <option value="USD">🇺🇸 USD</option>
+          <option value="EUR">🇪🇺 EUR</option>
+        </select>
+        <span class="calc-label" style="font-size:10px; color:var(--color-text-muted);" id="calc-tasa-fx"></span>
+      </div>
+
+      <div class="calc-result-grid">
+        <div class="calc-result-card">
+          <div class="val" id="res-cuota">—</div>
+          <div class="lbl">Cuota mensual estimada</div>
+        </div>
+        <div class="calc-result-card">
+          <div class="val" id="res-ingreso">—</div>
+          <div class="lbl">Ingreso mínimo requerido (×3)</div>
+        </div>
+        <div class="calc-result-card">
+          <div class="val" id="res-ci">—</div>
+          <div class="lbl">Valor cuota inicial</div>
+        </div>
+        <div class="calc-result-card">
+          <div class="val" id="res-total">—</div>
+          <div class="lbl">Total a financiar</div>
+        </div>
+      </div>
+      <p style="font-size:10px; color:var(--color-text-muted); margin-top:10px; margin-bottom:0;">* Cálculo orientativo de crédito hipotecario colombiano bajo sistema de cuota fija (francés). Tasa, plazo y condiciones finales dependen del banco.</p>
+    </div>
+
+    <script>
+    (function() {
+      const PRECIO_COP = {{ anuncio.precio_venta }};
+      // Tasas de conversión estáticas (fallback) — se intenta actualizar desde API pública
+      let FX = { COP: 1, USD: 0.000244, EUR: 0.000226 };
+
+      // Intentar obtener TRM del día desde API del Banco de la República
+      fetch('https://www.datos.gov.co/resource/32sa-8pi3.json?$limit=1&$order=vigenciadesde DESC')
+        .then(r => r.json()).then(d => {
+          const trm = parseFloat((d[0] || {}).valor);
+          if (trm > 0) { FX.USD = 1 / trm; FX.EUR = 1 / (trm * 1.08); }
+        }).catch(() => {});
+
+      function fmt(n, moneda) {
+        if (moneda === 'COP') return '$' + Math.round(n).toLocaleString('es-CO') + ' COP';
+        if (moneda === 'USD') return 'US$' + (n * FX.USD).toLocaleString('en-US', {maximumFractionDigits: 0});
+        if (moneda === 'EUR') return '€' + (n * FX.EUR).toLocaleString('de-DE', {maximumFractionDigits: 0});
+        return n;
+      }
+
+      window.calcular = function() {
+        const ci_pct  = parseFloat(document.getElementById('calc-ci').value) / 100;
+        const anios   = parseInt(document.getElementById('calc-plazo').value);
+        const tasaEA  = parseFloat(document.getElementById('calc-tasa').value) / 100;
+        const moneda  = document.getElementById('calc-moneda').value;
+
+        document.getElementById('calc-ci-pct').textContent  = Math.round(ci_pct * 100) + '%';
+        document.getElementById('calc-anios').textContent   = anios + ' año' + (anios > 1 ? 's' : '');
+
+        const valorCI     = PRECIO_COP * ci_pct;
+        const financiado  = PRECIO_COP - valorCI;
+        // Tasa EA → tasa mensual: (1+EA)^(1/12) - 1
+        const tasaMes     = Math.pow(1 + tasaEA, 1 / 12) - 1;
+        const nMeses      = anios * 12;
+        // Cuota mensual fija (sistema francés)
+        const cuota = tasaMes === 0 ? financiado / nMeses
+                                    : financiado * tasaMes / (1 - Math.pow(1 + tasaMes, -nMeses));
+        const ingresoMin  = cuota * 3;
+
+        document.getElementById('res-cuota').textContent   = fmt(cuota,      moneda);
+        document.getElementById('res-ingreso').textContent = fmt(ingresoMin,  moneda);
+        document.getElementById('res-ci').textContent      = fmt(valorCI,     moneda);
+        document.getElementById('res-total').textContent   = fmt(financiado,  moneda);
+        document.getElementById('calc-ci-val').textContent = fmt(valorCI,     moneda);
+
+        const fxLabel = moneda !== 'COP' ? ('TRM ~$' + Math.round(1/FX.USD).toLocaleString('es-CO') + ' COP/USD') : '';
+        document.getElementById('calc-tasa-fx').textContent = fxLabel;
+      };
+
+      // Calcular al cargar
+      window.addEventListener('DOMContentLoaded', calcular);
+    })();
+    </script>
     {% endif %}
   </div>
 

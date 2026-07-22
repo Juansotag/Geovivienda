@@ -9,23 +9,11 @@ DATABASE_URL = os.environ["DATABASE_URL"]
 
 
 def _aplicar_sql(cur, archivo: str):
-    """Ejecuta un archivo SQL contra la conexion activa.
-    psycopg2 no acepta multiples sentencias en un solo execute() (a diferencia
-    de psql), asi que se separan por ';' y se ejecutan de una en una,
-    omitiendo bloques vacios y comentarios de linea completa."""
+    """Ejecuta un archivo SQL contra la conexion activa."""
     with open(archivo, encoding="utf-8") as f:
         sql = f.read()
-    # Separar por ';' pero respetar los bloques DO $$ ... END $$;
-    # Para simplicidad: usamos el token ';' seguido de nueva linea como delimitador.
-    # Los bloques DO $$ tienen su propio ';' al final que forma la ultima sentencia.
-    sentencias = [s.strip() for s in sql.split(";") if s.strip()]
-    for stmt in sentencias:
-        # Saltarse las lineas que son solo comentarios -- ...
-        lineas_codigo = [l for l in stmt.splitlines() if not l.strip().startswith("--")]
-        codigo = "\n".join(lineas_codigo).strip()
-        if not codigo:
-            continue
-        cur.execute(stmt)
+    if sql.strip():
+        cur.execute(sql)
     print(f"  OK: {archivo}")
 
 

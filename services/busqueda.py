@@ -305,6 +305,22 @@ def _cumple_municipios(busqueda: dict, anuncio: dict) -> bool:
     return False
 
 
+def _cumple_area_metros(busqueda: dict, anuncio: dict) -> bool:
+    """Filtro duro de area: si el anuncio tiene area conocida y la busqueda
+    especifica un rango, el anuncio debe quedar dentro. Si el anuncio no
+    tiene area registrada se le da el beneficio de la duda (pasa)."""
+    area = anuncio.get("area_metros")
+    area_min = busqueda.get("area_metros_min")
+    area_max = busqueda.get("area_metros_max")
+    if area is None:
+        return True  # sin datos: pasa
+    if area_min is not None and float(area) < float(area_min):
+        return False
+    if area_max is not None and float(area) > float(area_max):
+        return False
+    return True
+
+
 def _cumple_filtros_duros(busqueda: dict, anuncio: dict) -> bool:
     """Filtro duro real: se evalua sobre el registro YA GUARDADO en la tabla
     maestra (nuevo o previamente conocido), asi que es correcto sin importar
@@ -315,7 +331,9 @@ def _cumple_filtros_duros(busqueda: dict, anuncio: dict) -> bool:
         and _cumple_comodidades_indispensables(busqueda, anuncio)
         and _cumple_upz(busqueda, anuncio)
         and _cumple_municipios(busqueda, anuncio)
+        and _cumple_area_metros(busqueda, anuncio)
     )
+
 
 
 def filtrar_urls_nuevas(urls: list[str]) -> list[str]:

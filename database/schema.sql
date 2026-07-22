@@ -131,6 +131,8 @@ CREATE TABLE IF NOT EXISTS busquedas (
     comodidades_relevantes JSONB DEFAULT '[]'::jsonb,
     comodidades_indispensables JSONB DEFAULT '[]'::jsonb,
     upz JSONB DEFAULT '[]'::jsonb,
+    area_metros_min REAL,
+    area_metros_max REAL,
     pregunta_abierta TEXT,
     top_n SMALLINT DEFAULT 5,
     usar_normalizacion_llm BOOLEAN DEFAULT TRUE,

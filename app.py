@@ -449,6 +449,11 @@ def _int_opcional(valor):
     return int(valor) if valor else None
 
 
+def _float_opcional(valor):
+    valor = (valor or "").strip()
+    return float(valor) if valor else None
+
+
 def _upz_opciones():
     """Lista (upz_nombre, localidad_nombre) para el checkbox grid del
     formulario de busqueda, ordenada por localidad y luego por UPZ."""
@@ -496,6 +501,8 @@ def _parse_busqueda_form(form) -> dict:
         "comodidades_relevantes": form.getlist("comodidades_relevantes"),
         "comodidades_indispensables": form.getlist("comodidades_indispensables"),
         "upz": form.getlist("upz"),
+        "area_metros_min": _float_opcional(form.get("area_metros_min")),
+        "area_metros_max": _float_opcional(form.get("area_metros_max")),
         "pregunta_abierta": form["pregunta_abierta"],
         "usar_normalizacion_llm": form.get("usar_normalizacion_llm") == "true",
     }

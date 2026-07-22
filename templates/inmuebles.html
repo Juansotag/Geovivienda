@@ -1,12 +1,34 @@
 {% extends "base.html" %}
 {% block title %}Inventario de Inmuebles — Casa en Casa{% endblock %}
 {% block content %}
+<style>
+  /* ── Sort indicators ──────────────────────────────────── */
+  th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  th.sortable::after { content: ' ⇅'; font-size: 10px; color: var(--color-text-muted); }
+  th.sortable.asc::after  { content: ' ↑'; color: var(--color-primary); }
+  th.sortable.desc::after { content: ' ↓'; color: var(--color-primary); }
+
+  /* ── $/m² badge in table ──────────────────────────────── */
+  .precio-m2-hint { font-size: 11px; color: var(--color-primary); font-weight: 600; margin-top: 2px; opacity: 0.85; }
+
+  /* ── Card actions — always visible, wrap on small ────── */
+  .inmueble-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--color-border);
+  }
+  .inmueble-card-actions .btn { flex: 1 1 auto; min-width: 60px; text-align: center; font-size: 11px; padding: 5px 8px; }
+
+  /* ── $/m² in card ─────────────────────────────────────── */
+  .card-precio-m2 { font-size: 11px; font-weight: 700; color: var(--color-primary); opacity: 0.8; margin-top: 2px; }
+</style>
+
 <div class="page-header">
   <h1>Inventario de Inmuebles</h1>
   <div style="display:flex; align-items:center; gap:10px;">
-    <button type="button" class="btn btn-secondary btn-sm" onclick="estandarizarComodidades(this)" title="Clasifica el texto libre de comodidades de anuncios viejos contra el catálogo cerrado">
-      <i data-lucide="sparkles" style="width:14px; height:14px;"></i> Estandarizar comodidades
-    </button>
     {% if anuncios %}
     <div class="view-toggle">
       <button class="view-toggle-btn active" id="btn-view-table" onclick="cambiarVista('table')" title="Vista de tabla" type="button">
@@ -51,14 +73,27 @@
         <option value="apartaestudio">Apartaestudio</option>
       </select>
     </div>
+
+    {# ── Localidad — dropdown dinámico ── #}
     <div class="form-group" style="margin-bottom:0;">
       <label for="filtro-localidad" style="font-size:11px;">Localidad</label>
-      <input type="text" id="filtro-localidad" placeholder="Ej: Usaquén" oninput="aplicarFiltrosInmuebles()">
+      <select id="filtro-localidad" onchange="aplicarFiltrosInmuebles()">
+        <option value="">Todas</option>
+        {% set localidades = anuncios | map(attribute='localidad') | select | unique | sort %}
+        {% for loc in localidades %}<option value="{{ loc }}">{{ loc }}</option>{% endfor %}
+      </select>
     </div>
+
+    {# ── UPZ — dropdown dinámico filtrado por localidad ── #}
     <div class="form-group" style="margin-bottom:0;">
       <label for="filtro-upz" style="font-size:11px;">UPZ / Barrio</label>
-      <input type="text" id="filtro-upz" placeholder="Ej: Cedros" oninput="aplicarFiltrosInmuebles()">
+      <select id="filtro-upz" onchange="aplicarFiltrosInmuebles()">
+        <option value="">Todas</option>
+        {% set upzs = anuncios | map(attribute='upz') | select | unique | sort %}
+        {% for u in upzs %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
+      </select>
     </div>
+
     <div class="form-group" style="margin-bottom:0;">
       <label for="filtro-estado" style="font-size:11px;">Estado</label>
       <select id="filtro-estado" onchange="aplicarFiltrosInmuebles()">
@@ -101,16 +136,17 @@
     </div>
     <button type="button" class="btn btn-secondary btn-sm" onclick="limpiarFiltrosInmuebles()">Limpiar filtros</button>
   </div>
+
   <div class="table-responsive" id="inmuebles-table-wrapper">
-    <table>
+    <table id="tabla-inmuebles">
       <thead>
         <tr>
-          <th>ID</th>
+          <th class="sortable" data-col="id" onclick="sortTable('id')">ID</th>
           <th>Portal</th>
           <th>Tipo / Estado</th>
-          <th>Uso / Precio</th>
+          <th class="sortable" data-col="precio" onclick="sortTable('precio')">Precio / m²</th>
           <th>Ubicación / Sector</th>
-          <th>Características</th>
+          <th class="sortable" data-col="area" onclick="sortTable('area')">Características</th>
           <th>Compatibilidad por Cliente</th>
           <th>Acciones</th>
         </tr>
@@ -141,6 +177,9 @@
             <span style="font-weight:600; color:var(--color-primary);">
               ${{ "{:,.0f}".format(a.precio_venta or 0) }} COP
             </span>
+            {% if a.precio_venta and a.area_metros and a.area_metros > 0 %}
+            <div class="precio-m2-hint">${{ "{:,.0f}".format(a.precio_venta / a.area_metros) }} / m²</div>
+            {% endif %}
             <div style="font-size:12px; color:var(--color-text-muted); text-transform:capitalize;">
               {{ a.operacion }}
             </div>
@@ -208,6 +247,7 @@
     <div class="inmueble-card inmueble-tarjeta" data-id="{{ a.id }}" data-portal="{{ a.portal }}" data-tipo="{{ a.tipo_inmueble | lower if a.tipo_inmueble else '' }}"
          data-estado="{{ a.estado or '' }}" data-estrato="{{ a.estrato or 0 }}" data-habitaciones="{{ a.habitaciones or 0 }}"
          data-banos="{{ a.banos or 0 }}" data-precio="{{ a.precio_venta or 0 }}" data-area="{{ a.area_metros or 0 }}"
+         data-localidad="{{ a.localidad or '' }}" data-upz="{{ a.upz or '' }}"
          data-clientes="{{ (a.compatibilidades | map(attribute='cliente_nombre') | select | list | join('|')) if a.compatibilidades else '' }}">
       <div class="inmueble-card-foto">
         {% if a.foto_url %}
@@ -226,6 +266,9 @@
       </div>
       <div class="inmueble-card-body">
         <div class="inmueble-card-price">${{ "{:,.0f}".format(a.precio_venta or 0) }} COP</div>
+        {% if a.precio_venta and a.area_metros and a.area_metros > 0 %}
+        <div class="card-precio-m2">${{ "{:,.0f}".format(a.precio_venta / a.area_metros) }} / m²</div>
+        {% endif %}
         <div class="inmueble-card-location">{{ a.ubicacion_texto or "Ubicación no especificada" }}</div>
         <div class="inmueble-card-specs">{{ a.habitaciones or "—" }} hab · {{ a.banos or "—" }} baños · {{ a.area_metros or "—" }} m² · Estrato {{ a.estrato or "—" }}</div>
 
@@ -249,9 +292,17 @@
         {% endif %}
 
         <div class="inmueble-card-actions">
+          <a href="{{ url_for('inmueble_perfil', anuncio_id=a.id) }}" class="btn btn-primary btn-sm" style="display:inline-flex; align-items:center; gap:4px;">
+            <i data-lucide="layout-panel-left" style="width:11px; height:11px;"></i> Perfil
+          </a>
           <a href="{{ a.url }}" target="_blank" class="btn btn-secondary btn-sm">Anuncio</a>
           <a href="{{ url_for('mapa', focus_id=a.id) }}" class="btn btn-secondary btn-sm">Mapa</a>
           <a href="{{ url_for('anuncio_editar', anuncio_id=a.id) }}" class="btn btn-secondary btn-sm">Editar</a>
+          <form action="{{ url_for('anuncio_eliminar', anuncio_id=a.id) }}" method="post"
+                onsubmit="return confirm('¿Seguro que deseas eliminar este inmueble?');"
+                style="margin:0; display:contents;">
+            <button type="submit" class="btn btn-danger btn-sm">Eliminar</button>
+          </form>
         </div>
       </div>
     </div>
@@ -263,70 +314,138 @@
 </div>
 
 <script>
+  // ── Vista tabla / tarjetas ────────────────────────────────
   function cambiarVista(vista) {
     const tabla = document.getElementById('inmuebles-table-wrapper');
-    const grid = document.getElementById('inmuebles-grid');
+    const grid  = document.getElementById('inmuebles-grid');
     const btnTabla = document.getElementById('btn-view-table');
-    const btnGrid = document.getElementById('btn-view-grid');
+    const btnGrid  = document.getElementById('btn-view-grid');
     if (!tabla || !grid) return;
 
     if (vista === 'grid') {
       tabla.style.display = 'none';
-      grid.style.display = 'grid';
+      grid.style.display  = 'grid';
       btnTabla.classList.remove('active');
       btnGrid.classList.add('active');
     } else {
       tabla.style.display = '';
-      grid.style.display = 'none';
+      grid.style.display  = 'none';
       btnTabla.classList.add('active');
       btnGrid.classList.remove('active');
     }
     localStorage.setItem('inmuebles_vista', vista);
   }
 
-  // --- Filtros de caracteristicas (aplican a tabla y tarjetas por igual) ---
+  // ── Filtros ───────────────────────────────────────────────
   function aplicarFiltrosInmuebles() {
-    const id = document.getElementById('filtro-id').value.trim();
+    const id          = document.getElementById('filtro-id').value.trim();
     const clienteFiltro = document.getElementById('filtro-cliente').value;
-    const portal = document.getElementById('filtro-portal').value;
-    const tipo = document.getElementById('filtro-tipo').value;
-    const estado = document.getElementById('filtro-estado').value;
-    const loc = (document.getElementById('filtro-localidad').value || '').trim().toLowerCase();
-    const upz = (document.getElementById('filtro-upz').value || '').trim().toLowerCase();
-    const estratoMin = parseFloat(document.getElementById('filtro-estrato').value) || 0;
-    const habsMin = parseFloat(document.getElementById('filtro-habs').value) || 0;
-    const banosMin = parseFloat(document.getElementById('filtro-banos').value) || 0;
-    const precioMin = parseFloat(document.getElementById('filtro-precio-min').value) || 0;
-    const precioMax = parseFloat(document.getElementById('filtro-precio-max').value) || Infinity;
-    const areaMin = parseFloat(document.getElementById('filtro-area-min').value) || 0;
-    const areaMax = parseFloat(document.getElementById('filtro-area-max').value) || Infinity;
+    const portal      = document.getElementById('filtro-portal').value;
+    const tipo        = document.getElementById('filtro-tipo').value;
+    const estado      = document.getElementById('filtro-estado').value;
+    const loc         = (document.getElementById('filtro-localidad').value || '').trim().toLowerCase();
+    const upz         = (document.getElementById('filtro-upz').value || '').trim().toLowerCase();
+    const estratoMin  = parseFloat(document.getElementById('filtro-estrato').value) || 0;
+    const habsMin     = parseFloat(document.getElementById('filtro-habs').value)    || 0;
+    const banosMin    = parseFloat(document.getElementById('filtro-banos').value)   || 0;
+    const precioMin   = parseFloat(document.getElementById('filtro-precio-min').value) || 0;
+    const precioMax   = parseFloat(document.getElementById('filtro-precio-max').value) || Infinity;
+    const areaMin     = parseFloat(document.getElementById('filtro-area-min').value)   || 0;
+    const areaMax     = parseFloat(document.getElementById('filtro-area-max').value)   || Infinity;
 
     document.querySelectorAll('.inmueble-fila, .inmueble-tarjeta').forEach(el => {
       const clientesInmueble = (el.dataset.clientes || '').split('|');
-      const coincide = (!id || el.dataset.id === id)
+      const coincide = (!id           || el.dataset.id === id)
         && (!clienteFiltro || clientesInmueble.includes(clienteFiltro))
-        && (!portal || el.dataset.portal === portal)
-        && (!tipo || el.dataset.tipo === tipo)
-        && (!estado || el.dataset.estado === estado)
-        && (!loc || (el.dataset.localidad || '').toLowerCase().includes(loc))
-        && (!upz || (el.dataset.upz || '').toLowerCase().includes(upz))
-        && (parseFloat(el.dataset.estrato) || 0) >= estratoMin
-        && (parseFloat(el.dataset.habitaciones) || 0) >= habsMin
-        && (parseFloat(el.dataset.banos) || 0) >= banosMin
-        && (parseFloat(el.dataset.precio) || 0) >= precioMin
-        && (parseFloat(el.dataset.precio) || 0) <= precioMax
-        && (parseFloat(el.dataset.area) || 0) >= areaMin
-        && (parseFloat(el.dataset.area) || 0) <= areaMax;
+        && (!portal        || el.dataset.portal === portal)
+        && (!tipo          || el.dataset.tipo === tipo)
+        && (!estado        || el.dataset.estado === estado)
+        && (!loc           || (el.dataset.localidad || '').toLowerCase() === loc || loc === 'todas')
+        && (!upz           || (el.dataset.upz || '').toLowerCase() === upz || upz === 'todas')
+        && (parseFloat(el.dataset.estrato)       || 0) >= estratoMin
+        && (parseFloat(el.dataset.habitaciones)  || 0) >= habsMin
+        && (parseFloat(el.dataset.banos)         || 0) >= banosMin
+        && (parseFloat(el.dataset.precio)        || 0) >= precioMin
+        && (parseFloat(el.dataset.precio)        || 0) <= precioMax
+        && (parseFloat(el.dataset.area)          || 0) >= areaMin
+        && (parseFloat(el.dataset.area)          || 0) <= areaMax;
       el.style.display = coincide ? '' : 'none';
     });
   }
 
   function limpiarFiltrosInmuebles() {
-    ['filtro-id', 'filtro-cliente', 'filtro-portal', 'filtro-tipo', 'filtro-estado', 'filtro-estrato'].forEach(id => document.getElementById(id).value = '');
-    ['filtro-localidad', 'filtro-upz', 'filtro-habs', 'filtro-banos', 'filtro-precio-min', 'filtro-precio-max', 'filtro-area-min', 'filtro-area-max'].forEach(id => document.getElementById(id).value = '');
+    ['filtro-id','filtro-cliente','filtro-portal','filtro-tipo','filtro-estado',
+     'filtro-estrato','filtro-localidad','filtro-upz'].forEach(id => document.getElementById(id).value = '');
+    ['filtro-habs','filtro-banos','filtro-precio-min','filtro-precio-max',
+     'filtro-area-min','filtro-area-max'].forEach(id => document.getElementById(id).value = '');
     aplicarFiltrosInmuebles();
   }
 
+  // ── Localidad → UPZ cascading filter ─────────────────────
+  // Construir mapa loc→upzs a partir de los datos ya en el DOM
+  const _locUpzMap = {};
+  document.querySelectorAll('.inmueble-fila, .inmueble-tarjeta').forEach(el => {
+    const loc = el.dataset.localidad || '';
+    const upz = el.dataset.upz || '';
+    if (!loc) return;
+    if (!_locUpzMap[loc]) _locUpzMap[loc] = new Set();
+    if (upz) _locUpzMap[loc].add(upz);
+  });
+
+  document.getElementById('filtro-localidad')?.addEventListener('change', function() {
+    const sel = document.getElementById('filtro-upz');
+    if (!sel) return;
+    const loc = this.value;
+    // Reconstruir opciones de UPZ
+    while (sel.options.length > 1) sel.remove(1);
+    const upzs = loc && _locUpzMap[loc] ? [..._locUpzMap[loc]].sort() : [...new Set(Object.values(_locUpzMap).flatMap(s => [...s]))].sort();
+    upzs.forEach(u => { const o = document.createElement('option'); o.value = u; o.textContent = u; sel.appendChild(o); });
+    aplicarFiltrosInmuebles();
+  });
+
+  // ── Ordenamiento de tabla por columna ────────────────────
+  let _sortCol = null;
+  let _sortAsc = true;
+
+  function sortTable(col) {
+    const tabla = document.getElementById('tabla-inmuebles');
+    if (!tabla) return;
+
+    // Toggle direction if same col
+    if (_sortCol === col) { _sortAsc = !_sortAsc; } else { _sortCol = col; _sortAsc = true; }
+
+    // Update header indicators
+    tabla.querySelectorAll('th.sortable').forEach(th => {
+      th.classList.remove('asc', 'desc');
+      if (th.dataset.col === col) th.classList.add(_sortAsc ? 'asc' : 'desc');
+    });
+
+    const tbody = tabla.querySelector('tbody');
+    const filas = [...tbody.querySelectorAll('tr.inmueble-fila')];
+
+    filas.sort((a, b) => {
+      let va, vb;
+      if (col === 'id')     { va = parseInt(a.dataset.id);     vb = parseInt(b.dataset.id); }
+      if (col === 'precio') { va = parseFloat(a.dataset.precio); vb = parseFloat(b.dataset.precio); }
+      if (col === 'area')   { va = parseFloat(a.dataset.area);   vb = parseFloat(b.dataset.area); }
+      if (isNaN(va)) va = 0; if (isNaN(vb)) vb = 0;
+      return _sortAsc ? va - vb : vb - va;
+    });
+
+    filas.forEach(f => tbody.appendChild(f));
+
+    // Sync card order in grid
+    const grid = document.getElementById('inmuebles-grid');
+    if (grid) {
+      const cards = [...grid.querySelectorAll('.inmueble-tarjeta')];
+      const idOrder = filas.map(f => f.dataset.id);
+      const cardMap = {};
+      cards.forEach(c => cardMap[c.dataset.id] = c);
+      idOrder.forEach(id => { if (cardMap[id]) grid.appendChild(cardMap[id]); });
+    }
+  }
+
+  // ── Init ─────────────────────────────────────────────────
   window.addEventListener('DOMContentLoaded', () => {
     const guardada = localStorage.getItem('inmuebles_vista');
     if (guardada === 'grid') cambiarVista('grid');
