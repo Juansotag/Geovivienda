@@ -322,6 +322,7 @@ def mapa():
         focus_id=focus_id,
         busqueda_id=busqueda_id,
         busqueda_resultados_map=busqueda_resultados_map,
+        catalogo_comodidades=busqueda.CATALOGO_COMODIDADES,
         google_maps_api_key=os.environ.get("GOOGLE_MAPS_API_KEY", "") or getattr(config, "GOOGLE_MAPS_API_KEY", ""),
     )
 
@@ -477,27 +478,52 @@ def anuncio_editar(anuncio_id):
 
 @app.route("/inmuebles/<int:anuncio_id>/recalcular-score", methods=["POST"])
 def anuncio_recalcular_score(anuncio_id):
-    """Reevalua un anuncio (ya corregido a mano) contra cada busqueda a la
-    que pertenece, usando el LLM - para cuando un error de scraping
-    evidente (ej. area mal capturada) infla o hunde el score sin que el
-    dato real de fondo haya cambiado."""
+    """Calcula el score LLM de un inmueble contra cualquier busqueda.
+    Si el inmueble ya tiene un resultado guardado para esa busqueda, actualiza
+    el score en DB. Si no existe resultado previo, igual devuelve el score calculado.
+    Requiere busqueda_id en el body JSON."""
     anuncio_obj = db.obtener_anuncio(anuncio_id)
     if not anuncio_obj:
         return jsonify({"status": "error", "message": "Inmueble no encontrado"}), 404
 
-    resultados = db.obtener_resultados_por_anuncio(anuncio_id)
-    if not resultados:
-        return jsonify({"status": "error", "message": "Este inmueble no aparece en ninguna búsqueda todavía."})
+    body = request.get_json(silent=True) or {}
+    busqueda_id = body.get("busqueda_id")
+    if not busqueda_id:
+        return jsonify({"status": "error", "message": "Selecciona una búsqueda para calcular el score."}), 400
 
-    actualizados = 0
-    for r in resultados:
-        scores = scoring.calcular_scores_llm(r, [anuncio_obj])
+    busqueda_obj = db.obtener_busqueda(int(busqueda_id))
+    if not busqueda_obj:
+        return jsonify({"status": "error", "message": "Búsqueda no encontrada."}), 404
+
+    # Calcular score usando LLM
+    try:
+        scores = scoring.calcular_scores_llm(busqueda_obj, [anuncio_obj])
         info = scores.get(anuncio_id)
-        if info is not None:
-            db.actualizar_score_resultado(r["resultado_id"], info["score"])
-            actualizados += 1
+        if info is None:
+            return jsonify({"status": "error", "message": "El LLM no devolvió un score. Intenta de nuevo."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Error al calcular score: {e}"}), 500
 
-    return jsonify({"status": "ok", "actualizados": actualizados, "total": len(resultados)})
+    score_val = info["score"]
+    razon = info.get("razon", "")
+
+    # Si existe un resultado en DB para esta búsqueda, actualizarlo
+    actualizado_en_db = False
+    try:
+        resultados = db.obtener_resultados_por_anuncio(anuncio_id)
+        for r in (resultados or []):
+            if r.get("busqueda_id") == int(busqueda_id):
+                db.actualizar_score_resultado(r["resultado_id"], score_val)
+                actualizado_en_db = True
+    except Exception:
+        pass
+
+    return jsonify({
+        "status": "ok",
+        "score": score_val,
+        "razon": razon,
+        "actualizado_en_db": actualizado_en_db,
+    })
 
 
 @app.route("/inmuebles/<int:anuncio_id>/buscar-administracion", methods=["POST"])
@@ -857,6 +883,12 @@ def inmueble_perfil(anuncio_id):
     dimensiones = scoring.DIMENSIONES_H3
 
     key = os.environ.get("GOOGLE_MAPS_API_KEY", "") or getattr(config, "GOOGLE_MAPS_API_KEY", "")
+    try:
+        busquedas_list = db.obtener_todas_busquedas() or []
+    except Exception as _e:
+        logging.error(f"[inmueble_perfil] Error al obtener búsquedas para chatbot: {_e}")
+        busquedas_list = []
+    logging.info(f"[inmueble_perfil] anuncio_id={anuncio_id} busquedas_count={len(busquedas_list)}")
     return render_template(
         "inmueble_perfil.html",
         activo="inmuebles",
@@ -865,6 +897,7 @@ def inmueble_perfil(anuncio_id):
         pois=pois,
         dimensiones=dimensiones,
         google_maps_api_key=key,
+        busquedas=busquedas_list,
     )
 
 
@@ -897,6 +930,114 @@ def inmueble_analisis_llm(anuncio_id):
     return jsonify({"status": "ok", "razon": razon})
 
 
+@app.route("/api/inmuebles/<int:anuncio_id>/score-desglosado", methods=["POST"])
+def inmueble_score_desglosado(anuncio_id):
+    """Calcula el scoring híbrido completo de un inmueble contra una búsqueda específica.
+    Usa pesos LLM unificados (12 dimensiones: 5 H3 + 7 inmueble) que suman 1.0."""
+    body = request.get_json(silent=True) or {}
+    busqueda_id = body.get("busqueda_id")
+    if not busqueda_id:
+        return jsonify({"status": "error", "message": "Se requiere busqueda_id"}), 400
+
+    anuncio = db.buscar_anuncio_por_id(anuncio_id)
+    if not anuncio:
+        return jsonify({"status": "error", "message": "Inmueble no encontrado"}), 404
+
+    busqueda_obj = db.obtener_busqueda(int(busqueda_id))
+    if not busqueda_obj:
+        return jsonify({"status": "error", "message": "Búsqueda no encontrada"}), 404
+
+    cliente_obj = db.obtener_cliente(busqueda_obj["cliente_id"]) or {}
+
+    try:
+        H3_DIMS = ["s_seguridad", "s_transporte", "s_comercio", "s_entorno_verde", "s_estrato_valor"]
+        INM_DIMS = ["presupuesto", "estrato", "habitaciones_banos", "upz", "tipo_vivienda",
+                    "antiguedad", "comodidades_indispensables", "comodidades_relevantes", "administracion"]
+
+        # 1. Sub-scores H3 (Python puro)
+        sub_scores = scoring.calcular_sub_scores(anuncio)
+        anuncio["_sub_scores"] = sub_scores
+
+        # POIs para el prompt LLM
+        lat, lon = anuncio.get("latitud"), anuncio.get("longitud")
+        if lat and lon:
+            try:
+                from services import spatial_analysis as _sa
+                anuncio["_pois_cercanos"] = _sa.pois_cercanos(float(lat), float(lon), radio_m=700)
+            except Exception:
+                pass
+
+        # 2. Pesos LLM v2 — 13 dimensiones unificadas personalizadas por perfil
+        pesos_llm = scoring.solicitar_pesos_llm_v2(busqueda_obj, cliente_obj)
+
+        # 3. Valores de cada componente del inmueble
+        s_coms_ind = scoring._score_comodidades_indispensables(busqueda_obj, anuncio)
+        s_coms_rel = scoring._score_comodidades_relevantes(busqueda_obj, anuncio)
+        s_admin = scoring._score_administracion(anuncio)
+        s_upz = scoring._score_upz(busqueda_obj, anuncio)
+
+        inmueble_componentes = {
+            "presupuesto":              round(scoring._score_presupuesto(busqueda_obj, anuncio), 3),
+            "estrato":                  round(scoring._score_estrato(busqueda_obj, anuncio), 3),
+            "habitaciones_banos":       round(scoring._score_habitaciones_banos(busqueda_obj, anuncio), 3),
+            "upz":                      round(s_upz, 3) if s_upz is not None else None,
+            "tipo_vivienda":            round(scoring._score_tipo_vivienda(busqueda_obj, anuncio), 3),
+            "antiguedad":               round(scoring._score_antiguedad_estado(anuncio), 3),
+            "comodidades_indispensables": round(s_coms_ind, 3) if s_coms_ind is not None else None,
+            "comodidades_relevantes":   round(s_coms_rel, 3) if s_coms_rel is not None else None,
+            "administracion":           round(s_admin, 3) if s_admin is not None else None,
+        }
+
+        # 4. Score híbrido unificado: Σ(valor × peso) para todos los que tengan dato
+        score_hibrido = 0.0
+        for dim in H3_DIMS:
+            val = sub_scores.get(dim)
+            if val is not None:
+                score_hibrido += float(val) * pesos_llm.get(dim, 0)
+        for dim in INM_DIMS:
+            val = inmueble_componentes.get(dim)
+            if val is not None:
+                score_hibrido += float(val) * pesos_llm.get(dim, 0)
+        score_hibrido = round(score_hibrido, 4)
+
+        # 5. Contribuciones individuales: valor × peso
+        h3_contribuciones = {
+            dim: round(float(sub_scores[dim]) * pesos_llm.get(dim, 0), 4)
+                 if sub_scores.get(dim) is not None else None
+            for dim in H3_DIMS
+        }
+        inm_contribuciones = {
+            dim: round(float(inmueble_componentes[dim]) * pesos_llm.get(dim, 0), 4)
+                 if inmueble_componentes.get(dim) is not None else None
+            for dim in INM_DIMS
+        }
+
+        # 6. Razón cualitativa LLM
+        scores_llm_result = scoring.calcular_scores_llm(busqueda_obj, [anuncio])
+        info_llm = scores_llm_result.get(anuncio_id)
+        score_final = info_llm["score"] if info_llm else score_hibrido
+        razon_llm = info_llm["razon"] if info_llm else ""
+
+        return jsonify({
+            "status": "ok",
+            "score_final": score_final,
+            "score_hibrido": score_hibrido,
+            "cliente_nombre": cliente_obj.get("nombre", ""),
+            "busqueda_id": busqueda_id,
+            "sub_scores": {k: round(v, 3) if v is not None else None for k, v in sub_scores.items()},
+            "pesos_llm": pesos_llm,
+            "h3_contribuciones": h3_contribuciones,
+            "inmueble_componentes": inmueble_componentes,
+            "inm_contribuciones": inm_contribuciones,
+            "razon_llm": razon_llm,
+        })
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        logging.error(f"[score-desglosado] anuncio={anuncio_id} busqueda={busqueda_id}: {e}\n{tb}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @app.route("/api/inmuebles/<int:anuncio_id>/chat", methods=["POST"])
 def inmueble_chat(anuncio_id):
     """Chatbot del Asesor IA: responde preguntas sobre el inmueble usando Claude con historial de conversación."""
@@ -908,58 +1049,183 @@ def inmueble_chat(anuncio_id):
 
     body = request.get_json(silent=True) or {}
     user_message = (body.get("message") or "").strip()
-    history = body.get("history") or []  # [{"role": "user"|"assistant", "content": "..."}]
+    history = body.get("history") or []
+    busqueda_id = body.get("busqueda_id")
 
     if not user_message:
         return jsonify({"error": "Mensaje vacío"}), 400
 
-    # Construir contexto del inmueble para el system prompt
-    precio_m2 = ""
-    if anuncio.get("precio") and anuncio.get("area"):
-        try:
-            precio_m2 = f" | Precio/m²: ${int(anuncio['precio']) // int(anuncio['area']):,.0f} COP/m²"
-        except Exception:
-            pass
+    def _safe_num(val, default=0):
+        try: return float(val)
+        except (TypeError, ValueError): return default
 
-    comodidades_str = ""
-    coms = anuncio.get("comodidades") or []
+    precio_val = _safe_num(anuncio.get('precio_venta'))
+    area_val   = _safe_num(anuncio.get('area_metros'))
+
+    # ── Inmueble JSON ──────────────────────────────────────────────────────
+    coms = anuncio.get("comodidades_normalizadas") or anuncio.get("comodidades") or []
     if isinstance(coms, str):
-        comodidades_str = coms
-    elif isinstance(coms, list):
-        comodidades_str = ", ".join(coms)
+        try:
+            import json as _json
+            coms = _json.loads(coms)
+        except Exception:
+            coms = [coms]
 
-    # Sub-scores de territorio H3
-    sub = {}
+    from services.busqueda import _upz_a_upl_norm
+    upz_raw = anuncio.get("upz") or ""
+    upl_norm = _upz_a_upl_norm(upz_raw) if upz_raw else ""
+
+    inmueble_json = {
+        "id": anuncio_id,
+        "tipo": anuncio.get("tipo_inmueble"),
+        "estado": anuncio.get("estado"),
+        "direccion": anuncio.get("ubicacion_texto"),
+        "localidad": anuncio.get("localidad"),
+        "upz_tradicional": anuncio.get("upz"),
+        "upl_post2023": upl_norm.title() if upl_norm else None,
+        "precio_cop": int(precio_val) if precio_val else None,
+        "precio_m2_cop": int(precio_val / area_val) if precio_val and area_val else None,
+        "area_m2": area_val or None,
+        "habitaciones": anuncio.get("habitaciones"),
+        "banos": anuncio.get("banos"),
+        "parqueaderos": anuncio.get("parqueaderos"),
+        "estrato": anuncio.get("estrato"),
+        "antiguedad": anuncio.get("antiguedad"),
+        "piso": anuncio.get("piso_nro"),
+        "administracion_mes": anuncio.get("administracion"),
+        "comodidades": coms,
+        "descripcion": (anuncio.get("descripcion") or "")[:800],
+        "portal": anuncio.get("portal"),
+        "url": anuncio.get("url"),
+    }
+
+    # ── H3 / datos del sector ──────────────────────────────────────────────
+    h3_data = anuncio.get("h3_data") or {}
+    if isinstance(h3_data, str):
+        try:
+            import json as _json
+            h3_data = _json.loads(h3_data)
+        except Exception:
+            h3_data = {}
+
+    sub_scores = {}
     try:
-        sub = scoring.calcular_sub_scores(anuncio)
+        sub_scores = scoring.calcular_sub_scores(anuncio) or {}
     except Exception:
         pass
 
-    sub_txt = ""
-    if sub:
-        sub_txt = "\n".join([f"  - {k}: {v:.2f}/1.0" for k, v in sub.items() if isinstance(v, (int, float))])
+    sector_json = {
+        "h3_index": anuncio.get("h3_index"),
+        "sub_scores_0_1": {k: round(v, 3) for k, v in sub_scores.items() if isinstance(v, (int, float))},
+        "datos_crudos": {k: v for k, v in (h3_data or {}).items()},
+    }
 
-    system_prompt = f"""Eres el Asesor de Vivienda IA de Geovivienda / Casa en Casa. Tu rol es ayudar a clientes a entender en profundidad este inmueble específico: responde preguntas sobre sus características, el sector, el precio, comparaciones y cualquier duda que tenga el usuario.
+    # ── POIs cercanos ──────────────────────────────────────────────────────
+    pois_json = {}
+    try:
+        from services import spatial_analysis as _sa
+        lat, lon = anuncio.get("latitud"), anuncio.get("longitud")
+        if lat and lon:
+            pois_raw = _sa.pois_cercanos(float(lat), float(lon), radio_m=700)
+            pois_json = {cat: [{"nombre": p["nombre"], "dist_m": p["distancia_m"]}
+                               for p in items]
+                         for cat, items in (pois_raw or {}).items() if items}
+    except Exception:
+        pass
 
-FICHA TÉCNICA DEL INMUEBLE #{anuncio_id}:
-- Tipo: {anuncio.get('tipo_inmueble', 'N/D')}
-- Dirección: {anuncio.get('ubicacion', 'N/D')}
-- Localidad: {anuncio.get('localidad', 'N/D')} | UPZ: {anuncio.get('upz', 'N/D')}
-- Precio: ${anuncio.get('precio', 0):,.0f} COP{precio_m2}
-- Área: {anuncio.get('area', 'N/D')} m² | Habitaciones: {anuncio.get('habitaciones', 'N/D')} | Baños: {anuncio.get('banos', 'N/D')}
-- Estrato: {anuncio.get('estrato', 'N/D')} | Estado: {anuncio.get('estado', 'N/D')}
-- Comodidades: {comodidades_str or 'No especificadas'}
-- Descripción del anuncio: {(anuncio.get('descripcion') or '')[:600]}
+    # ── Búsqueda + Cliente ─────────────────────────────────────────────────
+    busqueda_json = None
+    cliente_json = None
+    if busqueda_id:
+        try:
+            bobj = db.obtener_busqueda(int(busqueda_id))
+            if bobj:
+                # Traer cliente
+                cobj = None
+                try:
+                    with db.get_cursor() as cur:
+                        cur.execute(
+                            "SELECT c.*, b.*, c.nombre AS cliente_nombre "
+                            "FROM busquedas b JOIN clientes c ON c.id = b.cliente_id "
+                            "WHERE b.id = %s", (int(busqueda_id),)
+                        )
+                        row = cur.fetchone()
+                        if row:
+                            cobj = dict(row)
+                except Exception:
+                    cobj = None
 
-ANÁLISIS TERRITORIAL (Hexágono H3 del Sector):
-{sub_txt or '  No disponible'}
+                busqueda_json = {
+                    "id": busqueda_id,
+                    "tipo_vivienda": bobj.get("tipo_vivienda"),
+                    "estado_deseado": bobj.get("estado_deseado"),
+                    "habitaciones_min": bobj.get("habitaciones_min"),
+                    "banos_min": bobj.get("banos_min"),
+                    "area_m2_min": bobj.get("area_metros_min"),
+                    "area_m2_max": bobj.get("area_metros_max"),
+                    "presupuesto_min_cop": bobj.get("presupuesto_min"),
+                    "presupuesto_max_cop": bobj.get("presupuesto_max"),
+                    "estrato_objetivo": bobj.get("estrato_objetivo"),
+                    "municipios": bobj.get("municipios"),
+                    "zona_deseada": bobj.get("zona_deseada"),
+                    "upz_o_upl_deseada": bobj.get("upz"),
+                    "comodidades_relevantes": bobj.get("comodidades_relevantes"),
+                    "comodidades_indispensables": bobj.get("comodidades_indispensables"),
+                    "uso_previsto": bobj.get("uso_previsto"),
+                    "antiguedad_min": bobj.get("antiguedad_anios_min"),
+                    "antiguedad_max": bobj.get("antiguedad_anios_max"),
+                    "pregunta_abierta": bobj.get("pregunta_abierta"),
+                }
+                if cobj:
+                    cliente_json = {
+                        "nombre": cobj.get("nombre") or cobj.get("cliente_nombre"),
+                        "pais_residencia": cobj.get("pais_residencia"),
+                        "ingreso_mensual_cop": cobj.get("ingreso_mensual_cop"),
+                        "ahorro_mensual_cop": cobj.get("ahorro_mensual_cop"),
+                        "nacionalidad": cobj.get("nacionalidad"),
+                    }
+        except Exception:
+            pass
 
-INSTRUCCIONES:
-- Responde siempre en español, de forma clara, concisa y amigable.
-- Si el usuario pregunta algo que no está en la ficha técnica, dilo honestamente y sugiere cómo podría obtener esa info.
-- No inventes datos. Si no tienes certeza, indícalo.
-- Máximo 3 párrafos cortos por respuesta para no abrumar al usuario.
-- No uses emojis."""
+    # ── System prompt ──────────────────────────────────────────────────────
+    import json as _json
+    try:
+        ctx_sections = [
+            f"## INMUEBLE #{anuncio_id}\n```json\n{_json.dumps(inmueble_json, ensure_ascii=False, indent=2)}\n```",
+            f"## SECTOR / ZONA H3\n```json\n{_json.dumps(sector_json, ensure_ascii=False, indent=2)}\n```",
+        ]
+        if pois_json:
+            ctx_sections.append(f"## POIs CERCANOS (radio 700m)\n```json\n{_json.dumps(pois_json, ensure_ascii=False, indent=2)}\n```")
+        if busqueda_json:
+            ctx_sections.append(f"## CRITERIOS DE BÚSQUEDA DEL CLIENTE\n```json\n{_json.dumps(busqueda_json, ensure_ascii=False, indent=2)}\n```")
+        if cliente_json:
+            ctx_sections.append(f"## PERFIL DEL CLIENTE\n```json\n{_json.dumps(cliente_json, ensure_ascii=False, indent=2)}\n```")
+
+        context_block = "\n\n".join(ctx_sections)
+
+        instrucciones_extra = ""
+        if busqueda_json:
+            instrucciones_extra = """
+- El usuario es un asesor inmobiliario consultando sobre la idoneidad de este inmueble para el cliente indicado.
+- En Bogotá, ten en cuenta que las UPZs tradicionales (ej. Galerías, La Esmeralda, Quinta Paredes) pertenecen a UPLs mayores post-2023 (ej. UPL Teusaquillo). Si el cliente busca la UPL Teusaquillo, los inmuebles en Galerías o Quinta Paredes SÍ están en la zona buscada.
+- Puedes comparar el inmueble contra los criterios de búsqueda del cliente y opinar si es una buena opción.
+- Menciona puntos de match y puntos de discrepancia entre el inmueble y los criterios del cliente."""
+
+        system_prompt = f"""Eres el Asesor de Vivienda IA de Geovivienda / Casa en Casa. Tienes acceso completo a la información del inmueble, su zona geográfica, los puntos de interés cercanos{"y el perfil del cliente" if cliente_json else ""}.
+
+{context_block}
+
+## INSTRUCCIONES
+- Responde siempre en español, de forma clara y estructurada.
+- Usa Markdown para formatear: **negritas** para datos clave, listas con `-` para enumerar, `##` para secciones si la respuesta es larga.
+- Basa tus respuestas EXCLUSIVAMENTE en los datos proporcionados. No inventes datos.
+- Si no tienes certeza sobre algo, dilo honestamente.
+- Sé conciso: evita relleno, pero asegúrate de completar la información solicitada sin cortarla.
+- No uses emojis.{instrucciones_extra}"""
+
+    except Exception as e:
+        system_prompt = f"Eres un asesor de vivienda. Ayuda sobre el inmueble #{anuncio_id}. Error cargando contexto: {e}."
+
 
     # Construir lista de mensajes para la API de Claude
     claude_messages = []
@@ -976,14 +1242,21 @@ INSTRUCCIONES:
         _client_chat = _anthropic.Anthropic()
         response = _client_chat.messages.create(
             model=config.CLAUDE_SMART,
-            max_tokens=800,
+            max_tokens=2000,
             system=system_prompt,
             messages=claude_messages,
         )
         answer = response.content[0].text if response.content else "No pude generar una respuesta en este momento."
         return jsonify({"status": "ok", "answer": answer})
     except Exception as e:
-        logging.error(f"Error en chatbot inmueble {anuncio_id}: {e}")
+        import traceback
+        tb = traceback.format_exc()
+        logging.error(f"Error en chatbot inmueble {anuncio_id}: {e}\n{tb}")
+        try:
+            with open('last_500_error.txt', 'w', encoding='utf-8') as _f:
+                _f.write(f"CHAT ERROR inmueble {anuncio_id}:\n{tb}")
+        except Exception:
+            pass
         return jsonify({"error": f"Error al procesar: {str(e)}"}), 500
 
 

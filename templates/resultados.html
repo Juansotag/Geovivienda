@@ -177,19 +177,17 @@
             {% endif %}
           </td>
           <td>
-            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-              <a href="{{ url_for('inmueble_perfil', anuncio_id=r.id) }}" class="btn btn-primary btn-sm" style="padding: 6px 10px; display:inline-flex; align-items:center; gap:4px;" title="Ver perfil detallado">
-                <i data-lucide="layout-panel-left" style="width:12px; height:12px;"></i> Perfil
+            <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
+              <a href="{{ url_for('inmueble_perfil', anuncio_id=r.id) }}"
+                 class="btn btn-primary btn-sm" style="padding:5px 9px; display:inline-flex; align-items:center; gap:3px;" title="Ver perfil">
+                <i data-lucide="layout-panel-left" style="width:12px;height:12px;"></i> Perfil
               </a>
-              {% if r.reporte_id %}
-                <a href="{{ url_for('ver_reporte_html', reporte_id=r.reporte_id) }}" target="_blank" class="btn btn-secondary btn-sm" style="padding: 6px 10px;">Ver</a>
-                <a href="{{ url_for('descargar_reporte_html', reporte_id=r.reporte_id) }}" class="btn btn-secondary btn-sm" style="padding: 6px 10px;">HTML</a>
-                <a href="{{ url_for('descargar_reporte_pdf', reporte_id=r.reporte_id) }}" class="btn btn-secondary btn-sm" style="padding: 6px 10px;">PDF</a>
-              {% else %}
-                <button class="btn btn-secondary btn-sm" style="padding: 6px 10px;" onclick="generarReporte({{ cliente.id }}, {{ r.id }}, this, {{ busqueda_id }})">Reporte</button>
-              {% endif %}
+              <a href="{{ r.url }}" target="_blank" class="btn btn-secondary btn-sm" style="padding:5px 9px;">Anuncio</a>
+              <button class="btn btn-secondary btn-sm" style="padding:5px 9px;"
+                onclick="generarInforme({{ r.id }}, this)">Informe</button>
               {% if r.latitud and r.longitud %}
-                <a href="{{ url_for('mapa', focus_id=r.id) }}" class="btn btn-secondary btn-sm" style="padding: 6px 10px;" title="Ver ubicación en el mapa"><i data-lucide="map-pin" style="width:12px; height:12px;"></i></a>
+              <a href="{{ url_for('mapa', focus_id=r.id) }}" class="btn btn-secondary btn-sm" style="padding:5px 9px;"
+                 title="Ver en mapa"><i data-lucide="map-pin" style="width:12px;height:12px;"></i></a>
               {% endif %}
             </div>
           </td>
@@ -235,12 +233,16 @@
         {% endif %}
         <div class="inmueble-card-specs">{{ r.habitaciones or "—" }} hab · {{ r.banos or "—" }} baños · {{ r.area_metros or "—" }} m² · Estrato {{ r.estrato or "—" }}</div>
         <div class="inmueble-card-actions">
+          <a href="{{ url_for('inmueble_perfil', anuncio_id=r.id) }}"
+             class="btn btn-primary btn-sm" style="display:inline-flex; align-items:center; gap:3px;">
+            <i data-lucide="layout-panel-left" style="width:12px;height:12px;"></i> Perfil
+          </a>
           <a href="{{ r.url }}" target="_blank" class="btn btn-secondary btn-sm">Anuncio</a>
-          {% if r.reporte_id %}
-            <a href="{{ url_for('ver_reporte_html', reporte_id=r.reporte_id) }}" target="_blank" class="btn btn-secondary btn-sm">Ver reporte</a>
-            <a href="{{ url_for('descargar_reporte_pdf', reporte_id=r.reporte_id) }}" class="btn btn-secondary btn-sm">PDF</a>
-          {% else %}
-            <button class="btn btn-primary btn-sm" onclick="generarReporte({{ cliente.id }}, {{ r.id }}, this, {{ busqueda_id }})">Generar reporte</button>
+          <button class="btn btn-secondary btn-sm" onclick="generarInforme({{ r.id }}, this)">Informe</button>
+          {% if r.latitud and r.longitud %}
+          <a href="{{ url_for('mapa', focus_id=r.id) }}" class="btn btn-secondary btn-sm" title="Ver en mapa">
+            <i data-lucide="map-pin" style="width:12px;height:12px;"></i>
+          </a>
           {% endif %}
         </div>
       </div>
@@ -518,6 +520,18 @@
           .catch(err => { console.error("Error polling status:", err); });
       }, 1500);
     }
+  }
+
+  // ── Generar Informe: abre el perfil del inmueble en nueva pestaña ──
+  function generarInforme(anuncioId, btn) {
+    const original = btn.textContent;
+    btn.textContent = 'Generando...';
+    btn.disabled = true;
+    setTimeout(() => {
+      window.open(`/inmuebles/${anuncioId}/perfil`, '_blank');
+      btn.textContent = original;
+      btn.disabled = false;
+    }, 400);
   }
 
 </script>

@@ -44,7 +44,7 @@ def test_construir_url_fincaraiz_sin_habitaciones_banos_no_aparecen_en_path():
     assert "banos" not in url
     assert url == (
         "https://www.fincaraiz.com.co/venta/casas/bogota/bogota-dc/usados"
-        "/desde-200000000/hasta-800000000?IDmoneda=4&stratum[]=5&stratum[]=6"
+        "/desde-200000000/hasta-800000000?&IDmoneda=4&stratum[]=5&stratum[]=6"
     )
 
 

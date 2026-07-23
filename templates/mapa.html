@@ -2,7 +2,10 @@
 {% block title %}Mapa de Inmuebles — Casa en Casa{% endblock %}
 {% block content %}
 <!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<!-- Marked.js para renderizar markdown en el chatbot -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
 <style>
   .map-wrapper {
@@ -31,7 +34,7 @@
     max-height: calc(100% - 32px);
     background: #ffffff;
     border-radius: 12px;
-    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.18), 0 8px 10px -6px rgba(0,0,0,0.1);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.18), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
     border: 1px solid var(--color-border);
     display: flex;
     flex-direction: column;
@@ -60,7 +63,7 @@
   }
 
   .panel-header button {
-    background: rgba(255,255,255,0.15);
+    background: rgba(255, 255, 255, 0.15);
     border: none;
     color: #fff;
     border-radius: 6px;
@@ -72,8 +75,9 @@
     cursor: pointer;
     transition: background 0.2s;
   }
+
   .panel-header button:hover {
-    background: rgba(255,255,255,0.3);
+    background: rgba(255, 255, 255, 0.3);
   }
 
   .panel-body {
@@ -89,10 +93,14 @@
   .accordion-item {
     border: 1px solid var(--color-border);
     border-radius: 8px;
-    overflow: hidden;
+    /* overflow debe ser visible para que el dropdown absoluto de comodidades
+       no quede recortado por el acordeón padre */
+    overflow: visible;
     background: #FAFAFA;
   }
 
+  /* El header sí puede tener border-radius sin overflow:hidden porque no
+     contiene elementos absolutos que deban escapar */
   .accordion-header {
     background: #F1F5F9;
     padding: 10px 14px;
@@ -105,6 +113,7 @@
     cursor: pointer;
     user-select: none;
     border-bottom: 1px solid transparent;
+    border-radius: 8px 8px 0 0;
   }
 
   .accordion-header:hover {
@@ -121,6 +130,7 @@
     display: none;
     background: #ffffff;
     overflow: visible;
+    border-radius: 0 0 8px 8px;
   }
 
   .accordion-item.active .accordion-content {
@@ -131,6 +141,7 @@
   .form-group-sm {
     margin-bottom: 10px;
   }
+
   .form-group-sm label {
     display: block;
     font-weight: 600;
@@ -139,7 +150,10 @@
     margin-bottom: 4px;
     text-transform: uppercase;
   }
-  .form-group-sm select, .form-group-sm input[type="text"], .form-group-sm input[type="number"] {
+
+  .form-group-sm select,
+  .form-group-sm input[type="text"],
+  .form-group-sm input[type="number"] {
     width: 100%;
     padding: 6px 10px;
     font-size: 12px;
@@ -163,6 +177,7 @@
     user-select: none;
     transition: background 0.2s;
   }
+
   .chiclet-badge button {
     background: none;
     border: none;
@@ -177,6 +192,7 @@
     align-items: center;
     justify-content: center;
   }
+
   .chiclet-badge button:hover {
     color: #EF4444;
   }
@@ -187,6 +203,7 @@
     gap: 6px;
     margin-top: 4px;
   }
+
   .checkbox-label {
     display: flex;
     align-items: center;
@@ -208,7 +225,7 @@
     border-radius: 8px;
     padding: 10px 14px;
     font-size: 11px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     max-width: 260px;
   }
 
@@ -216,7 +233,12 @@
     height: 10px;
     border-radius: 4px;
     margin: 6px 0;
-    background: linear-gradient(to right, #3B82F6, #10B981, #F59E0B, #EF4444);
+    background: linear-gradient(to right,
+        hsl(240, 90%, 48%),
+        hsl(180, 90%, 48%),
+        hsl(120, 90%, 48%),
+        hsl(60, 90%, 48%),
+        hsl(0, 90%, 48%));
   }
 
   .gis-badge-tag {
@@ -275,7 +297,7 @@
           <i data-lucide="chevron-down" style="width:14px; height:14px;"></i>
         </div>
         <div class="accordion-content">
-          
+
           <div class="form-group-sm">
             <label for="filter_client">Simular Cliente</label>
             <select id="filter_client" onchange="applyFilters()">
@@ -364,12 +386,17 @@
           <!-- Comodidades / Equipamiento (Buscador Catálogo + Chiclets/Pills) -->
           <div class="form-group-sm" style="position:relative; margin-top:8px;">
             <label for="input_comodidad_search">Comodidades / Equipamiento (Catálogo ~200)</label>
-            <input type="text" id="input_comodidad_search" placeholder="Buscar comodidad (ej: piscina, garaje)..." autocomplete="off">
-            <div id="comodidades-dropdown" class="card" style="position:absolute; top:100%; left:0; right:0; z-index:1050; display:none; max-height:160px; overflow-y:auto; padding:2px; margin-top:2px; box-shadow:0 4px 12px rgba(0,0,0,0.15); border:1px solid var(--color-border); background:#fff;"></div>
+            <input type="text" id="input_comodidad_search" placeholder="Buscar comodidad (ej: piscina, garaje)..."
+              autocomplete="off">
+            <div id="comodidades-dropdown" class="card"
+              style="position:absolute; top:100%; left:0; right:0; z-index:1050; display:none; max-height:160px; overflow-y:auto; padding:2px; margin-top:2px; box-shadow:0 4px 12px rgba(0,0,0,0.15); border:1px solid var(--color-border); background:#fff;">
+            </div>
           </div>
-          <div id="chiclets-container" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; margin-bottom:8px;"></div>
+          <div id="chiclets-container"
+            style="display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; margin-bottom:8px;"></div>
 
-          <button class="btn btn-secondary btn-sm" style="width: 100%; margin-top: 6px;" onclick="resetFilters()">Restablecer Filtros</button>
+          <button class="btn btn-secondary btn-sm" style="width: 100%; margin-top: 6px;"
+            onclick="resetFilters()">Restablecer Filtros</button>
         </div>
       </div>
 
@@ -380,7 +407,7 @@
           <i data-lucide="chevron-down" style="width:14px; height:14px;"></i>
         </div>
         <div class="accordion-content">
-          
+
           <div class="form-group-sm">
             <label class="checkbox-label" style="font-size:12px; font-weight:700;">
               <input type="checkbox" id="chk_layer_h3" onchange="toggleGisLayer('h3', this.checked)">
@@ -392,9 +419,17 @@
           <div class="form-group-sm">
             <label for="select_h3_metric">Variable Territorial H3</label>
             <select id="select_h3_metric" onchange="updateH3Metric(this.value)">
-              
-              <optgroup label="Puntuación Global">
+
+              <optgroup label="★ Puntuación Global">
                 <option value="score_h3_global">Score H3 Global (Calidad Sector)</option>
+              </optgroup>
+
+              <optgroup label="★ Scores por Dimensión (0-10)">
+                <option value="score_dim_seguridad">Score Seguridad y Convivencia (25%)</option>
+                <option value="score_dim_estrato">Score Estrato Socioeconómico (20%)</option>
+                <option value="score_dim_ambiente">Score Ambiente y Zonas Verdes (25%)</option>
+                <option value="score_dim_comercio">Score Comercio y Servicios (15%)</option>
+                <option value="score_dim_transporte">Score Transporte Público (10%)</option>
               </optgroup>
 
               <optgroup label="Socioeconómico y Catastro">
@@ -455,32 +490,44 @@
           <div class="form-group-sm">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
               <label for="range_h3_opacity" style="margin-bottom:0;">Opacidad de Hexágonos</label>
-              <span id="opacity_val_label" style="font-weight:700; font-size:11px; color:var(--color-primary);">25%</span>
+              <span id="opacity_val_label"
+                style="font-weight:700; font-size:11px; color:var(--color-primary);">25%</span>
             </div>
-            <input type="range" id="range_h3_opacity" min="0.05" max="0.9" step="0.05" value="0.25" oninput="updateH3Opacity(this.value)" style="width:100%;">
+            <input type="range" id="range_h3_opacity" min="0.05" max="0.9" step="0.05" value="0.25"
+              oninput="updateH3Opacity(this.value)" style="width:100%;">
           </div>
 
           <!-- Botón / Checkbox para Mejorar Escala por Ranking / Percentil -->
-          <div class="form-group-sm" style="background:#F8FAFC; border:1px solid var(--color-border); border-radius:6px; padding:8px 10px;">
+          <div class="form-group-sm"
+            style="background:#F8FAFC; border:1px solid var(--color-border); border-radius:6px; padding:8px 10px;">
             <label class="checkbox-label" style="font-size:11px; font-weight:700; color:var(--color-primary);">
               <input type="checkbox" id="chk_use_ranking" onchange="toggleRankingScale(this.checked)">
               Mejorar escala de colores (Percentil / Ranking H3)
             </label>
-            <small style="color:var(--color-text-muted); font-size:10px; display:block; margin-top:3px; line-height:1.3;">
-              Elimina sesgo por valores extremos (outliers) distribuyendo la intensidad de color homogéneamente por percentiles.
+            <small
+              style="color:var(--color-text-muted); font-size:10px; display:block; margin-top:3px; line-height:1.3;">
+              Elimina sesgo por valores extremos (outliers) distribuyendo la intensidad de color homogéneamente por
+              percentiles.
             </small>
           </div>
 
           <hr style="border:0; border-top:1px solid var(--color-border); margin:10px 0;">
 
           <!-- Capas de Equipamiento POI -->
-          <label style="font-weight:700; font-size:11px; color:var(--color-text-muted); text-transform:uppercase;">Equipamientos e Interés (POIs)</label>
+          <label
+            style="font-weight:700; font-size:11px; color:var(--color-text-muted); text-transform:uppercase;">Equipamientos
+            e Interés (POIs)</label>
           <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
-            <label class="checkbox-label"><input type="checkbox" id="chk_layer_pois_transporte" onchange="toggleGisLayer('transporte', this.checked)"> Transporte (TM / SITP)</label>
-            <label class="checkbox-label"><input type="checkbox" id="chk_layer_pois_educacion" onchange="toggleGisLayer('educacion', this.checked)"> Educación (Colegios / Univ)</label>
-            <label class="checkbox-label"><input type="checkbox" id="chk_layer_pois_salud" onchange="toggleGisLayer('salud', this.checked)"> Salud (Hospitales / Clínicas)</label>
-            <label class="checkbox-label"><input type="checkbox" id="chk_layer_pois_comercio" onchange="toggleGisLayer('comercio', this.checked)"> Comercio (D1, Ara, Malls)</label>
-            <label class="checkbox-label"><input type="checkbox" id="chk_layer_pois_parques" onchange="toggleGisLayer('parques', this.checked)"> Parques y Zonas Verdes</label>
+            <label class="checkbox-label"><input type="checkbox" id="chk_layer_pois_transporte"
+                onchange="toggleGisLayer('transporte', this.checked)"> Transporte (TM / SITP)</label>
+            <label class="checkbox-label"><input type="checkbox" id="chk_layer_pois_educacion"
+                onchange="toggleGisLayer('educacion', this.checked)"> Educación (Colegios / Univ)</label>
+            <label class="checkbox-label"><input type="checkbox" id="chk_layer_pois_salud"
+                onchange="toggleGisLayer('salud', this.checked)"> Salud (Hospitales / Clínicas)</label>
+            <label class="checkbox-label"><input type="checkbox" id="chk_layer_pois_comercio"
+                onchange="toggleGisLayer('comercio', this.checked)"> Comercio (D1, Ara, Malls)</label>
+            <label class="checkbox-label"><input type="checkbox" id="chk_layer_pois_parques"
+                onchange="toggleGisLayer('parques', this.checked)"> Parques y Zonas Verdes</label>
           </div>
 
         </div>
@@ -521,37 +568,45 @@
 </div>
 
 <!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
 <script>
   const GOOGLE_KEY = {{ (google_maps_api_key or '') | tojson }};
   const busquedaResultadosMap = {{ busqueda_resultados_map | tojson | safe }};
+  // Catálogo de búsquedas para los dropdowns de acciones del popup
+  const BUSQUEDAS_CATALOG = {{ busquedas | map(attribute = 'id') | list | tojson | safe }}.map((id, i) => ({
+    id,
+    label: {{ busquedas | map(attribute = 'cliente_nombre') | list | tojson | safe }}[i]
+    + ' — Búsqueda #' + id,
+    cliente_nombre: {{ busquedas | map(attribute = 'cliente_nombre') | list | tojson | safe }}[i]
+  }));
   const anuncios = [
     {% for a in anuncios if a.latitud and a.longitud %}
-    {
-      id: {{ a.id }},
-      tipo_inmueble: {{ a.tipo_inmueble | tojson }},
-      estado: {{ a.estado | tojson }},
-      portal: {{ a.portal | tojson }},
-      precio: {{ a.precio_venta or 0 }},
-      area: {{ a.area_metros or 0 }},
-      habitaciones: {{ a.habitaciones or 0 }},
-      banos: {{ a.banos or 0 }},
-      estrato: {{ a.estrato or 0 }},
-      localidad: {{ a.localidad | tojson }},
-      upz: {{ a.upz | tojson }},
-      ubicacion: {{ a.ubicacion_texto | tojson }},
-      lat: {{ a.latitud }},
-      lng: {{ a.longitud }},
-      url: {{ a.url | tojson }},
-      comodidades: {{ (a.comodidades.split(',') | map('trim') | list if a.comodidades is string else (a.comodidades or [])) | tojson }},
-      compatibilidades: {{ a.compatibilidades | tojson | safe }}
-    },
-    {% endfor %}
+  {
+    id: {{ a.id }},
+    tipo_inmueble: {{ a.tipo_inmueble | tojson }},
+    estado: {{ a.estado | tojson }},
+    portal: {{ a.portal | tojson }},
+    precio: {{ a.precio_venta or 0 }},
+    area: {{ a.area_metros or 0 }},
+    habitaciones: {{ a.habitaciones or 0 }},
+    banos: {{ a.banos or 0 }},
+    estrato: {{ a.estrato or 0 }},
+    localidad: {{ a.localidad | tojson }},
+    upz: {{ a.upz | tojson }},
+    ubicacion: {{ a.ubicacion_texto | tojson }},
+    lat: {{ a.latitud }},
+    lng: {{ a.longitud }},
+    url: {{ a.url | tojson }},
+    comodidades: {{ (a.comodidades.split(',') | map('trim') | list if a.comodidades is string else (a.comodidades or [])) | tojson }},
+    compatibilidades: {{ a.compatibilidades | tojson | safe }}
+  },
+  {% endfor %}
   ];
 
   const focusId = {{ focus_id if focus_id else 'null' }};
-  
+
   // ── Inicialización de Leaflet ───────────────────
   const map = L.map('map', { zoomControl: false }).setView([4.65, -74.08], 12);
   L.control.zoom({ position: 'topright' }).addTo(map);
@@ -588,11 +643,11 @@
   }
 
   // Grupos de Capas
-  let markerLayerGroup     = L.layerGroup().addTo(map);
-  let h3LayerGroup         = L.layerGroup();
-  let localidadesLayerGroup= L.layerGroup();
-  let upzsLayerGroup       = L.layerGroup();
-  let poiLayerGroups       = {
+  let markerLayerGroup = L.layerGroup().addTo(map);
+  let h3LayerGroup = L.layerGroup();
+  let localidadesLayerGroup = L.layerGroup();
+  let upzsLayerGroup = L.layerGroup();
+  let poiLayerGroups = {
     transporte: L.layerGroup(),
     educacion: L.layerGroup(),
     salud: L.layerGroup(),
@@ -716,6 +771,13 @@
   };
 
   const METRIC_TO_RANK = {
+    // Scores por dimensión (se calculan en frontend, mapean al rank dominante)
+    'score_dim_seguridad': 'rank_hurtos_upz',
+    'score_dim_estrato': 'rank_estrato',
+    'score_dim_ambiente': 'rank_dist_parque',
+    'score_dim_comercio': 'rank_dist_centro_comercial',
+    'score_dim_transporte': 'rank_dist_brt',
+    // Variables crudas → ranks precomputados
     'val_dist_brt': 'rank_dist_brt',
     'val_dist_sitp': 'rank_dist_sitp',
     'val_dist_metro': 'rank_dist_metro',
@@ -752,6 +814,37 @@
     'estrato_promedio_200m': 'rank_estrato',
   };
 
+  // Cálculo de scores por dimensión a partir de los ranks precomputados en el GeoJSON.
+  // Devuelve un valor entre 0 y 10 (o null si faltan datos).
+  function calcScoreDimension(p, dim) {
+    const g = (key) => (typeof p[key] === 'number' && !isNaN(p[key])) ? p[key] : null;
+    switch (dim) {
+      case 'score_dim_seguridad':
+        return g('rank_hurtos_upz') !== null ? g('rank_hurtos_upz') * 10 : null;
+      case 'score_dim_estrato':
+        return g('rank_estrato') !== null ? g('rank_estrato') * 10 : null;
+      case 'score_dim_ambiente': {
+        const rp = g('rank_dist_parque'), ra = g('rank_arboles_300m');
+        if (rp === null && ra === null) return null;
+        const vals = [rp, ra].filter(v => v !== null);
+        return (vals.reduce((a, b) => a + b, 0) / vals.length) * 10;
+      }
+      case 'score_dim_comercio': {
+        const rd = g('rank_dist_d1_ara'), rc = g('rank_dist_centro_comercial'), rs = g('rank_dist_supermercado_premium');
+        const vals = [rd, rc, rs].filter(v => v !== null);
+        if (!vals.length) return null;
+        return (vals.reduce((a, b) => a + b, 0) / vals.length) * 10;
+      }
+      case 'score_dim_transporte': {
+        const rb = g('rank_dist_brt'), rs2 = g('rank_sitp_300m');
+        const vals = [rb, rs2].filter(v => v !== null);
+        if (!vals.length) return null;
+        return (vals.reduce((a, b) => a + b, 0) / vals.length) * 10;
+      }
+      default: return null;
+    }
+  }
+
   async function cargarCapaH3() {
     try {
       const res = await fetch("/api/h3/geojson");
@@ -782,11 +875,11 @@
   }
 
   function getColorForRatio(ratio) {
+    // Gradiente continuo: azul (0) → cian → verde → amarillo → rojo (1)
+    // Usa interpolación HSL: H=240 (azul) → H=0 (rojo), pasando por verde/amarillo
     ratio = Math.max(0, Math.min(1, ratio));
-    if (ratio < 0.25) return '#3B82F6';
-    if (ratio < 0.50) return '#10B981';
-    if (ratio < 0.75) return '#F59E0B';
-    return '#EF4444';
+    const h = Math.round((1 - ratio) * 240); // 240=azul, 120=verde, 60=amarillo, 0=rojo
+    return `hsl(${h}, 90%, 48%)`;
   }
 
   function formatH3Value(key, val) {
@@ -816,8 +909,8 @@
     if (key === 'estrato_promedio_200m') {
       return `Estrato ${val.toFixed(1)}`;
     }
-    if (key === 'score_h3_global') {
-      return `${val.toFixed(1)} / 10`;
+    if (key === 'score_h3_global' || key.startsWith('score_dim_')) {
+      return `${val.toFixed(2)} / 10`;
     }
     return typeof val === 'number' ? (val > 1000 ? Math.round(val).toLocaleString('es-CO') : val.toFixed(1)) : val;
   }
@@ -875,7 +968,7 @@
 
     if (useRankingScale) {
       const hasPrecalculatedRank = h3GeojsonData.features.some(f => f.properties && typeof f.properties[rankKey] === 'number');
-      
+
       if (!hasPrecalculatedRank) {
         let pairs = [];
         h3GeojsonData.features.forEach((f, idx) => {
@@ -904,43 +997,68 @@
     const minFormatted = formatH3Value(currentH3Metric, isDistance ? maxVal : minVal);
     const maxFormatted = formatH3Value(currentH3Metric, isDistance ? minVal : maxVal);
 
+    // Leyenda: en modo ranking los extremos se describen cualitativamente
+    const legendLeft = useRankingScale ? (isDistance ? 'Lejos (Peor)' : 'Peor') : (isDistance ? `${minFormatted} (Lejos)` : minFormatted);
+    const legendRight = useRankingScale ? (isDistance ? 'Cerca (Mejor)' : 'Mejor') : (isDistance ? `${maxFormatted} (Cerca)` : maxFormatted);
+
     legendBox.innerHTML = `
       <div style="font-weight:700;" id="legend-metric-title">${labelTitle}</div>
-      ${useRankingScale ? `<div style="font-size:9px; color:#475569; margin-top:2px;">Modo: Ranking / Percentil H3 (Visualización Óptima)</div>` : ''}
+      ${useRankingScale ? `<div style="font-size:9px; color:#475569; margin-top:2px;">Modo: Ranking / Percentil H3 (Visualización Óptima)</div>` : `<div style="font-size:9px; color:#475569; margin-top:2px;">Rango: ${minFormatted} – ${maxFormatted}</div>`}
       <div class="legend-bar"></div>
       <div style="display:flex; justify-content:space-between; color:var(--color-text-muted);" id="legend-metric-range">
-        <span>${isDistance ? `${minFormatted} (Lejos)` : minFormatted}</span>
-        <span>${isDistance ? `${maxFormatted} (Cerca)` : maxFormatted}</span>
+        <span>${legendLeft}</span>
+        <span>${legendRight}</span>
       </div>
     `;
 
     h3LeafletLayer = L.geoJSON(h3GeojsonData, {
       style: (feature, idx) => {
         const p = feature.properties || {};
-        const rawVal = p[currentH3Metric];
+        let rawVal;
+        const isDimScore = currentH3Metric.startsWith('score_dim_');
+
+        if (isDimScore) {
+          // Score por dimensión: calculado en frontend desde ranks precomputados.
+          // El resultado (0-10) se normaliza a ratio 0-1 para el colormap.
+          const score = calcScoreDimension(p, currentH3Metric);
+          if (score === null) return { color: '#94A3B8', weight: 1, opacity: 0.2, fillOpacity: 0.05 };
+          rawVal = score;
+          const ratio = score / 10;  // ya es calidad: alto=mejor=rojo
+          return { color: getColorForRatio(ratio), weight: 1, opacity: 0.4, fillOpacity: h3FillOpacity };
+        }
+
+        rawVal = p[currentH3Metric];
         let ratio = 0.5;
 
         if (rawVal === null || rawVal === undefined || isNaN(rawVal)) return { color: '#94A3B8', weight: 1, opacity: 0.2, fillOpacity: 0.05 };
 
         if (useRankingScale) {
+          let usingPrecalc = false;
           if (rankKey && typeof p[rankKey] === 'number') {
+            // Rank precomputado del DB: ya codifica calidad (1=mejor, 0=peor).
+            // Para distancias el DB guarda rank donde 1=más cercano=mejor.
+            // NO aplicar isDistance flip — el rank ya es correcto.
             ratio = p[rankKey];
+            usingPrecalc = true;
           } else if (rankMap && rankMap[idx] !== undefined) {
+            // Rank calculado en frontend: pos=0 es el valor más pequeño.
+            // Para distancias, valor más pequeño = más cercano = mejor → necesita flip.
             ratio = rankMap[idx];
           } else {
             ratio = (rawVal - minVal) / (maxVal - minVal || 1);
           }
+          if (!usingPrecalc && isDistance) ratio = 1 - ratio;
         } else {
           ratio = (rawVal - minVal) / (maxVal - minVal || 1);
+          if (isDistance) ratio = 1 - ratio;
         }
-
-        if (isDistance) ratio = 1 - ratio;
         const color = getColorForRatio(ratio);
         return { color: color, weight: 1, opacity: 0.4, fillOpacity: h3FillOpacity };
       },
       onEachFeature: (feature, layer) => {
         const p = feature.properties || {};
-        const val = p[currentH3Metric];
+        const isDimScore = currentH3Metric.startsWith('score_dim_');
+        const val = isDimScore ? calcScoreDimension(p, currentH3Metric) : p[currentH3Metric];
         const valFormatted = formatH3Value(currentH3Metric, val);
 
         layer.bindTooltip(`
@@ -957,10 +1075,10 @@
   // ── Capas de POIs (Sin Emojis) ────────────────────
   const _poiCategoryConfig = {
     transporte: { color: '#EF4444', text: 'T' },
-    educacion:  { color: '#3B82F6', text: 'E' },
-    salud:      { color: '#10B981', text: 'S' },
-    comercio:   { color: '#F59E0B', text: 'C' },
-    parques:    { color: '#22C55E', text: 'P' }
+    educacion: { color: '#3B82F6', text: 'E' },
+    salud: { color: '#10B981', text: 'S' },
+    comercio: { color: '#F59E0B', text: 'C' },
+    parques: { color: '#22C55E', text: 'P' }
   };
 
   const _poisCargados = {};
@@ -1084,6 +1202,11 @@
 
   // ── Gestor de Comodidades por Chiclets (Tags/Pills) ──
   const selectedChiclets = new Set();
+
+  // Catálogo canónico inyectado desde el backend (CATALOGO_COMODIDADES de busqueda.py).
+  // El filtro | default([]) evita errores si el servidor no pasó la variable.
+  const CATALOGO_BACKEND = {{ catalogo_comodidades | default ([]) | tojson | safe }};
+
   let allCatalogComodidades = [];
 
   function normalizeStr(str) {
@@ -1092,16 +1215,22 @@
   }
 
   function initComodidadesCatalog() {
-    const comSet = new Set();
-    anuncios.forEach(a => {
-      let items = [];
-      if (Array.isArray(a.comodidades)) items = a.comodidades;
-      else if (typeof a.comodidades === 'string') items = a.comodidades.split(',').map(s => s.trim());
-      items.forEach(c => {
-        if (c && c.length > 1) comSet.add(c);
+    if (CATALOGO_BACKEND.length > 0) {
+      // Catálogo canónico del backend disponible → usarlo directamente.
+      // NO mezclar con comodidades crudas de anuncios (texto sin normalizar del scraping).
+      allCatalogComodidades = CATALOGO_BACKEND.slice().sort((a, b) => a.localeCompare(b, 'es'));
+    } else {
+      // Fallback: servidor no pasó el catálogo → extraer de anuncios como última alternativa.
+      const comSet = new Set();
+      anuncios.forEach(a => {
+        let items = [];
+        if (Array.isArray(a.comodidades)) items = a.comodidades;
+        else if (typeof a.comodidades === 'string') items = a.comodidades.split(',').map(s => s.trim());
+        items.forEach(c => { if (c && c.length > 1) comSet.add(c); });
       });
-    });
-    allCatalogComodidades = [...comSet].sort((a, b) => a.localeCompare(b, 'es'));
+      allCatalogComodidades = [...comSet].sort((a, b) => a.localeCompare(b, 'es'));
+    }
+    console.log(`[Comodidades] Catálogo listo: ${allCatalogComodidades.length} ítems (backend: ${CATALOGO_BACKEND.length})`);
   }
 
   function setupComodidadesSearch() {
@@ -1109,7 +1238,7 @@
     const dropdown = document.getElementById('comodidades-dropdown');
     if (!input || !dropdown) return;
 
-    input.addEventListener('input', function() {
+    input.addEventListener('input', function () {
       const q = normalizeStr(this.value);
       if (!q) { dropdown.style.display = 'none'; return; }
 
@@ -1244,16 +1373,19 @@
       }
 
       const popupContent = `
-        <div style="font-family: var(--font-base); font-size:13px; color:var(--color-text);">
+        <div style="font-family: var(--font-base); font-size:13px; color:var(--color-text); min-width:240px;">
           <h4 style="margin:0 0 6px 0; color:var(--color-primary); font-size:14px; text-transform:capitalize;">${a.tipo_inmueble} (#${a.id})</h4>
           <p style="margin: 0 0 4px 0;"><strong>Dirección:</strong> ${a.ubicacion}</p>
           ${sectorBadges}
-          <p style="margin: 0 0 4px 0;"><strong>Precio:</strong> $${(a.precio / 1000000).toFixed(0)}M COP ${a.area ? `($${Math.round(a.precio/a.area).toLocaleString('es-CO')}/m²)` : ''}</p>
+          <p style="margin: 0 0 4px 0;"><strong>Precio:</strong> $${(a.precio / 1000000).toFixed(0)}M COP ${a.area ? `($${Math.round(a.precio / a.area).toLocaleString('es-CO')}/m²)` : ''}</p>
           <p style="margin: 0 0 4px 0;"><strong>Área:</strong> ${a.area} m² · <strong>Hab:</strong> ${a.habitaciones} · <strong>Baños:</strong> ${a.banos}</p>
           ${scoreHtml}
-          <div style="display:flex; gap:8px; margin-top:8px;">
-            <a href="/inmuebles/${a.id}/perfil" class="btn btn-primary btn-sm" style="padding: 3px 8px; font-size:11px;">Ver perfil</a>
-            <a href="${a.url}" target="_blank" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size:11px;">Anuncio</a>
+          <div style="display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;">
+            <a href="/inmuebles/${a.id}/perfil" class="btn btn-primary btn-sm" style="padding:4px 10px; font-size:11px;">Ver perfil</a>
+            <a href="${a.url}" target="_blank" class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:11px;">Anuncio ↗</a>
+            <button onclick="abrirAccionesPopup(${a.id})" class="btn btn-sm" style="padding:4px 10px; font-size:11px; background:#F1F5F9; border:1px solid #CBD5E1; color:#374151; cursor:pointer; border-radius:6px; display:inline-flex; align-items:center; gap:4px;">
+              Acciones
+            </button>
           </div>
         </div>
       `;
@@ -1299,5 +1431,421 @@
       map.fitBounds(bounds, { padding: [50, 50] });
     }
   });
+
+  // ── MODAL DE ACCIONES DEL INMUEBLE DESDE EL MAPA ──────────────────────────
+
+  let _accionAnuncioId = null;
+  let _mapaChat = { history: [] };
+
+  function abrirAccionesPopup(anuncioId) {
+    _accionAnuncioId = anuncioId;
+    _mapaChat = { history: [] };
+    document.getElementById('mapa-modal-overlay').style.display = 'flex';
+    // resetear tabs
+    switchAccionTab('chat');
+    // limpiar chat
+    document.getElementById('mapa-chat-messages').innerHTML =
+      '<div class="mapa-bubble assistant">Hola, soy tu asesor IA. Pregúntame lo que quieras sobre este inmueble y su entorno.</div>';
+    document.getElementById('mapa-chat-input').value = '';
+    // limpiar feedback
+    ['score-feedback', 'reporte-feedback'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.textContent = ''; el.style.display = 'none'; }
+    });
+  }
+
+  function cerrarAccionesModal() {
+    document.getElementById('mapa-modal-overlay').style.display = 'none';
+    _accionAnuncioId = null;
+  }
+
+  function switchAccionTab(tab) {
+    ['tab-chat', 'tab-score', 'tab-reporte'].forEach(id => {
+      document.getElementById(id).style.display = 'none';
+    });
+    document.getElementById(`tab-${tab}`).style.display = 'block';
+    ['btn-tab-chat', 'btn-tab-score', 'btn-tab-reporte'].forEach(id => {
+      document.getElementById(id).style.fontWeight = '500';
+      document.getElementById(id).style.borderBottom = '2px solid transparent';
+      document.getElementById(id).style.color = '#64748B';
+    });
+    document.getElementById(`btn-tab-${tab}`).style.fontWeight = '700';
+    document.getElementById(`btn-tab-${tab}`).style.borderBottom = '2px solid #181F59';
+    document.getElementById(`btn-tab-${tab}`).style.color = '#181F59';
+  }
+
+  // ── Chat IA desde el mapa ──
+  function mapaChatKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarMapaChat(); }
+  }
+
+  async function enviarMapaChat() {
+    const input = document.getElementById('mapa-chat-input');
+    const text = (input.value || '').trim();
+    if (!text || !_accionAnuncioId) return;
+    input.value = '';
+
+    const msgs = document.getElementById('mapa-chat-messages');
+
+    // Burbuja de usuario (texto plano)
+    const userBubble = document.createElement('div');
+    userBubble.className = 'mapa-bubble user';
+    userBubble.textContent = text;
+    msgs.appendChild(userBubble);
+    msgs.scrollTop = msgs.scrollHeight;
+
+    _mapaChat.history.push({ role: 'user', content: text });
+
+    const typing = document.createElement('div');
+    typing.className = 'mapa-bubble assistant';
+    typing.id = 'mapa-typing';
+    typing.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+    msgs.appendChild(typing); msgs.scrollTop = msgs.scrollHeight;
+
+    try {
+      const resp = await fetch(`/api/inmuebles/${_accionAnuncioId}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, history: _mapaChat.history.slice(0, -1) })
+      });
+      const data = await resp.json();
+      document.getElementById('mapa-typing')?.remove();
+      const answer = (data.status === 'ok' && data.answer) ? data.answer : (data.error || 'Sin respuesta.');
+      // Burbuja del assistant con markdown renderizado
+      const asBubble = document.createElement('div');
+      asBubble.className = 'mapa-bubble assistant';
+      asBubble.style.display = 'block';
+      if (window.marked) {
+        asBubble.innerHTML = marked.parse(answer);
+      } else {
+        asBubble.textContent = answer;
+      }
+      msgs.appendChild(asBubble);
+      msgs.scrollTop = msgs.scrollHeight;
+      _mapaChat.history.push({ role: 'assistant', content: answer });
+    } catch {
+      document.getElementById('mapa-typing')?.remove();
+      const errBubble = document.createElement('div');
+      errBubble.className = 'mapa-bubble assistant';
+      errBubble.textContent = 'Error de conexión.';
+      msgs.appendChild(errBubble);
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+  }
+
+  // ── Recalcular Score ──
+  async function recalcularScoreDesdeModal() {
+    const sel = document.getElementById('sel-busqueda-score');
+    const busquedaId = parseInt(sel?.value);
+    const fb = document.getElementById('score-feedback');
+    if (!busquedaId) { fb.textContent = 'Selecciona una búsqueda.'; fb.style.display = 'block'; return; }
+
+    fb.textContent = 'Calculando score con IA...'; fb.style.display = 'block';
+    fb.style.color = '#475569';
+
+    try {
+      const resp = await fetch(`/inmuebles/${_accionAnuncioId}/recalcular-score`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ busqueda_id: busquedaId })
+      });
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        const pct = Math.round(data.score * 100);
+        const saved = data.actualizado_en_db ? ' (guardado en resultados)' : ' (solo consulta, no en resultados)';
+        fb.style.color = '#166534';
+        fb.innerHTML = `<strong>Score: ${pct}%</strong>${saved}<br><span style="color:#475569; font-size:11px;">${data.razon || ''}</span>`;
+      } else {
+        fb.textContent = data.message || 'No se pudo calcular el score.';
+        fb.style.color = '#92400E';
+      }
+    } catch {
+      fb.textContent = 'Error de conexión.'; fb.style.color = '#991B1B';
+    }
+  }
+
+  // ── Crear Informe: abre el perfil del inmueble en nueva pestaña ──
+  async function crearInformeDesdeModal() {
+    const fb = document.getElementById('reporte-feedback');
+    if (!_accionAnuncioId) return;
+    fb.textContent = 'Abriendo perfil...';
+    fb.style.display = 'block';
+    fb.style.color = '#475569';
+    setTimeout(() => {
+      window.open(`/inmuebles/${_accionAnuncioId}/perfil`, '_blank');
+      fb.textContent = 'Perfil abierto en nueva pestaña.';
+      fb.style.color = '#166534';
+    }, 400);
+  }
 </script>
+
+<!-- ── MODAL DE ACCIONES DESDE EL MAPA ─────────────────────────────────── -->
+<style>
+  #mapa-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    background: rgba(0, 0, 0, 0.45);
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+  }
+
+  #mapa-modal-box {
+    background: #fff;
+    border-radius: 16px;
+    width: 420px;
+    max-width: 95vw;
+    box-shadow: 0 16px 60px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    max-height: 90vh;
+  }
+
+  #mapa-modal-header {
+    background: var(--color-primary);
+    color: #fff;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .mapa-tab-bar {
+    display: flex;
+    border-bottom: 1px solid var(--color-border);
+    padding: 0 16px;
+    background: #F8FAFC;
+    flex-shrink: 0;
+  }
+
+  .mapa-tab-bar button {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .mapa-modal-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  /* Bubbles de chat dentro del modal */
+  #mapa-chat-messages {
+    height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 10px;
+    background: #F8FAFC;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+  }
+
+  .mapa-bubble {
+    max-width: 85%;
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+
+  .mapa-bubble.user {
+    align-self: flex-end;
+    background: var(--color-primary);
+    color: #fff;
+    border-bottom-right-radius: 3px;
+  }
+
+  .mapa-bubble.assistant {
+    align-self: flex-start;
+    background: #fff;
+    color: #1e293b;
+    border: 1px solid #E2E8F0;
+    border-bottom-left-radius: 3px;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .mapa-bubble.assistant .typing-dot {
+    width: 6px;
+    height: 6px;
+    background: #94A3B8;
+    border-radius: 50%;
+    animation: typingBounce 1.2s infinite;
+    flex-shrink: 0;
+  }
+
+  .mapa-chat-input-row {
+    display: flex;
+    gap: 6px;
+    align-items: flex-end;
+  }
+
+  .mapa-chat-input-row textarea {
+    flex: 1;
+    border: 1px solid #CBD5E1;
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 12px;
+    resize: none;
+    outline: none;
+    max-height: 60px;
+    font-family: inherit;
+  }
+
+  .mapa-chat-input-row textarea:focus {
+    border-color: var(--color-primary);
+  }
+
+  .mapa-chat-input-row button {
+    background: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .mapa-action-section label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+
+  .mapa-action-section select {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid #CBD5E1;
+    font-size: 13px;
+    margin-bottom: 10px;
+    font-family: inherit;
+    outline: none;
+  }
+
+  .mapa-action-section select:focus {
+    border-color: var(--color-primary);
+  }
+
+  .mapa-action-btn {
+    background: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .mapa-action-btn:hover {
+    background: #2d3a9e;
+  }
+
+  .mapa-feedback {
+    display: none;
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    background: #F1F5F9;
+  }
+</style>
+
+<div id="mapa-modal-overlay" onclick="if(event.target===this) cerrarAccionesModal()">
+  <div id="mapa-modal-box">
+    <div id="mapa-modal-header">
+      <div style="font-weight:700; font-size:14px; display:flex; align-items:center; gap:8px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+        </svg>
+        Acciones rápidas
+      </div>
+      <button onclick="cerrarAccionesModal()"
+        style="background:rgba(255,255,255,0.15); border:none; color:#fff; border-radius:6px; padding:4px 10px; cursor:pointer; font-size:18px; line-height:1;">&times;</button>
+    </div>
+
+    <!-- Tab bar -->
+    <div class="mapa-tab-bar">
+      <button id="btn-tab-chat" onclick="switchAccionTab('chat')"
+        style="font-weight:700; border-bottom:2px solid #181F59; color:#181F59;"> Chat IA</button>
+      <button id="btn-tab-score" onclick="switchAccionTab('score')" style="font-weight:500; color:#64748B;"> Recalcular
+        Score</button>
+      <button id="btn-tab-reporte" onclick="switchAccionTab('reporte')" style="font-weight:500; color:#64748B;"> Crear
+        Informe</button>
+    </div>
+
+    <!-- Tab: Chat IA -->
+    <div id="tab-chat" class="mapa-modal-body">
+      <p style="font-size:11px; color:var(--color-text-muted); margin:0 0 10px;">Esta conversación no se guarda. Es
+        temporal para este inmueble.</p>
+      <div id="mapa-chat-messages"></div>
+      <div class="mapa-chat-input-row">
+        <textarea id="mapa-chat-input" rows="1" placeholder="Pregunta algo sobre este inmueble..."
+          onkeydown="mapaChatKeyDown(event)"></textarea>
+        <button onclick="enviarMapaChat()">Enviar</button>
+      </div>
+    </div>
+
+    <!-- Tab: Recalcular Score -->
+    <div id="tab-score" class="mapa-modal-body" style="display:none;">
+      <div class="mapa-action-section">
+        <label>Búsqueda / Cliente</label>
+        <select id="sel-busqueda-score">
+          <option value="">— Selecciona una búsqueda —</option>
+          {% for b in busquedas %}
+          <option value="{{ b.id }}">{{ b.cliente_nombre }} — Búsqueda #{{ b.id }}</option>
+          {% endfor %}
+        </select>
+        <p style="font-size:11px; color:var(--color-text-muted); margin:0 0 12px;">Recalcula el score de este inmueble
+          para la búsqueda seleccionada usando el LLM. Útil si corregiste datos del inmueble.</p>
+        <button class="mapa-action-btn" onclick="recalcularScoreDesdeModal()">
+          Recalcular score ahora
+        </button>
+        <div id="score-feedback" class="mapa-feedback"></div>
+      </div>
+    </div>
+
+    <!-- Tab: Crear Informe -->
+    <div id="tab-reporte" class="mapa-modal-body" style="display:none;">
+      <div class="mapa-action-section">
+        <p style="font-size:13px; color:var(--color-text); margin:0 0 14px; line-height:1.6;">
+          Abre el perfil completo del inmueble en una nueva pestaña.
+          Incluye mapa, características, sector H3 y evaluación de score.
+        </p>
+        <button class="mapa-action-btn" onclick="crearInformeDesdeModal()">
+          Abrir perfil del inmueble
+        </button>
+        <div id="reporte-feedback" class="mapa-feedback"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}

@@ -134,7 +134,7 @@ def construir_url_fincaraiz(operacion, tipos_inmueble, ubicacion="bogota/bogota-
             query_params.append(f"stratum[]={estrato}")
             
     if query_params:
-        url_completa += "?" + "&".join(query_params)
+        url_completa += "?&" + "&".join(query_params)
         
     return url_completa
 

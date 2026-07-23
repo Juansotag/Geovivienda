@@ -26,6 +26,11 @@ from .extractor_links import configurar_driver
 _CACHE: dict[str, dict] = {}
 
 
+def _sin_tildes_m2(texto: str) -> str:
+    import unicodedata
+    return ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'MN')
+
+
 def construir_url_metrocuadrado(operacion="venta", tipo_inmueble="apartamento", ciudad="bogota"):
     mapa_tipos = {
         "apartamento": "apartamentos",
@@ -39,7 +44,11 @@ def construir_url_metrocuadrado(operacion="venta", tipo_inmueble="apartamento", 
     if operacion not in ("venta", "arriendo"):
         operacion = "venta"
 
-    ciudad_url = ciudad.lower().strip().replace(" ", "-")
+    ciudad_norm = _sin_tildes_m2(ciudad.lower().strip()).replace(".", "").replace(",", "")
+    if ciudad_norm == "bogota":
+        ciudad_url = "bogota"
+    else:
+        ciudad_url = ciudad_norm.replace(" ", "-")
     return f"https://www.metrocuadrado.com/{tipo_url}/{operacion}/{ciudad_url}/"
 
 

@@ -404,19 +404,23 @@ def actualizar_perfil(nombre: str, correo: str, cargo: str):
 
 
 def obtener_todas_busquedas() -> list[dict]:
+    """Devuelve todas las búsquedas con el nombre del cliente asociado.
+    Usa LEFT JOIN para no descartar búsquedas cuyo cliente haya sido eliminado."""
     with get_cursor() as cur:
         cur.execute(
             """
-            SELECT b.*, c.nombre AS cliente_nombre,
+            SELECT b.*,
+                   COALESCE(c.nombre, '(cliente eliminado)') AS cliente_nombre,
                    (SELECT COUNT(*) FROM resultados_busqueda rb WHERE rb.busqueda_id = b.id) AS encontrados,
                    (SELECT COUNT(*) FROM resultados_busqueda rb WHERE rb.busqueda_id = b.id AND rb.es_top = TRUE) AS tops,
                    COALESCE(EXTRACT(EPOCH FROM (b.terminada_en - b.creada_en))::integer, 0) AS duracion_segundos
             FROM busquedas b
-            JOIN clientes c ON c.id = b.cliente_id
+            LEFT JOIN clientes c ON c.id = b.cliente_id
             ORDER BY b.creada_en DESC
             """
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+        return rows
 
 
 def obtener_todos_anuncios_con_scores() -> list[dict]:

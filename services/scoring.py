@@ -347,11 +347,20 @@ def _resumir_anuncio_para_prompt(a: dict) -> str:
                 partes.append(f"{cat}: " + ", ".join(f"{p['nombre']} ({p['distancia_m']}m)" for p in items[:2]))
         if partes:
             pois_txt = " | POIs más cercanos: " + "; ".join(partes)
+
+    upz_orig = a.get("upz") or ""
+    from services.busqueda import _upz_a_upl_norm
+    upl_trad = _upz_a_upl_norm(upz_orig) if upz_orig else ""
+    if upz_orig and upl_trad and upl_trad != upz_orig.lower():
+        upz_txt = f"{upz_orig} (pertenece a la UPL {upl_trad.title()})"
+    else:
+        upz_txt = upz_orig or "no especificada"
+
     return (
         f"- id={a['id']}: {a.get('tipo_inmueble')}, {a.get('estado')}, antigüedad: {a.get('antiguedad') or 'no especificada'}, "
         f"{a.get('habitaciones')} hab, {a.get('banos')} baños, {a.get('parqueaderos') or 0} parqueadero(s), {a.get('area_metros')} m², "
         f"estrato {a.get('estrato')} (estrato del sector 200m: {a.get('estrato_promedio_200m')}), "
-        f"${precio:,.0f} COP, administración: {admin_txt}, ubicación: {a.get('ubicacion_texto')}, "
+        f"${precio:,.0f} COP, administración: {admin_txt}, UPZ/UPL: {upz_txt}, ubicación: {a.get('ubicacion_texto')}, "
         f"distancia a TransMilenio: {a.get('dist_tm')}m, distancia a SITP: {a.get('dist_sitp')}m, distancia a ciclorruta: {a.get('dist_ciclo')}m, "
         f"comodidades: {a.get('comodidades') or 'no especificadas'}, "
         f"descripción: {(a.get('descripcion') or '')[:200]}"
@@ -375,6 +384,206 @@ def _texto_rango_anios(minimo, maximo) -> str:
     return f"{minimo} a {maximo} años"
 
 
+def _score_comodidades_relevantes(busqueda: dict, anuncio: dict) -> float | None:
+    """Fracción de comodidades OPCIONALES (relevantes) que tiene el inmueble (0.0–1.0).
+    Devuelve None si la búsqueda no tiene lista de relevantes (no aplicar al score)."""
+    relevantes = busqueda.get("comodidades_relevantes") or []
+    if not relevantes:
+        return None
+    coms = anuncio.get("comodidades_normalizadas") or anuncio.get("comodidades") or []
+    if isinstance(coms, str):
+        try:
+            coms = json.loads(coms)
+        except Exception:
+            coms = [coms]
+    coms_lower = [str(c).lower() for c in coms]
+    presentes = sum(
+        1 for rel in relevantes
+        if any(str(rel).lower() in c or c in str(rel).lower() for c in coms_lower)
+    )
+    return round(presentes / len(relevantes), 3)
+
+
+def _score_comodidades_indispensables(busqueda: dict, anuncio: dict) -> float | None:
+    """Penalización fuerte si faltan comodidades INDISPENSABLES (0.0–1.0).
+    Devuelve None si no hay lista de indispensables.
+    Cada comodidad faltante resta 0.7 del score (mínimo 0.0)."""
+    indispensables = busqueda.get("comodidades_indispensables") or []
+    if not indispensables:
+        return None
+    coms = anuncio.get("comodidades_normalizadas") or anuncio.get("comodidades") or []
+    if isinstance(coms, str):
+        try:
+            coms = json.loads(coms)
+        except Exception:
+            coms = [coms]
+    coms_lower = [str(c).lower() for c in coms]
+    faltantes = sum(
+        1 for ind in indispensables
+        if not any(str(ind).lower() in c or c in str(ind).lower() for c in coms_lower)
+    )
+    return round(max(0.0, 1.0 - faltantes * 0.7), 3)
+
+
+def _score_administracion(anuncio: dict) -> float | None:
+    """Score de administración mensual: None si no hay dato (se omite del cálculo).
+    ≤$150.000/mes → 1.0 (barata), ≥$700.000/mes → 0.0 (cara), lineal entre medias."""
+    admin = anuncio.get("administracion")
+    if not admin:
+        return None
+    try:
+        admin = float(admin)
+    except (TypeError, ValueError):
+        return None
+    if admin <= 0:
+        return None
+    LOW, HIGH = 150_000.0, 700_000.0
+    if admin <= LOW:
+        return 1.0
+    if admin >= HIGH:
+        return 0.0
+    return round(1.0 - (admin - LOW) / (HIGH - LOW), 3)
+
+
+def _score_upz(busqueda: dict, anuncio: dict) -> float | None:
+    """Match de UPZ/zona: 1.0 si el inmueble está en alguna UPZ/UPL deseada, 0.0 si no.
+    Devuelve None si la búsqueda no especificó UPZ (no aplica al score).
+    Traduce UPZ pre-2023 del inmueble a UPL post-2023."""
+    upz_deseadas = busqueda.get("upz") or []
+    if not upz_deseadas:
+        return None
+
+    a_upz = anuncio.get("upz")
+    if not a_upz:
+        return 1.0  # Sin dato: no penalizamos
+
+    from services.busqueda import _upz_a_upl_norm, _sin_tildes
+    a_upl_norm = _upz_a_upl_norm(str(a_upz))
+    ubicacion_norm = _sin_tildes((anuncio.get("ubicacion_texto") or "").lower())
+    texto = ubicacion_norm + " " + a_upl_norm + " " + _sin_tildes(str(a_upz).lower())
+
+    for upz in upz_deseadas:
+        b_norm = _sin_tildes(str(upz).strip().lower())
+        if b_norm in texto or b_norm in a_upl_norm or a_upl_norm in b_norm:
+            return 1.0
+    return 0.0
+
+
+def solicitar_pesos_llm_v2(busqueda: dict, cliente: dict | None = None) -> dict:
+    """Versión expandida: asigna pesos a 13 dimensiones unificadas (5 H3 + 8 inmueble)
+    que suman 1.0. Guía al LLM para dar más peso a criterios difíciles de satisfacer
+    (UPZ, comodidades, habitaciones) y menos a los triviales (tipo, antigüedad)."""
+    cliente = cliente or {}
+    pregunta = (busqueda.get("pregunta_abierta") or "").strip()
+    estrato = busqueda.get("estrato_objetivo") or []
+    uso = busqueda.get("uso_previsto") or []
+    ingreso = cliente.get("ingreso_mensual_cop") or 0
+    coms_rel = _texto_lista(busqueda.get("comodidades_relevantes"), "ninguna")
+    coms_ind = _texto_lista(busqueda.get("comodidades_indispensables"), "ninguna")
+    hay_upz = bool(busqueda.get("upz"))
+    hay_coms_rel = bool(busqueda.get("comodidades_relevantes"))
+    hay_coms_ind = bool(busqueda.get("comodidades_indispensables"))
+
+    prompt = f"""Eres un sistema de scoring inmobiliario personalizado. Dado el perfil del cliente,
+asigna pesos (0.0–1.0, sumando EXACTAMENTE 1.0) a 13 dimensiones de evaluación.
+
+PERFIL DEL CLIENTE:
+- Qué busca (texto libre): {pregunta or 'no especificado'}
+- Estrato objetivo: {estrato}
+- Uso previsto: {_texto_lista(uso)}
+- Presupuesto: {busqueda.get('presupuesto_min', 0):,.0f} a {busqueda.get('presupuesto_max', 0):,.0f} COP
+- Ingreso mensual: {ingreso:,.0f} COP/mes
+- Habitaciones mínimas: {busqueda.get('habitaciones_min', 'no especificado')}
+- Baños mínimos: {busqueda.get('banos_min', 'no especificado')}
+- UPZ/zona deseada: {_texto_lista(busqueda.get('upz'), 'no especificada')}
+- Comodidades relevantes (opcionales): {coms_rel}
+- Comodidades indispensables: {coms_ind}
+
+CRITERIOS FÁCILES DE SATISFACER → asigna peso BAJO (0.02–0.06 cada uno):
+- tipo_vivienda: casi todos los anuncios son del tipo correcto
+- antiguedad: la mayoría de inmuebles no tienen restricción
+
+CRITERIOS DIFÍCILES DE SATISFACER → asigna peso ALTO (según importancia):
+- upz: pocos inmuebles están exactamente en la zona/UPZ deseada {'(sí aplica)' if hay_upz else '(no aplica → peso 0)'}
+- comodidades_relevantes: varía mucho entre inmuebles {'(sí aplica)' if hay_coms_rel else '(no aplica → peso 0)'}
+- comodidades_indispensables: filtro crítico {'(sí aplica)' if hay_coms_ind else '(no aplica → peso 0)'}
+- habitaciones_banos: requisito mínimo difícil de cumplir exactamente
+- administracion: costo que muchos inmuebles tienen alto o sin dato {'→ peso bajo si ingreso > 15M COP/mes' if ingreso > 15_000_000 else ''}
+
+REGLAS DE PERSONALIZACIÓN POR PERFIL:
+- Texto menciona parques/verde/naturaleza/aire → aumenta s_entorno_verde significativamente
+- Texto menciona comercio/tiendas/restaurantes/servicios → aumenta s_comercio significativamente
+- Texto menciona seguridad/tranquilidad → aumenta s_seguridad
+- Texto menciona movilidad reducida/adulto mayor/pensionado → aumenta comodidades_relevantes mucho
+- Texto menciona hijos/familia/niños → aumenta habitaciones_banos
+- Texto menciona trabajo remoto/home office → reduce s_transporte
+- Ingreso > 15M COP/mes → reduce presupuesto y administracion
+
+DIMENSIONES DEL SECTOR H3 (datos del entorno urbano):
+- s_seguridad: seguridad ciudadana, hurtos
+- s_transporte: TransMilenio, Metro, SITP, ciclovías
+- s_comercio: supermercados, centros comerciales
+- s_entorno_verde: parques, árboles, recreación
+- s_estrato_valor: estrato del sector, avalúo, colegios
+
+DIMENSIONES DEL INMUEBLE:
+- presupuesto: si el precio entra en el rango del cliente
+- estrato: si el estrato coincide con el deseado
+- habitaciones_banos: si cumple mínimo de habitaciones y baños
+- upz: si está en la UPZ/zona deseada
+- tipo_vivienda: si el tipo coincide (FÁCIL — peso bajo)
+- antiguedad: si la antigüedad es aceptable (FÁCIL — peso bajo)
+- comodidades_relevantes: fracción de comodidades opcionales presentes
+- administracion: costo mensual de administración
+
+Responde ÚNICAMENTE con JSON con exactamente estas 13 claves, sin texto adicional:
+{{"s_seguridad":0.XX,"s_transporte":0.XX,"s_comercio":0.XX,"s_entorno_verde":0.XX,"s_estrato_valor":0.XX,"presupuesto":0.XX,"estrato":0.XX,"habitaciones_banos":0.XX,"upz":0.XX,"tipo_vivienda":0.XX,"antiguedad":0.XX,"comodidades_relevantes":0.XX,"administracion":0.XX}}"""
+
+    EXPECTED = ["s_seguridad", "s_transporte", "s_comercio", "s_entorno_verde", "s_estrato_valor",
+                "presupuesto", "estrato", "habitaciones_banos", "upz",
+                "tipo_vivienda", "antiguedad", "comodidades_relevantes", "administracion"]
+    DEFAULT = {
+        "s_seguridad": 0.11, "s_transporte": 0.08, "s_comercio": 0.10,
+        "s_entorno_verde": 0.11, "s_estrato_valor": 0.08,
+        "presupuesto": 0.10, "estrato": 0.07, "habitaciones_banos": 0.10,
+        "upz": 0.09 if hay_upz else 0.0,
+        "tipo_vivienda": 0.03, "antiguedad": 0.03,
+        "comodidades_relevantes": 0.07 if hay_coms_rel else 0.0,
+        "administracion": 0.03,
+    }
+    # Renormalizar defaults por si algunas son 0
+    total_def = sum(DEFAULT.values())
+    if total_def > 0:
+        DEFAULT = {k: round(v / total_def, 4) for k, v in DEFAULT.items()}
+
+    try:
+        respuesta = _client.messages.create(
+            model=config.CLAUDE_FAST,
+            max_tokens=320,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        texto = "".join(b.text for b in respuesta.content if b.type == "text").strip()
+        if texto.startswith("```"):
+            texto = texto.split("```")[1]
+            if texto.lower().startswith("json"):
+                texto = texto[4:]
+        pesos = json.loads(texto)
+        total = sum(pesos.values())
+        if total > 0:
+            pesos = {k: round(v / total, 4) for k, v in pesos.items()}
+        for k in EXPECTED:
+            if k not in pesos:
+                pesos[k] = DEFAULT.get(k, 0.0)
+        # Forzar a 0 las que no aplican
+        if not hay_upz:
+            pesos["upz"] = 0.0
+        if not hay_coms_rel:
+            pesos["comodidades_relevantes"] = 0.0
+        return pesos
+    except Exception:
+        return dict(DEFAULT)
+
+
 def calcular_scores_llm(busqueda: dict, anuncios: list[dict]) -> dict[int, dict]:
     """Le pide a Claude un score 0-1 para CADA anuncio en un solo llamado
     (no uno por inmueble, para no disparar costo/tiempo por busqueda),
@@ -390,11 +599,20 @@ def calcular_scores_llm(busqueda: dict, anuncios: list[dict]) -> dict[int, dict]
 
     lista_inmuebles = "\n".join(_resumir_anuncio_para_prompt(a) for a in anuncios)
 
-    prompt = f"""Eres un asesor inmobiliario de Casa en Casa evaluando que tan bien encajan
-varios inmuebles con el perfil de un cliente especifico.
+    prompt = f"""Eres un asesor inmobiliario de Casa en Casa evaluando qué tan bien encajan
+inmuebles con el perfil de un cliente. Usa una escala ESTRICTA y DIFERENCIADORA:
 
-CRITERIOS DE BUSQUEDA DEL CLIENTE:
+ESCALA OBLIGATORIA:
+- 0.90–1.00: match casi perfecto — cumple UPZ, habitaciones, comodidades, precio Y entorno
+- 0.75–0.89: muy buena opción — cumple lo importante, uno o dos puntos de mejora menores
+- 0.60–0.74: opción válida — cumple requisitos mínimos pero faltan cosas relevantes
+- 0.45–0.59: opción mediocre — cumple lo básico (presupuesto/tipo) pero falla en criterios clave
+- 0.30–0.44: opción débil — varios criterios importantes sin cumplir
+- 0.00–0.29: no recomendable — falla en requisitos fundamentales
+
+CRITERIOS DE BÚSQUEDA DEL CLIENTE:
 - Municipios de interés: {_texto_lista([m.get('municipio') for m in (busqueda.get('municipios') or [])])}
+- UPZ/zona deseada: {_texto_lista(busqueda.get('upz'), 'no especificada')}
 - Presupuesto: {(busqueda.get('presupuesto_min') or 0):,.0f} a {(busqueda.get('presupuesto_max') or 0):,.0f} COP
 - Estrato(s) objetivo: {_texto_lista(busqueda.get('estrato_objetivo'))}
 - Tipo de vivienda: {busqueda.get('tipo_vivienda')}, estado deseado: {busqueda.get('estado_deseado')}
@@ -402,33 +620,30 @@ CRITERIOS DE BUSQUEDA DEL CLIENTE:
 - Habitaciones mínimas: {busqueda.get('habitaciones_min')} (exactas: {busqueda.get('habitaciones_exactas')})
 - Baños mínimos: {busqueda.get('banos_min')} (exactos: {busqueda.get('banos_exactos')})
 - Uso previsto: {_texto_lista(busqueda.get('uso_previsto'))}
-- Comodidades relevantes (pesan en el score, no son obligatorias): {_texto_lista(busqueda.get('comodidades_relevantes'), "no especificadas")}
-- Comodidades indispensables: {_texto_lista(busqueda.get('comodidades_indispensables'), "ninguna")} (nota: todos los inmuebles de esta lista YA fueron filtrados y cumplen estas comodidades, no necesitas verificarlas ni penalizar por ellas)
-- Qué busca en la vivienda y su entorno (respuesta abierta del cliente): {busqueda.get('pregunta_abierta') or 'no especificado'}
+- Comodidades relevantes: {_texto_lista(busqueda.get('comodidades_relevantes'), 'no especificadas')}
+- Comodidades indispensables: {_texto_lista(busqueda.get('comodidades_indispensables'), 'ninguna')}
+- Qué busca el cliente (texto libre): {busqueda.get('pregunta_abierta') or 'no especificado'}
 
 INMUEBLES A EVALUAR (incluyen Sub-Scores del sector 0.0–1.0 y POIs cercanos):
 {lista_inmuebles}
 
-Para cada inmueble, asigna un score de compatibilidad entre 0.0 y 1.0 (usa 2 decimales),
-donde 1.0 es un match perfecto y 0.0 no encaja para nada. Considera TODOS los criterios,
-no solo presupuesto/estrato — también el entorno, las comodidades, y lo que el cliente
-dijo textualmente que busca. Diferencia de verdad entre inmuebles: si dos inmuebles tienen
-diferencias reales entre sí (ubicación, comodidades, estado), sus scores deben reflejarlo,
-no le des el mismo número a todos por comodidad.
+REGLAS DE PENALIZACIÓN EXPLÍCITA — aplica estas deducciones antes de cualquier otro ajuste:
+1. UPZ/UPL/zona NO coincide con la deseada (nota: UPZs tradicionales como Galerías, La Esmeralda, Quinta Paredes, etc. forman parte de la UPL Teusaquillo; si el inmueble pertenece a la UPL deseada, SÍ COINCIDE y NO debes penalizar) → descuenta 0.18 del score máximo posible
+2. Cada comodidad RELEVANTE faltante → descuenta 0.05 (p.ej. 3 faltantes = -0.15)
+3. Habitaciones < mínimo requerido → score máximo 0.35 (requisito duro)
+4. Baños < mínimo requerido → score máximo 0.35 (requisito duro)
+5. Administración > $500.000/mes → descuenta 0.08
+6. Administración > $700.000/mes → descuenta 0.15
+7. Comodidad INDISPENSABLE faltante → score máximo 0.25 (muy raro dado el filtro previo, pero verifica)
 
-IMPORTANTE - restricciones duras: habitaciones mínimas y baños mínimos NO son una
-preferencia más entre varias, son un requisito. Si "exactas"/"exactos" es true, el
-inmueble debe tener EXACTAMENTE ese número; si es false, debe tener ESE NÚMERO O MÁS.
-Un inmueble que incumple habitaciones mínimas o baños mínimos no puede pasar de 0.35
-de score sin importar qué tan bien encaje en todo lo demás (los datos del scraper a
-veces no filtran bien esto, así que verifícalo tú mismo con los datos de cada inmueble
-antes de puntuar). La antigüedad y las comodidades indispensables, en cambio, ya
-fueron aplicadas como filtro duro ANTES de que este inmueble llegara a tu evaluación
-- no las vuelvas a verificar ni las penalices, enfócate en diferenciar por lo demás.
+IMPORTANTE:
+- Tipo de vivienda y antigüedad son criterios triviales — NO les des protagonismo en el score
+- UPZ, comodidades y habitaciones son los criterios que realmente diferencian inmuebles
+- Si evaluás un solo inmueble, usa la escala completa igual — no inflés artificialmente
+- Diferencia de verdad: dos inmuebles similares pero en diferente UPZ deben tener scores distintos
 
-Responde ÚNICAMENTE con un array JSON, sin texto adicional antes o después, con este
-formato exacto:
-[{{"id": 123, "score": 0.85, "razon": "explicación breve de una línea"}}, ...]
+Responde ÚNICAMENTE con un array JSON, sin texto adicional, con este formato:
+[{{"id": 123, "score": 0.72, "razon": "explicación concreta de una línea mencionando qué cumple y qué no"}}]
 """
 
     try:
