@@ -543,11 +543,15 @@
           <div style="display:flex; flex-direction:column; gap:8px;">
             <label class="checkbox-label" style="font-weight:600;">
               <input type="checkbox" id="chk_layer_localidades" onchange="toggleGisLayer('localidades', this.checked)">
-              Límites de Localidades (Bogotá)
+              Límites de Localidades (20)
+            </label>
+            <label class="checkbox-label" style="font-weight:600;">
+              <input type="checkbox" id="chk_layer_upls" onchange="toggleGisLayer('upls', this.checked)">
+              Límites de UPL (33)
             </label>
             <label class="checkbox-label" style="font-weight:600;">
               <input type="checkbox" id="chk_layer_upzs" onchange="toggleGisLayer('upzs', this.checked)">
-              Límites de UPZ (Bogotá)
+              Límites de UPZ (116)
             </label>
           </div>
         </div>
@@ -646,6 +650,7 @@
   let markerLayerGroup = L.layerGroup().addTo(map);
   let h3LayerGroup = L.layerGroup();
   let localidadesLayerGroup = L.layerGroup();
+  let uplsLayerGroup = L.layerGroup();
   let upzsLayerGroup = L.layerGroup();
   let poiLayerGroups = {
     transporte: L.layerGroup(),
@@ -699,6 +704,11 @@
         cargarCapaBoundary('localidades');
         map.addLayer(localidadesLayerGroup);
       } else map.removeLayer(localidadesLayerGroup);
+    } else if (layerName === 'upls') {
+      if (visible) {
+        cargarCapaBoundary('upls');
+        map.addLayer(uplsLayerGroup);
+      } else map.removeLayer(uplsLayerGroup);
     } else if (layerName === 'upzs') {
       if (visible) {
         cargarCapaBoundary('upzs');
@@ -717,10 +727,26 @@
   async function cargarCapaBoundary(tipo) {
     if (_boundariesLoaded[tipo]) return;
     _boundariesLoaded[tipo] = true;
-    const endpoint = tipo === 'localidades' ? '/api/boundaries/localidades' : '/api/boundaries/upz';
-    const targetGroup = tipo === 'localidades' ? localidadesLayerGroup : upzsLayerGroup;
-    const strokeColor = tipo === 'localidades' ? '#1E293B' : '#64748B';
-    const fillOpacity = tipo === 'localidades' ? 0.05 : 0.08;
+    
+    let endpoint = '/api/boundaries/localidades';
+    let targetGroup = localidadesLayerGroup;
+    let strokeColor = '#1E293B';
+    let fillOpacity = 0.05;
+    let labelTitle = 'Localidad';
+
+    if (tipo === 'upls') {
+      endpoint = '/api/boundaries/upls';
+      targetGroup = uplsLayerGroup;
+      strokeColor = '#4F46E5';
+      fillOpacity = 0.06;
+      labelTitle = 'UPL';
+    } else if (tipo === 'upzs') {
+      endpoint = '/api/boundaries/upz';
+      targetGroup = upzsLayerGroup;
+      strokeColor = '#64748B';
+      fillOpacity = 0.08;
+      labelTitle = 'UPZ';
+    }
 
     try {
       const res = await fetch(endpoint);
@@ -730,15 +756,15 @@
       L.geoJSON(data, {
         style: {
           color: strokeColor,
-          weight: tipo === 'localidades' ? 2 : 1,
-          dashArray: tipo === 'upzs' ? '3, 3' : null,
+          weight: tipo === 'localidades' ? 2.5 : (tipo === 'upls' ? 1.5 : 1),
+          dashArray: tipo === 'upzs' ? '3, 3' : (tipo === 'upls' ? '5, 5' : null),
           fillColor: strokeColor,
           fillOpacity: fillOpacity
         },
         onEachFeature: (feature, layer) => {
           const p = feature.properties || {};
-          const nombre = p.NOMBRE || p.nombre || p.Nombre || p.LOCALIDAD || 'Sector';
-          layer.bindTooltip(`<strong>${tipo === 'localidades' ? 'Localidad' : 'UPZ'}:</strong> ${nombre}`);
+          const nombre = p.NOMBRE || p.nombre || p.Nombre || p.LOCALIDAD || p.LOCNOMBRE || 'Sector';
+          layer.bindTooltip(`<strong>${labelTitle}:</strong> ${nombre}`);
         }
       }).addTo(targetGroup);
     } catch (e) { console.error(`Error cargando polígonos ${tipo}:`, e); }

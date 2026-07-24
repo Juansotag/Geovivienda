@@ -198,11 +198,12 @@ def _cumple_upz(busqueda: dict, anuncio: dict) -> bool:
     if not a_upz:
         return True
 
+    a_upz_norm = _sin_tildes(str(a_upz).strip().lower())
     a_upl_norm = _upz_a_upl_norm(str(a_upz))
 
     for u_item in upzs_pedidas:
         b_norm = _sin_tildes(str(u_item).strip().lower())
-        if b_norm in a_upl_norm or a_upl_norm in b_norm:
+        if b_norm in a_upz_norm or a_upz_norm in b_norm or b_norm in a_upl_norm or a_upl_norm in b_norm:
             return True
     return False
 
@@ -453,17 +454,44 @@ LOCALIDADES_VALIDAS_BOGOTA = {
 
 def _localidades_slugs_desde_upzs(upzs_pedidas: list[str]) -> list[str]:
     slugs = []
+    upz_map = {}
+    try:
+        from services import spatial_analysis
+        upz_map = spatial_analysis.upz_a_localidad_map() or {}
+    except Exception:
+        pass
+
     for item in upzs_pedidas:
         norm = _sin_tildes(str(item).strip().lower())
-        loc_slug = UPL_A_LOCALIDAD_SLUG.get(norm)
+        loc_slug = None
+
+        # 1. Buscar en el mapa espacial real de 116 UPZs -> Localidades
+        for k, v in upz_map.items():
+            if _sin_tildes(str(k).strip().lower()) == norm:
+                loc_slug = _sin_tildes(str(v).strip().lower()).replace(" ", "-")
+                break
+
+        # 2. Buscar en UPL_A_LOCALIDAD_SLUG
+        if not loc_slug:
+            loc_slug = UPL_A_LOCALIDAD_SLUG.get(norm)
+
+        # 3. Revisar si norm ya es el slug de una localidad válida
         if not loc_slug:
             norm_hyphen = norm.replace(" ", "-")
             if norm_hyphen in LOCALIDADES_VALIDAS_BOGOTA:
                 loc_slug = norm_hyphen
-            else:
+
+        # 4. Validar contra el set de localidades oficiales
+        if loc_slug:
+            loc_slug = _sin_tildes(loc_slug.lower()).replace(" ", "-")
+            if loc_slug not in LOCALIDADES_VALIDAS_BOGOTA:
                 loc_slug = "bogota"
+        else:
+            loc_slug = "bogota"
+
         if loc_slug not in slugs:
             slugs.append(loc_slug)
+
     return slugs
 
 

@@ -265,7 +265,7 @@
       <label class="checkbox-label {% if busqueda and upz_nombre in (busqueda.upz or []) %}checked{% endif %}">
         <input type="checkbox" name="upz" value="{{ upz_nombre }}" onchange="toggleCheckboxClass(this)" {% if
           busqueda and upz_nombre in (busqueda.upz or []) %}checked{% endif %}>
-        <span>{{ upz_nombre }} ({{ localidad_nombre }})</span>
+        <span>{{ upz_nombre }} - {{ localidad_nombre }}</span>
       </label>
       {% endfor %}
     </div>

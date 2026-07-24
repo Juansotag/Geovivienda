@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +9,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
+
 <body class="landing-body">
   <header class="landing-header">
     <div class="sidebar-logo" style="margin-bottom:0; box-shadow:none; border:none; padding:0;">
@@ -19,17 +21,22 @@
   <section class="landing-hero">
     <div class="hero-text">
       <h1>Conectando colombianos con el hogar de sus sueños en Colombia.</h1>
-      <p>Geovivienda es la herramienta interna inteligente para asesores de <strong>Casa en Casa</strong>. Evaluamos perfiles financieros y geográficos de clientes en el exterior para emparejarlos con viviendas ideales en Bogotá usando modelos de compatibilidad y reportes LLM enriquecidos.</p>
-      <a href="{{ url_for('login') }}" class="btn btn-accent" style="font-size: 16px; padding: 12px 32px;">Entrar a la Herramienta</a>
+      <p>Geovivienda es la herramienta interna inteligente para asesores de <strong>Casa en Casa</strong>. Evaluamos
+        perfiles financieros y geográficos de clientes en el exterior para emparejarlos con viviendas ideales en Bogotá
+        usando modelos de compatibilidad y reportes LLM enriquecidos.</p>
+      <a href="{{ url_for('login') }}" class="btn btn-accent" style="font-size: 16px; padding: 12px 32px;">Entrar a la
+        Herramienta</a>
     </div>
     <div class="hero-image">
       <h3 style="margin-top:0;">Filtros & Búsquedas</h3>
-      <div style="border: 1px solid var(--color-border); border-radius: var(--radius-default); padding: 16px; margin-bottom: 12px; background: #FFFFFF; font-size:13px; color:var(--color-text-muted);">
+      <div
+        style="border: 1px solid var(--color-border); border-radius: var(--radius-default); padding: 16px; margin-bottom: 12px; background: #FFFFFF; font-size:13px; color:var(--color-text-muted);">
         <strong>Cliente:</strong> Juan Carlos Ramírez (España)<br>
         <strong>Presupuesto:</strong> 200M - 300M COP<br>
         <strong>Ubicación:</strong> Bogotá DC
       </div>
-      <div style="display:flex; justify-content:space-between; align-items:center; border:1px solid var(--color-border); border-radius: var(--radius-default); padding: 12px; background: #FFFFFF;">
+      <div
+        style="display:flex; justify-content:space-between; align-items:center; border:1px solid var(--color-border); border-radius: var(--radius-default); padding: 12px; background: #FFFFFF;">
         <span style="font-size:14px; font-weight:600;">Apartamento en Cedritos</span>
         <span class="badge badge-alto">92% Match</span>
       </div>
@@ -40,21 +47,27 @@
     <div class="feature-card">
       <i data-lucide="globe" style="width: 28px; height: 28px; color: var(--color-primary); margin-bottom: 12px;"></i>
       <h3>Multi-Portal Scraping</h3>
-      <p>Buscamos inmuebles en tiempo real a través de los portales más importantes como FincaRaíz y Metrocuadrado para consolidar el inventario disponible.</p>
+      <p>Buscamos inmuebles en tiempo real a través de los portales más importantes como FincaRaíz y Metrocuadrado para
+        consolidar el inventario disponible.</p>
     </div>
     <div class="feature-card">
-      <i data-lucide="trending-up" style="width: 28px; height: 28px; color: var(--color-primary); margin-bottom: 12px;"></i>
+      <i data-lucide="trending-up"
+        style="width: 28px; height: 28px; color: var(--color-primary); margin-bottom: 12px;"></i>
       <h3>Algoritmo de Score</h3>
-      <p>Calculamos un puntaje de compatibilidad exacto basado en el presupuesto, estrato, comodidades deseadas, y proximidad al transporte (TransMilenio, SITP).</p>
+      <p>Calculamos un puntaje de compatibilidad exacto basado en el presupuesto, estrato, comodidades deseadas, y
+        proximidad al transporte (TransMilenio, SITP).</p>
     </div>
     <div class="feature-card">
-      <i data-lucide="file-text" style="width: 28px; height: 28px; color: var(--color-primary); margin-bottom: 12px;"></i>
+      <i data-lucide="file-text"
+        style="width: 28px; height: 28px; color: var(--color-primary); margin-bottom: 12px;"></i>
       <h3>Reportes con IA</h3>
-      <p>Generamos informes on-demand con inteligencia artificial (Claude Sonnet 5) para asesorar al cliente honestamente sobre el entorno y la vivienda.</p>
+      <p>Generamos informes on-demand con inteligencia artificial para asesorar al cliente honestamente sobre el entorno
+        y la vivienda.</p>
     </div>
   </section>
   <script>
     lucide.createIcons();
   </script>
 </body>
+
 </html>

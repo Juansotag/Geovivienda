@@ -46,7 +46,10 @@ def _cargar_capas():
     ciclo       = gpd.read_file(os.path.join(GEO_DIR, 'cliclorutas.geojson')).to_crs(CRS_METRICO)
     estratos    = gpd.read_file(os.path.join(GEO_DIR, 'estratos.geojson')).to_crs(CRS_METRICO)
     localidades = gpd.read_file(os.path.join(GEO_DIR, 'localidad.geojson')).to_crs(CRS_METRICO)
-    upzs        = gpd.read_file(os.path.join(GEO_DIR, 'upz.geojson')).to_crs(CRS_METRICO)
+    upz_path = os.path.join(BASE_DIR, 'geodata', 'upz.geojson')
+    if not os.path.exists(upz_path):
+        upz_path = os.path.join(GEO_DIR, 'upz.geojson')
+    upzs        = gpd.read_file(upz_path).to_crs(CRS_METRICO)
     metro       = gpd.read_file(os.path.join(GEO_DIR, 'estaciones_metro.geojson')).to_crs(CRS_METRICO)
     municipios  = gpd.read_file(os.path.join(GEO_DIR, 'municipios_cundinamarca.geojson')).to_crs(CRS_METRICO)
 

@@ -353,9 +353,22 @@ def api_boundaries_localidades():
     return resp
 
 
+@app.route("/api/boundaries/upls")
+def api_boundaries_upls():
+    """Sirve el polígono GeoJSON de las 33 UPL (post-2023) de Bogotá."""
+    path = os.path.join(BASE_DIR, "static", "geo", "upz.geojson")
+    if not os.path.exists(path):
+        return jsonify({"error": "GeoJSON de UPL no encontrado"}), 404
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    resp = jsonify(data)
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
+
 @app.route("/api/boundaries/upz")
 def api_boundaries_upz():
-    """Sirve el polígono GeoJSON de las UPZ de Bogotá."""
+    """Sirve el polígono GeoJSON de las 116 UPZ (pre-2023) de Bogotá."""
     path = os.path.join(BASE_DIR, "geodata", "upz.geojson")
     if not os.path.exists(path):
         path = os.path.join(BASE_DIR, "static", "geo", "upz.geojson")
