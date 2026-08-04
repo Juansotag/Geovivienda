@@ -1,4 +1,4 @@
-# 🏠 Geovivienda: Location, Location, Location
+# Geovivienda: Location, Location, Location
 
 > **"En el mercado inmobiliario, las tres cosas más importantes son: ubicación, ubicación y ubicación."**
 
@@ -42,15 +42,15 @@ Geovivienda es un servicio de inteligencia inmobiliaria que permite encontrar el
 ## Arquitectura
 
 ```
-Tu máquina local                      Servidor público (Railway)
-────────────────                      ─────────────────────────
-extractor_links.py   →  CSV Raw  →    app.py (solo lectura)
-extractor_detalles.py               └── /api/data  → frontend
-spatial_analysis.py  →  CSV Enriquecido
-                         └── dist_sitp
-                         └── dist_tm
-                         └── dist_ciclo
-                         └── estrato_promedio_200m
+Tu máquina local Servidor público (Railway)
+──────────────── ─────────────────────────
+extractor_links.py CSV Raw app.py (solo lectura)
+extractor_detalles.py └── /api/data frontend
+spatial_analysis.py CSV Enriquecido
+ └── dist_sitp
+ └── dist_tm
+ └── dist_ciclo
+ └── estrato_promedio_200m
 ```
 
 > El scraping y el análisis espacial corren **solo en local**. El servidor público sirve los datos ya procesados.
@@ -61,21 +61,21 @@ spatial_analysis.py  →  CSV Enriquecido
 
 ```
 FincaRaíz (web)
-    │
-    ▼
-extractor_links.py      → Lista de URLs de propiedades
-    │
-    ▼
-extractor_detalles.py   → dataset_fincaraiz.csv
-    │                     (precio, área, habitaciones, lat/lng, ...)
-    ▼
-spatial_analysis.py     → dataset_enriquecido.csv
-    │                     + dist_sitp  (metros)
-    │                     + dist_tm    (metros)
-    │                     + dist_ciclo (metros)
-    │                     + estrato_promedio_200m
-    ▼
-app.py / Flask API      → /api/data → frontend
+ │
+ ▼
+extractor_links.py Lista de URLs de propiedades
+ │
+ ▼
+extractor_detalles.py dataset_fincaraiz.csv
+ │ (precio, área, habitaciones, lat/lng, ...)
+ ▼
+spatial_analysis.py dataset_enriquecido.csv
+ │ + dist_sitp (metros)
+ │ + dist_tm (metros)
+ │ + dist_ciclo (metros)
+ │ + estrato_promedio_200m
+ ▼
+app.py / Flask API /api/data frontend
 ```
 
 ### Campos del Dataset Enriquecido
@@ -130,16 +130,16 @@ conda install geopandas -c conda-forge -y
 ```bash
 # El frontend de la app gestiona el scraping desde el sidebar.
 # Para correrlo manualmente desde Python:
-python extractor_links.py    # Extrae URLs
+python extractor_links.py # Extrae URLs
 python extractor_detalles.py # Extrae detalles y guarda dataset_fincaraiz.csv
-python spatial_analysis.py   # Enriquece con datos espaciales
+python spatial_analysis.py # Enriquece con datos espaciales
 ```
 
 ### Levantar el Servidor
 
 ```bash
 python app.py
-# → http://localhost:5000
+# http://localhost:5000
 ```
 
 ---
@@ -150,9 +150,9 @@ La plataforma ofrece una experiencia centralizada para el análisis inmobiliario
 
 1. **Panel de Filtros (Sidebar)**: Define zona (slug de FincaRaíz), tipo de operación, presupuesto, estratos, habitaciones, baños y comodidades.
 2. **Mapa Interactivo (Leaflet)**: Visualiza los inmuebles geolocalizados con capas superponibles:
-   - **Estratos**: Polígonos con clasificación socioeconómica de la ciudad.
-   - **Transmilenio / SITP / Metro / Cable**: Estaciones de transporte masivo.
-   - **Ciclorrutas**: Red de ciclovías.
+ - **Estratos**: Polígonos con clasificación socioeconómica de la ciudad.
+ - **Transmilenio / SITP / Metro / Cable**: Estaciones de transporte masivo.
+ - **Ciclorrutas**: Red de ciclovías.
 3. **Inventario Geolocalizado**: Tabla dinámica con precio total, precio por m² y ubicación exacta.
 4. **Log de Scraping en Tiempo Real**: Visualización del progreso del rastreo vía polling a `/api/status`.
 
@@ -200,22 +200,22 @@ Ver [`geovivienda_roadmap.md`](./geovivienda_roadmap.md) para el plan técnico d
 
 ```
 Geovivienda/
-├── app.py                   # Servidor Flask y API REST
-├── extractor_links.py       # Módulo de extracción de URLs (Selenium)
-├── extractor_detalles.py    # Módulo de extracción de detalles (BS4)
-├── spatial_analysis.py      # Pipeline de análisis espacial (GeoPandas)
-├── dataset_fincaraiz.csv    # Dataset crudo (generado localmente)
-├── dataset_enriquecido.csv  # Dataset enriquecido (generado localmente)
-├── requirements.txt         # Dependencias del servidor
-├── Procfile                 # Configuración de Gunicorn
-├── nixpacks.toml            # Configuración de despliegue en Railway
+├── app.py # Servidor Flask y API REST
+├── extractor_links.py # Módulo de extracción de URLs (Selenium)
+├── extractor_detalles.py # Módulo de extracción de detalles (BS4)
+├── spatial_analysis.py # Pipeline de análisis espacial (GeoPandas)
+├── dataset_fincaraiz.csv # Dataset crudo (generado localmente)
+├── dataset_enriquecido.csv # Dataset enriquecido (generado localmente)
+├── requirements.txt # Dependencias del servidor
+├── Procfile # Configuración de Gunicorn
+├── nixpacks.toml # Configuración de despliegue en Railway
 ├── static/
-│   ├── script.js            # Lógica del frontend (Leaflet, filtros, API)
-│   ├── style.css            # Estilos del dashboard
-│   └── geo/                 # Capas GeoJSON (estratos, transporte, ciclorrutas)
+│ ├── script.js # Lógica del frontend (Leaflet, filtros, API)
+│ ├── style.css # Estilos del dashboard
+│ └── geo/ # Capas GeoJSON (estratos, transporte, ciclorrutas)
 ├── templates/
-│   └── index.html           # Plantilla principal del dashboard
-└── geovivienda_roadmap.md   # Roadmap técnico detallado
+│ └── index.html # Plantilla principal del dashboard
+└── geovivienda_roadmap.md # Roadmap técnico detallado
 ```
 
 ---
