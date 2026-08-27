@@ -4,8 +4,8 @@ import unicodedata
 import os
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STATIC_GEO_DIR = os.path.join(BASE_DIR, 'static', 'geo')
-GEODATA_DIR = os.path.join(BASE_DIR, 'geodata')
+STATIC_GEO_DIR = os.path.join(BASE_DIR, 'static', 'geo', 'bogota')
+GEODATA_DIR = os.path.join(BASE_DIR, 'geodata', 'bogota')
 
 def normalize(text):
     if not text or pd.isna(text): return ''

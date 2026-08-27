@@ -67,7 +67,7 @@ def crear_busqueda(cliente_temporal):
             "uso_previsto": [],
             "comodidades_relevantes": [],
             "comodidades_indispensables": [],
-            "upz": [],
+            "sectores": [],
             "pregunta_abierta": "",
         }
         datos.update(overrides)

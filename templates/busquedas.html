@@ -68,7 +68,9 @@
                 <i data-lucide="info" style="width:12px; height:12px;"></i> Criterios
               </button>
               {% if b.status == 'pendiente' %}
-                <a href="{{ url_for('busqueda_lanzar', busqueda_id=b.id) }}" class="btn btn-primary btn-sm" style="background-color: #28a745; border-color: #28a745; color: white;">Lanzar</a>
+                <form action="{{ url_for('busqueda_lanzar', busqueda_id=b.id) }}" method="post" style="display:inline;">
+                  <button type="submit" class="btn btn-primary btn-sm" style="background-color: #28a745; border-color: #28a745; color: white;">Lanzar</button>
+                </form>
                 <a href="{{ url_for('busqueda_editar', busqueda_id=b.id) }}" class="btn btn-secondary btn-sm">Editar</a>
               {% else %}
                 <a href="{{ url_for('cliente_resultados', cliente_id=b.cliente_id, busqueda_id=b.id) }}" class="btn btn-secondary btn-sm">
@@ -76,9 +78,11 @@
                 </a>
               {% endif %}
               {% if b.status != 'running' %}
-                <a href="{{ url_for('busqueda_lanzar', busqueda_id=b.id) }}" class="btn btn-primary btn-sm" title="Volver a ejecutar esta búsqueda">
+              <form action="{{ url_for('busqueda_lanzar', busqueda_id=b.id) }}" method="post" style="display:inline;">
+                <button type="submit" class="btn btn-primary btn-sm" title="Volver a ejecutar esta búsqueda">
                   <i data-lucide="rotate-cw" style="width:12px; height:12px;"></i> Reintentar
-                </a>
+                </button>
+              </form>
               {% endif %}
               <a href="{{ url_for('mapa', busqueda_id=b.id) }}" class="btn btn-secondary btn-sm" title="Ver resultados de esta búsqueda en el mapa">
                 <i data-lucide="map-pin" style="width:12px; height:12px;"></i> Mapa
@@ -140,7 +144,7 @@ function verCriteriosBusqueda(b) {
     <div style="margin-bottom:12px;">
       <strong>Municipios:</strong> ${municipiosTxt}
     </div>
-    ${(b.upz && b.upz.length) ? `<div style="margin-bottom:12px;"><strong>UPZ / Barrio:</strong> ${b.upz.map(u => `<span class="badge" style="background:#F0FDF4; color:#166534; font-weight:600; margin-right:4px;">${u}</span>`).join(' ')}</div>` : ''}
+    ${(b.sectores && b.sectores.length) ? `<div style="margin-bottom:12px;"><strong>Sector / Barrio:</strong> ${b.sectores.map(s => `<span class="badge" style="background:#F0FDF4; color:#166534; font-weight:600; margin-right:4px;">${s}</span>`).join(' ')}</div>` : ''}
 
     <div style="margin-bottom:12px;">
       <strong style="display:block; margin-bottom:6px;">Comodidades Indispensables (Filtro duro):</strong>

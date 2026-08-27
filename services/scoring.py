@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 
 import anthropic
@@ -198,7 +199,8 @@ Responde ÚNICAMENTE con un objeto JSON, sin texto adicional:
             if k not in pesos:
                 pesos[k] = PESOS_GLOBALES_DEFAULT[k]
         return pesos
-    except Exception:
+    except Exception as _e:
+        logging.error(f"[solicitar_pesos_llm] Fallo al pedir pesos al LLM: {_e}", exc_info=True)
         return dict(PESOS_GLOBALES_DEFAULT)
 
 
@@ -445,26 +447,25 @@ def _score_administracion(anuncio: dict) -> float | None:
     return round(1.0 - (admin - LOW) / (HIGH - LOW), 3)
 
 
-def _score_upz(busqueda: dict, anuncio: dict) -> float | None:
-    """Match de UPZ/zona: 1.0 si el inmueble está en alguna UPZ/UPL deseada, 0.0 si no.
-    Devuelve None si la búsqueda no especificó UPZ (no aplica al score).
-    Traduce UPZ pre-2023 del inmueble a UPL post-2023."""
-    upz_deseadas = busqueda.get("upz") or []
-    if not upz_deseadas:
+def _score_sectores(busqueda: dict, anuncio: dict) -> float | None:
+    """Match de sector/zona: 1.0 si el inmueble está en algún sector deseado, 0.0 si no.
+    Devuelve None si la búsqueda no especificó sector (no aplica al score)."""
+    sectores_pedidos = busqueda.get("sectores") or []
+    if not sectores_pedidos:
         return None
 
-    a_upz = anuncio.get("upz")
-    if not a_upz:
+    a_sec = anuncio.get("nivel_admin_2")
+    if not a_sec:
         return 1.0  # Sin dato: no penalizamos
 
     from services.busqueda import _upz_a_upl_norm, _sin_tildes
-    a_upl_norm = _upz_a_upl_norm(str(a_upz))
+    a_admin1_norm = _upz_a_upl_norm(str(a_sec))
     ubicacion_norm = _sin_tildes((anuncio.get("ubicacion_texto") or "").lower())
-    texto = ubicacion_norm + " " + a_upl_norm + " " + _sin_tildes(str(a_upz).lower())
+    texto = ubicacion_norm + " " + a_admin1_norm + " " + _sin_tildes(str(a_sec).lower())
 
-    for upz in upz_deseadas:
-        b_norm = _sin_tildes(str(upz).strip().lower())
-        if b_norm in texto or b_norm in a_upl_norm or a_upl_norm in b_norm:
+    for sec in sectores_pedidos:
+        b_norm = _sin_tildes(str(sec).strip().lower())
+        if b_norm in texto or b_norm in a_admin1_norm or a_admin1_norm in b_norm:
             return 1.0
     return 0.0
 
@@ -662,7 +663,8 @@ Responde ÚNICAMENTE con un array JSON, sin texto adicional, con este formato:
             int(item["id"]): {"score": round(float(item["score"]), 2), "razon": item.get("razon", "")}
             for item in datos
         }
-    except Exception:
+    except Exception as _e:
+        logging.error(f"[calcular_scores_llm] Fallo al calcular scores LLM: {_e}", exc_info=True)
         return {}
 
 

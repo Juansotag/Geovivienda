@@ -8,8 +8,8 @@ import h3
 import unicodedata
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-GEODATA_DIR = os.path.join(BASE_DIR, 'geodata')
-STATIC_GEO_DIR = os.path.join(BASE_DIR, 'static', 'geo')
+GEODATA_DIR = os.path.join(BASE_DIR, 'geodata', 'bogota')
+STATIC_GEO_DIR = os.path.join(BASE_DIR, 'static', 'geo', 'bogota')
 
 CRS_METRICO = 'EPSG:3116'
 CRS_WGS84   = 'EPSG:4326'

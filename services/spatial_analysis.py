@@ -40,21 +40,44 @@ def _limpiar_h3_row(row_dict: dict) -> dict:
     return out
 
 
-def _cargar_capas():
-    sitp        = gpd.read_file(os.path.join(GEO_DIR, 'estaciones_sitp.geojson')).to_crs(CRS_METRICO)
-    tm          = gpd.read_file(os.path.join(GEO_DIR, 'estaciones_tm.geojson')).to_crs(CRS_METRICO)
-    ciclo       = gpd.read_file(os.path.join(GEO_DIR, 'cliclorutas.geojson')).to_crs(CRS_METRICO)
-    estratos    = gpd.read_file(os.path.join(GEO_DIR, 'estratos.geojson')).to_crs(CRS_METRICO)
-    localidades = gpd.read_file(os.path.join(GEO_DIR, 'localidad.geojson')).to_crs(CRS_METRICO)
-    upz_path = os.path.join(BASE_DIR, 'geodata', 'upz.geojson')
+def _cargar_capas(ciudad="bogota"):
+    ciudad = ciudad.lower()
+    geo_dir = os.path.join(BASE_DIR, 'static', 'geo', ciudad)
+    geodata_dir = os.path.join(BASE_DIR, 'geodata', ciudad)
+
+    def load_if_exists(path):
+        if os.path.exists(path):
+            return gpd.read_file(path).to_crs(CRS_METRICO)
+        return gpd.GeoDataFrame(columns=['geometry'], geometry='geometry', crs=CRS_METRICO)
+
+    sitp        = load_if_exists(os.path.join(geo_dir, 'estaciones_sitp.geojson'))
+    tm          = load_if_exists(os.path.join(geo_dir, 'estaciones_tm.geojson'))
+    if tm.empty and os.path.exists(os.path.join(geo_dir, 'estaciones_mio.geojson')):
+        tm = gpd.read_file(os.path.join(geo_dir, 'estaciones_mio.geojson')).to_crs(CRS_METRICO)
+    ciclo       = load_if_exists(os.path.join(geo_dir, 'cliclorutas.geojson'))
+    if ciclo.empty:
+        ciclo = load_if_exists(os.path.join(geo_dir, 'ciclorrutas.geojson'))
+    estratos    = load_if_exists(os.path.join(geo_dir, 'estratos.geojson'))
+    
+    localidades = load_if_exists(os.path.join(geo_dir, 'localidad.geojson'))
+    if localidades.empty:
+        localidades = load_if_exists(os.path.join(geo_dir, 'comunas.geojson'))
+    
+    upz_path = os.path.join(geodata_dir, 'upz.geojson')
     if not os.path.exists(upz_path):
-        upz_path = os.path.join(GEO_DIR, 'upz.geojson')
-    upzs        = gpd.read_file(upz_path).to_crs(CRS_METRICO)
-    metro       = gpd.read_file(os.path.join(GEO_DIR, 'estaciones_metro.geojson')).to_crs(CRS_METRICO)
-    municipios  = gpd.read_file(os.path.join(GEO_DIR, 'municipios_cundinamarca.geojson')).to_crs(CRS_METRICO)
+        upz_path = os.path.join(geo_dir, 'upz.geojson')
+    if not os.path.exists(upz_path):
+        upz_path = os.path.join(geodata_dir, 'barrios.geojson')
+    upzs        = load_if_exists(upz_path)
+    
+    metro       = load_if_exists(os.path.join(geo_dir, 'estaciones_metro.geojson'))
+    municipios  = load_if_exists(os.path.join(BASE_DIR, 'static', 'geo', 'municipios_cundinamarca.geojson'))
 
     # Capas POIs
-    poi_path = os.path.join(BASE_DIR, 'geodata', 'entorno', 'poi', 'pois_bogota_completo.geojson')
+    poi_path = os.path.join(geodata_dir, 'entorno', 'poi', 'pois_bogota_completo.geojson')
+    if not os.path.exists(poi_path):
+        poi_path = os.path.join(geodata_dir, 'entorno', 'poi', f'pois_{ciudad}_completo.geojson')
+        
     pois_d1_ara = None
     pois_malls = None
     pois_salud = None
@@ -69,13 +92,10 @@ def _cargar_capas():
         pois_educacion = pois_gdf[pois_gdf['categoria'] == 'educacion']
 
     # Capas de parques y transporte extendido para POIs cercanos
-    parques_path = os.path.join(BASE_DIR, 'geodata', 'entorno', 'ambiente', 'parques.geojson')
+    parques_path = os.path.join(geodata_dir, 'entorno', 'ambiente', 'parques.geojson')
     if os.path.exists(parques_path):
         try:
             pois_parques = gpd.read_file(parques_path)
-            # pois_parques.crs puede ser None si el archivo no tiene CRS declarado;
-            # str(None).upper() devolvería 'NONE', no 'None' — y el .upper() sobre
-            # el objeto None lanzaría AttributeError. Se verifica is None primero.
             crs_val = pois_parques.crs
             if crs_val is None or str(crs_val).upper() == 'EPSG:6247':
                 pois_parques = pois_parques.set_crs('EPSG:6247', allow_override=True).to_crs(CRS_METRICO)
@@ -90,27 +110,31 @@ def _cargar_capas():
         estratos = estratos.dropna(subset=[col_estrato])
 
     upz_a_localidad = {}
-    for _, upz_row in upzs.iterrows():
-        centroide = upz_row.geometry.centroid
-        loc_match = localidades[localidades.contains(centroide)]
-        if not loc_match.empty:
-            upz_a_localidad[str(upz_row['NOMBRE']).strip()] = str(loc_match.iloc[0]['LOCNOMBRE']).strip()
+    if not upzs.empty and not localidades.empty:
+        col_upz_nombre = next((c for c in ['NOMBRE', 'BarNombre'] if c in upzs.columns), None)
+        col_loc_nombre = next((c for c in ['LOCNOMBRE', 'ComNombre'] if c in localidades.columns), None)
+        
+        if col_upz_nombre and col_loc_nombre:
+            for _, upz_row in upzs.iterrows():
+                centroide = upz_row.geometry.centroid
+                loc_match = localidades[localidades.contains(centroide)]
+                if not loc_match.empty:
+                    upz_a_localidad[str(upz_row[col_upz_nombre]).strip()] = str(loc_match.iloc[0][col_loc_nombre]).strip()
 
-    # Cargar GeoJSON H3 Res 9 maestro en memoria, indexado por h3_index
+    # Cargar GeoJSON H3 Res 9 maestro en memoria
     h3_lookup = {}
-    h3_geojson_path = os.path.join(BASE_DIR, 'geodata', 'mapa_h3_bogota.geojson')
+    h3_geojson_path = os.path.join(geodata_dir, f'mapa_h3_{ciudad}.geojson')
     if os.path.exists(h3_geojson_path):
         try:
             h3_gdf = gpd.read_file(h3_geojson_path)
-            # Excluir columna geometry para el snapshot
             prop_cols = [c for c in h3_gdf.columns if c != 'geometry']
             for _, row in h3_gdf.iterrows():
                 idx = str(row.get('h3_index', ''))
                 if idx:
                     h3_lookup[idx] = _limpiar_h3_row({c: row[c] for c in prop_cols})
-            print(f"[spatial_analysis] GeoJSON H3 cargado: {len(h3_lookup)} hexágonos en memoria")
+            print(f"[spatial_analysis] GeoJSON H3 cargado: {len(h3_lookup)} hexágonos en memoria para {ciudad}")
         except Exception as e:
-            print(f"[spatial_analysis] Advertencia: no se pudo cargar el GeoJSON H3: {e}")
+            print(f"[spatial_analysis] Advertencia: no se pudo cargar el GeoJSON H3 de {ciudad}: {e}")
 
     return (
         sitp, tm, ciclo, estratos, col_estrato, localidades, upzs, metro, municipios,
@@ -154,14 +178,15 @@ def _calcular_estrato_promedio(gdf, estratos, col_estrato):
     return gdf
 
 
-_CAPAS_CACHE = None
+_CAPAS_CACHE = {}
 
 
-def _capas():
+def _capas(ciudad="bogota"):
+    ciudad = ciudad.lower()
     global _CAPAS_CACHE
-    if _CAPAS_CACHE is None:
-        _CAPAS_CACHE = _cargar_capas()
-    return _CAPAS_CACHE
+    if ciudad not in _CAPAS_CACHE:
+        _CAPAS_CACHE[ciudad] = _cargar_capas(ciudad)
+    return _CAPAS_CACHE[ciudad]
 
 
 # Pre-cargar las capas geográficas al importar el módulo (no de forma lazy).
@@ -176,8 +201,8 @@ except Exception as _e:
     print("[spatial_analysis] Las capas se cargarán en el primer request que las necesite.")
 
 
-def upz_a_localidad_map() -> dict:
-    capas_res = _capas()
+def upz_a_localidad_map(ciudad="bogota") -> dict:
+    capas_res = _capas(ciudad)
     return capas_res[9]
 
 
@@ -205,14 +230,14 @@ def _top_pois_cercanos(capa_gdf, punto_metrico, nombre_col, radio_m=700, max_n=3
         return []
 
 
-def pois_cercanos(lat: float, lon: float, radio_m: int = 700) -> dict:
+def pois_cercanos(lat: float, lon: float, radio_m: int = 700, ciudad="bogota") -> dict:
     """Calcula los POIs más cercanos al punto (lat, lon) por categoría.
     Retorna dict {categoria: [{nombre, distancia_m}]} con hasta 4 POIs por categoría."""
     (
         sitp, tm, ciclo, estratos, col_estrato, localidades, upzs, metro, municipios, _,
         pois_d1_ara, pois_malls, pois_salud, pois_educacion,
         pois_parques, h3_lookup
-    ) = _capas()
+    ) = _capas(ciudad)
 
     punto = gpd.GeoSeries([Point(lon, lat)], crs=CRS_WGS84).to_crs(CRS_METRICO).iloc[0]
 
@@ -243,7 +268,7 @@ def pois_cercanos(lat: float, lon: float, radio_m: int = 700) -> dict:
     return {k: v for k, v in resultado.items() if v}
 
 
-def enriquecer_inmueble(lat: float, lon: float) -> dict:
+def enriquecer_inmueble(lat: float, lon: float, ciudad: str = "bogota") -> dict:
     """
     Enriquece un punto geográfico con datos del hexágono H3 y contexto espacial.
 
@@ -261,7 +286,7 @@ def enriquecer_inmueble(lat: float, lon: float) -> dict:
         sitp, tm, ciclo, estratos, col_estrato, localidades, upzs, metro, municipios, _,
         pois_d1_ara, pois_malls, pois_salud, pois_educacion,
         pois_parques, h3_lookup
-    ) = _capas()
+    ) = _capas(ciudad)
 
     h3_index = h3.latlng_to_cell(lat, lon, 9)
     h3_data  = h3_lookup.get(h3_index)
@@ -350,23 +375,14 @@ def enriquecer_inmueble(lat: float, lon: float) -> dict:
     }
 
 
-def verificar_ubicacion_rapida(lat: float, lon: float) -> dict:
-    """Verifica la ubicación de un punto usando solo H3 lookup + point-in-polygon
-    para UPZ y municipio. NO calcula distancias a capas de transporte/comercio.
-
-    ~1-5ms vs ~5s de enriquecer_inmueble completo.
-
-    Se usa como pre-filtro en busqueda.py para descartar anuncios fuera de las
-    UPZ o municipios pedidos ANTES de gastar tiempo en el enriquecimiento completo.
-
-    Retorna: {"upz": str|None, "municipio": str|None, "localidad": str|None, "h3_index": str|None}
-    """
+def verificar_ubicacion_rapida(lat: float, lon: float, ciudad: str = "bogota") -> dict:
+    """Retorna localidad, upz (o barrio) y municipio de un punto."""
     try:
         (
             _sitp, _tm, _ciclo, _estratos, _col_estrato, localidades, upzs, _metro, municipios, _,
             _pois_d1_ara, _pois_malls, _pois_salud, _pois_educacion,
             _pois_parques, h3_lookup
-        ) = _capas()
+        ) = _capas(ciudad)
 
         punto = gpd.GeoSeries([Point(lon, lat)], crs=CRS_WGS84).to_crs(CRS_METRICO).iloc[0]
 

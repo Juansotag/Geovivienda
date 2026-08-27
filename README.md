@@ -1,235 +1,113 @@
-# Geovivienda: Location, Location, Location
+# 🏠 Geovivienda: Inteligencia Inmobiliaria de Próxima Generación
 
-> **"En el mercado inmobiliario, las tres cosas más importantes son: ubicación, ubicación y ubicación."**
+> **"En el mercado inmobiliario, el éxito no depende de vender metros cuadrados, sino de vender calidad de vida."**
 
-A pesar de este mantra, la mayoría de las plataformas actuales en Colombia se limitan a mostrar el interior de una propiedad —habitaciones, baños, metros cuadrados— sin ofrecer un análisis sistemático y profundo de su entorno. **Geovivienda** nace para cambiar esto.
+## 🎯 Visión Ejecutiva: El Valor de Geovivienda para el Negocio
 
----
+Geovivienda no es un portal de búsqueda de inmuebles más; es una **herramienta estratégica B2B (Business-to-Business)** diseñada para transformar el flujo de ventas de los agentes y ejecutivos de Geovivienda. 
 
-## El Problema
+En un mercado saturado donde el cliente toma meses en decidirse, la fricción principal es encontrar la coincidencia perfecta entre *lo que el cliente imagina* y *lo que realmente ofrece el entorno del inmueble*. Geovivienda soluciona esto combinando **Inteligencia Geoespacial (H3)** e **Inteligencia Artificial (LLM)**.
 
-Las herramientas tradicionales de búsqueda de inmuebles fallan al ignorar el contexto urbano. Un apartamento puede ser perfecto por dentro, pero ¿qué tan seguro es el barrio? ¿Qué tan conectado está con el transporte masivo? ¿Cuál es su estrato real en comparación con el precio?
+### ¿Cómo ayuda Geovivienda a cumplir los objetivos de negocio?
 
-## La Solución
-
-Geovivienda es un servicio de inteligencia inmobiliaria que permite encontrar el próximo hogar basado no solo en las características del inmueble, sino en la **calidad objetiva de su ubicación**.
-
-### Características Principales
-
-- **Scraping Avanzado**: Extracción automatizada de datos desde FincaRaíz con Selenium (Headless) y BeautifulSoup.
-- **Inteligencia Geoespacial**: Captura de coordenadas precisas (Latitud/Longitud) y enriquecimiento con datos de contexto urbano mediante GeoPandas.
-- **Análisis Espacial Integrado**: Cálculo automático de distancia al transporte (Transmilenio, SITP, Ciclorrutas) y estrato socioeconómico promedio ponderado por área en un radio de 200 m.
-- **Capas GIS Interactivas**: Visualización de estratos, estaciones de TransMilenio, SITP, Metro, Cable y Ciclorrutas sobre el mapa.
-- **Dashboard Interactivo**: Interfaz web moderna construida en Flask y Leaflet.js con filtros en tiempo real.
+1. **Cierre de Ventas Más Rápido (Reducción de Tiempo en el Embudo)**: Al interpretar mediante IA las preguntas abiertas de los clientes (ej. *"busco un apartamento seguro, donde pueda salir a pasear a mis perros en la noche y tenga el MIO cerca"*), el sistema califica y filtra automáticamente el inventario. Los agentes pueden presentar opciones altamente relevantes en la primera cita, reduciendo las visitas físicas innecesarias.
+2. **Ventaja Competitiva Basada en Datos (Data-Driven Real Estate)**: Mientras la competencia vende "un apartamento de 3 habitaciones", los agentes de Geovivienda venden "un apartamento rodeado de 4 parques, a 300 metros del transporte masivo y en una zona con índices de seguridad superiores al promedio".
+3. **Escalabilidad y Ecosistema B2B**: Estamos desarrollando una sólida infraestructura espacial para otras ciudades de Colombia. Esto nos permite subir proyectos exclusivos de aliados estratégicos (constructoras, agencias) de manera ágil y conectar todo el flujo de leads calificados directamente con nuestro CRM en Zoho, automatizando el proceso de seguimiento comercial.
+4. **Fidelización y Confianza del Cliente**: Un cliente que recibe opciones que realmente escuchan su estilo de vida es un cliente que confía ciegamente en su agente.
 
 ---
 
-## Stack Tecnológico
+## 🚀 La Solución Tecnológica
 
-| Componente | Tecnología | Rol |
+### 1. Inteligencia Geoespacial Avanzada (Motor H3 de Uber)
+Toda la ciudad está dividida en miles de hexágonos matemáticos (resolución 9), cada uno enriquecido con más de 100 variables pre-calculadas:
+- **Movilidad**: Distancia exacta a estaciones de transporte masivo (Transmilenio, SITP, MIO, Metro) y redes de ciclorrutas.
+- **Entorno Socioeconómico**: Promedios ponderados del estrato en radios de 200 y 500 metros.
+- **Puntos de Interés (POIs)**: Cercanía a supermercados (D1, Ara), colegios, zonas verdes, hospitales y centros comerciales.
+- **Seguridad**: Análisis histórico de micro-criminalidad (hurtos y delitos) por zona.
+
+### 2. Scoring Inmobiliario Potenciado por IA (Gemini)
+El sistema abandona los filtros rígidos. Utilizamos modelos de Inteligencia Artificial para:
+- Leer la descripción narrativa de las necesidades del cliente.
+- Extraer dinámicamente los pesos o importancia de cada variable (ej. qué tan importante es el transporte vs. las zonas verdes).
+- Asignar un **Score de Compatibilidad (0 a 100)** a cada inmueble de la base de datos frente a ese cliente específico.
+
+### 3. Dashboard Interactivo Premium
+Una interfaz web enfocada en productividad, construida en Flask y Leaflet.js, que ofrece:
+- **Flujos B2B**: Gestión de múltiples perfiles de clientes, guardado de búsquedas y seguimiento de prospectos.
+- **Visualización GIS**: Capas vectoriales en tiempo real (estratos, rutas de transporte) superpuestas en el mapa interactivo.
+
+---
+
+## 🛠️ Stack Tecnológico Moderno
+
+Para soportar esta visión, hemos migrado a una infraestructura de clase mundial:
+
+| Capa | Tecnología | Rol Estratégico |
 | :--- | :--- | :--- |
-| **Backend** | Python / Flask | API REST, ruteo y lógica de negocio |
-| **Scraping** | Selenium (WebDriver) | Navegación automatizada en SPAs con scroll dinámico |
-| **Parsing** | BeautifulSoup4 | Extracción de datos del DOM estructurado |
-| **Data Engine** | Pandas / NumPy | Limpieza, normalización y transformación de datos |
-| **Análisis Espacial** | GeoPandas / Shapely | Cálculo de distancias y superposición de capas GIS |
-| **Frontend** | Vanilla JS / Leaflet.js | Mapa interactivo, capas GeoJSON y filtrado dinámico |
-| **UI/UX** | CSS3 (Light Mode) | Diseño moderno tipo dashboard premium |
-| **Infraestructura** | Gunicorn / Nixpacks | Servidor de producción y despliegue en Railway |
+| **Backend & Core** | Python / Flask | Motor de orquestación ágil, APIs REST y algoritmos de negocio. |
+| **Base de Datos** | PostgreSQL (Railway) | Persistencia robusta en la nube. Garantiza que el inventario, clientes y búsquedas estén siempre sincronizados y disponibles. |
+| **Inteligencia Geoespacial** | Uber H3 / GeoPandas | Procesamiento de superposición masiva de polígonos y cálculo de distancias. |
+| **Inteligencia Artificial** | Gemini API | Comprensión del lenguaje natural (NLP) para ponderación de requerimientos de clientes. |
+| **Frontend & GIS** | Vanilla JS / Leaflet.js | Renderizado de mapas y experiencia de usuario asíncrona (AJAX) sin lag. |
+| **Diseño UI/UX** | CSS3 / Glassmorphism | Estética corporativa de impacto que inspira confianza en los ejecutivos y clientes. |
 
 ---
 
-## Arquitectura
+## 🗺️ Arquitectura de Datos (Data Pipeline)
 
-```
-Tu máquina local Servidor público (Railway)
-──────────────── ─────────────────────────
-extractor_links.py CSV Raw app.py (solo lectura)
-extractor_detalles.py └── /api/data frontend
-spatial_analysis.py CSV Enriquecido
- └── dist_sitp
- └── dist_tm
- └── dist_ciclo
- └── estrato_promedio_200m
+El flujo de información que alimenta a Geovivienda:
+
+```mermaid
+graph LR
+    A[Fuentes Abiertas y Catastrales] -->|GeoJSON/CSV| B(Pipeline H3 GeoPandas)
+    B -->|Cálculos Espaciales Pesados| C[geodata/mapa_h3.geojson]
+    C -->|Asignación a Inmuebles| D[PostgreSQL en Railway]
+    D -->|Inventario Enriquecido| E[Dashboard Frontend]
+    F[Agente + Cliente B2B] -->|Narrativa de Vida| G[LLM API]
+    G -->|Ponderación Inteligente| D
 ```
 
-> El scraping y el análisis espacial corren **solo en local**. El servidor público sirve los datos ya procesados.
+### La Dualidad Espacial: Optimización de Rendimiento
+Para garantizar una experiencia veloz, hemos dividido los datos geográficos:
+- **Capa Profunda (`geodata/`)**: Archivos pesados (crimen, UPZs, barrios, POIs) utilizados **solo por el servidor** para calcular la IA.
+- **Capa Visual (`static/geo/`)**: GeoJSON optimizados (ligeros) que viajan al navegador del usuario **solo para dibujar** el mapa.
 
 ---
 
-## Pipeline de Datos
-
-```
-FincaRaíz (web)
- │
- ▼
-extractor_links.py Lista de URLs de propiedades
- │
- ▼
-extractor_detalles.py dataset_fincaraiz.csv
- │ (precio, área, habitaciones, lat/lng, ...)
- ▼
-spatial_analysis.py dataset_enriquecido.csv
- │ + dist_sitp (metros)
- │ + dist_tm (metros)
- │ + dist_ciclo (metros)
- │ + estrato_promedio_200m
- ▼
-app.py / Flask API /api/data frontend
-```
-
-### Campos del Dataset Enriquecido
-
-| Campo | Descripción |
-| :--- | :--- |
-| `URL` | Enlace a la ficha en FincaRaíz |
-| `Precio_Venta` | Precio total en COP |
-| `Area_Metros` | Área total en m² |
-| `Habitaciones` | Número de habitaciones |
-| `Banos` | Número de baños |
-| `Parqueaderos` | Número de parqueaderos |
-| `Estrato` | Estrato declarado en el aviso |
-| `Latitud` / `Longitud` | Coordenadas geográficas |
-| `dist_sitp` | Distancia en metros a la estación SITP más cercana |
-| `dist_tm` | Distancia en metros a la estación Transmilenio más cercana |
-| `dist_ciclo` | Distancia en metros a la ciclorruta más cercana |
-| `estrato_promedio_200m` | Estrato promedio ponderado por área en radio de 200 m |
-
----
-
-## Instalación y Uso Local
-
-### Requisitos Previos
-
-- Python 3.10+
-- Google Chrome instalado (para Selenium)
-- Conda o virtualenv recomendado
-
-### Setup
-
-```bash
-# 1. Clonar el repositorio
-git clone https://github.com/tu-usuario/Geovivienda.git
-cd Geovivienda
-
-# 2. Crear entorno virtual
-conda create -n geovivienda python=3.11 -y
-conda activate geovivienda
-
-# 3. Instalar dependencias Python
-pip install -r requirements.txt
-
-# 4. Instalar GeoPandas (con dependencias espaciales)
-conda install geopandas -c conda-forge -y
-```
-
-> **Nota:** GeoPandas requiere GDAL, Fiona y Shapely. Instalarla con `conda-forge` es la forma más confiable en Windows.
-
-### Ejecutar el Scraping
-
-```bash
-# El frontend de la app gestiona el scraping desde el sidebar.
-# Para correrlo manualmente desde Python:
-python extractor_links.py # Extrae URLs
-python extractor_detalles.py # Extrae detalles y guarda dataset_fincaraiz.csv
-python spatial_analysis.py # Enriquece con datos espaciales
-```
-
-### Levantar el Servidor
-
-```bash
-python app.py
-# http://localhost:5000
-```
-
----
-
-## Interfaz y Funcionalidad
-
-La plataforma ofrece una experiencia centralizada para el análisis inmobiliario:
-
-1. **Panel de Filtros (Sidebar)**: Define zona (slug de FincaRaíz), tipo de operación, presupuesto, estratos, habitaciones, baños y comodidades.
-2. **Mapa Interactivo (Leaflet)**: Visualiza los inmuebles geolocalizados con capas superponibles:
- - **Estratos**: Polígonos con clasificación socioeconómica de la ciudad.
- - **Transmilenio / SITP / Metro / Cable**: Estaciones de transporte masivo.
- - **Ciclorrutas**: Red de ciclovías.
-3. **Inventario Geolocalizado**: Tabla dinámica con precio total, precio por m² y ubicación exacta.
-4. **Log de Scraping en Tiempo Real**: Visualización del progreso del rastreo vía polling a `/api/status`.
-
----
-
-## Persistencia
-
-### Estado Actual
-Los datos se almacenan localmente en:
-- `dataset_fincaraiz.csv` — datos crudos extraídos de FincaRaíz.
-- `dataset_enriquecido.csv` — datos con análisis espacial integrado.
-
-Formato: separador `;`, decimales `,` (compatible con Excel en español).
-
-### Evolución Planificada
-Migración a **PostgreSQL en Supabase** para:
-- Datos compartidos entre usuarios sin re-descarga.
-- Consultas eficientes sobre volúmenes masivos.
-- Sincronización automática de precios y disponibilidad.
-
----
-
-## Retos y Limitaciones Conocidas
-
-- **Peso de Capas GeoJSON**: La capa de Estratos es muy pesada y puede causar problemas de memoria en entornos de despliegue con recursos limitados (Railway free tier). La solución a largo plazo es convertir a PMTiles.
-- **Anti-Scraping**: FincaRaíz usa lazy-loading agresivo. El extractor aplica scroll progresivo y tiempos de espera para garantizar la captura completa.
-- **Análisis Espacial Lento**: El cálculo de estrato promedio con `gpd.overlay` por propiedad es costoso. Para datasets grandes (+500 inmuebles) puede tardar varios minutos.
-
----
-
-## Roadmap
-
-| Fase | Meta |
-|------|------|
-| **Fase 1** — Infraestructura | Migrar a Supabase PostgreSQL + PMTiles en Storage |
-| **Fase 2** — UI/UX | Score de ubicación, sliders, vista comparativa, popups ricos |
-| **Fase 3** — Demo para inversión | 300+ inmuebles, landing page, video LinkedIn |
-| **Futuro** | Predicción de plusvalía, índice de seguridad, alertas por email, multi-ciudad |
-
-Ver [`geovivienda_roadmap.md`](./geovivienda_roadmap.md) para el plan técnico detallado.
-
----
-
-## Estructura del Repositorio
+## ⚙️ Estructura de Componentes del Proyecto
 
 ```
 Geovivienda/
-├── app.py # Servidor Flask y API REST
-├── extractor_links.py # Módulo de extracción de URLs (Selenium)
-├── extractor_detalles.py # Módulo de extracción de detalles (BS4)
-├── spatial_analysis.py # Pipeline de análisis espacial (GeoPandas)
-├── dataset_fincaraiz.csv # Dataset crudo (generado localmente)
-├── dataset_enriquecido.csv # Dataset enriquecido (generado localmente)
-├── requirements.txt # Dependencias del servidor
-├── Procfile # Configuración de Gunicorn
-├── nixpacks.toml # Configuración de despliegue en Railway
+├── app.py                   # Servidor central Flask
+├── services/
+│   ├── busqueda.py          # Lógica centralizada de inventario y filtrado
+│   ├── scoring.py           # Algoritmo de ranking de compatibilidad Inmueble-Cliente
+│   └── spatial_analysis.py  # Interfaz de consulta de capas y hexágonos H3 en memoria
+├── database/
+│   ├── db.py                # Conexión, pooling y queries a PostgreSQL
+│   └── schema.sql           # Estructura relacional normalizada multi-ciudad
+├── scripts/                 # Tareas automatizadas de generación H3 y scraping
+├── geodata/                 # Almacén de procesamiento backend (Carpetas /bogota y /cali)
 ├── static/
-│ ├── script.js # Lógica del frontend (Leaflet, filtros, API)
-│ ├── style.css # Estilos del dashboard
-│ └── geo/ # Capas GeoJSON (estratos, transporte, ciclorrutas)
-├── templates/
-│ └── index.html # Plantilla principal del dashboard
-└── geovivienda_roadmap.md # Roadmap técnico detallado
+│   ├── script.js            # Lógica AJAX interactiva y Mapas Leaflet
+│   └── geo/                 # Recursos espaciales ligeros para Frontend (Carpetas /bogota y /cali)
+├── templates/               # Vistas HTML con Jinja2
+└── tests/                   # Framework Pytest: +40 pruebas de integración y unitarias para asegurar calidad
 ```
 
 ---
 
-## Visión de Futuro
+## 📈 Roadmap Ejecutivo y Proyección de Fases
 
-Este proyecto no es solo un buscador; es la base para una **red de agentes de IA** dedicados al sector inmobiliario. La infraestructura de datos espaciales generada aquí servirá para:
-
-- Predicción de plusvalía basada en desarrollo urbano cercano.
-- Recomendaciones personalizadas por estilo de vida.
-- Análisis de riesgo y seguridad por micro-sector (datos SIEDCO).
-- Comparación con precios históricos.
-- API pública para agencias inmobiliarias.
+| Fase | Estado | Hito Entregado |
+|------|--------|----------------|
+| **Fase 1: Infraestructura Core** | ✅ Completada | Adopción de PostgreSQL, estructura de autenticación de clientes y rediseño B2B del portal. |
+| **Fase 2: Inteligencia (H3+AI)**| ✅ Completada | Despliegue del índice espacial H3 y conexión funcional con modelos de lenguaje LLM para scoring. |
+| **Fase 3: Multi-Ciudad** | 🚧 En Progreso | Estandarización de taxonomía urbana (Sectores y Nivel Admin). Inicio del piloto comercial en la ciudad de Cali. |
+| **Fase 4: Insights Predictivos** | 📅 Planificada | Módulo de sugerencias automáticas de inversión y predicción de plusvalía a 5 años basada en macro-tendencias. |
+| **Fase 5: Apertura B2C** | 📅 Futuro | Lanzamiento de interfaz pública (Lead Generation) para captar clientes orgánicos, redirigiéndolos al agente de Geovivienda más cercano. |
 
 ---
 
-*Desarrollado para transformar la búsqueda de vivienda en Colombia.*
+*Geovivienda no se trata de buscar dónde vivir. Se trata de predecir cómo vas a vivir.*

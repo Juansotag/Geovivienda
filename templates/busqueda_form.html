@@ -253,19 +253,19 @@
 
   <div id="container-bogota-sectores" style="display:none; margin-top:14px; background: rgba(24, 31, 89, 0.03); padding: 16px; border-radius: var(--radius-default); border: 1px solid var(--color-border);">
     <h4 style="margin-top:0; margin-bottom:10px; font-size:14px; color:var(--color-primary); display:flex; align-items:center; gap:8px;">
-      <i data-lucide="map-pin" style="width:16px; height:16px;"></i> Filtro Territorial por UPZ (Bogotá)
+      <i data-lucide="map-pin" style="width:16px; height:16px;"></i> Filtro Territorial por Sector (UPZ / Barrio)
     </h4>
     <p style="font-size:12px; color:var(--color-text-muted); margin-top:-4px; margin-bottom:12px;">
-      Selecciona una o varias UPZ si deseas acotar la búsqueda a sectores específicos (pueden ser de localidades
-      distintas). Si no seleccionas ninguna, se busca en toda la ciudad. Los inmuebles fuera de las UPZ elegidas
+      Selecciona uno o varios sectores si deseas acotar la búsqueda a zonas específicas. Si no seleccionas ninguno, se busca en toda la ciudad. Los inmuebles fuera de las zonas elegidas
       serán filtrados.
     </p>
-    <div class="checkbox-group" style="max-height:260px; overflow-y:auto; padding-right:4px; margin-bottom:0;">
-      {% for upz_nombre, localidad_nombre in upz_opciones %}
-      <label class="checkbox-label {% if busqueda and upz_nombre in (busqueda.upz or []) %}checked{% endif %}">
-        <input type="checkbox" name="upz" value="{{ upz_nombre }}" onchange="toggleCheckboxClass(this)" {% if
-          busqueda and upz_nombre in (busqueda.upz or []) %}checked{% endif %}>
-        <span>{{ upz_nombre }} - {{ localidad_nombre }}</span>
+    <div class="checkbox-group" style="max-height:260px; overflow-y:auto; padding-right:4px; margin-bottom:0;" id="sectores-checkbox-group">
+      {% for sector_nombre, admin1_nombre in sectores_opciones %}
+      {% set sector_lower = sector_nombre | lower %}
+      <label class="checkbox-label {% if busqueda and sector_lower in ((busqueda.sectores or []) | map('lower') | list) %}checked{% endif %}">
+        <input type="checkbox" name="sectores" value="{{ sector_nombre }}" onchange="toggleCheckboxClass(this)" {% if
+          busqueda and sector_lower in ((busqueda.sectores or []) | map('lower') | list) %}checked{% endif %}>
+        <span>{{ sector_nombre }} - {{ admin1_nombre }}</span>
       </label>
       {% endfor %}
     </div>
@@ -727,7 +727,7 @@
       `).join("");
     }
     document.getElementById("municipios_json").value = JSON.stringify(_municipiosSeleccionados);
-    verificarBogotaSectores();
+    verificarSectoresDisponibles();
     if (window.lucide) lucide.createIcons();
   }
 
@@ -735,13 +735,14 @@
   // en app.py), asi que aqui solo se decide si mostrarlo u ocultarlo segun si
   // Bogota esta entre los municipios elegidos - al ocultarlo se limpia la
   // seleccion para no dejar UPZ "fantasma" aplicadas a una busqueda sin Bogota.
-  function verificarBogotaSectores() {
+  function verificarSectoresDisponibles() {
+    // TODO: Cargar sectores dinámicamente según la ciudad (Cali/Bogotá)
     const tieneBogota = _municipiosSeleccionados.some(m => m.municipio && m.municipio.toLowerCase().includes("bogot"));
     const container = document.getElementById("container-bogota-sectores");
     if (container) {
       container.style.display = tieneBogota ? "block" : "none";
       if (!tieneBogota) {
-        container.querySelectorAll('input[name="upz"]').forEach(cb => {
+        container.querySelectorAll('input[name="sectores"]').forEach(cb => {
           cb.checked = false;
           const label = cb.closest(".checkbox-label");
           if (label) label.classList.remove("checked");

@@ -279,12 +279,12 @@
           <div class="form-group-sm">
             <label for="select_basemap">Proveedor de Mapa</label>
             <select id="select_basemap" onchange="changeBaseMap(this.value)">
+              <option value="google_hybrid" selected>Google Maps Híbrido</option>
               <option value="carto_voyager">CartoDB Voyager (Claro)</option>
               <option value="carto_dark">CartoDB Dark Matter (Oscuro)</option>
               <option value="osm">OpenStreetMap Standard</option>
               <option value="google_roadmap">Google Maps Roadmap</option>
               <option value="google_satellite">Google Maps Satelital</option>
-              <option value="google_hybrid">Google Maps Híbrido</option>
             </select>
           </div>
         </div>
@@ -543,15 +543,15 @@
           <div style="display:flex; flex-direction:column; gap:8px;">
             <label class="checkbox-label" style="font-weight:600;">
               <input type="checkbox" id="chk_layer_localidades" onchange="toggleGisLayer('localidades', this.checked)">
-              Límites de Localidades (20)
+              1. Localidad / Comuna
             </label>
             <label class="checkbox-label" style="font-weight:600;">
               <input type="checkbox" id="chk_layer_upls" onchange="toggleGisLayer('upls', this.checked)">
-              Límites de UPL (33)
+              2. UPL (Bogotá)
             </label>
             <label class="checkbox-label" style="font-weight:600;">
               <input type="checkbox" id="chk_layer_upzs" onchange="toggleGisLayer('upzs', this.checked)">
-              Límites de UPZ (116)
+              3. UPZ / Barrio
             </label>
           </div>
         </div>
@@ -575,8 +575,13 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
   integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
+<script id="anuncios-data" type="application/json">
+{{ anuncios_json | safe }}
+</script>
+
 <script>
   const GOOGLE_KEY = {{ (google_maps_api_key or '') | tojson }};
+  // Variables globales
   const busquedaResultadosMap = {{ busqueda_resultados_map | tojson | safe }};
   // Catálogo de búsquedas para los dropdowns de acciones del popup
   const BUSQUEDAS_CATALOG = {{ busquedas | map(attribute = 'id') | list | tojson | safe }}.map((id, i) => ({
@@ -585,34 +590,21 @@
     + ' — Búsqueda #' + id,
     cliente_nombre: {{ busquedas | map(attribute = 'cliente_nombre') | list | tojson | safe }}[i]
   }));
-  const anuncios = [
-    {% for a in anuncios if a.latitud and a.longitud %}
-  {
-    id: {{ a.id }},
-    tipo_inmueble: {{ a.tipo_inmueble | tojson }},
-    estado: {{ a.estado | tojson }},
-    portal: {{ a.portal | tojson }},
-    precio: {{ a.precio_venta or 0 }},
-    area: {{ a.area_metros or 0 }},
-    habitaciones: {{ a.habitaciones or 0 }},
-    banos: {{ a.banos or 0 }},
-    estrato: {{ a.estrato or 0 }},
-    localidad: {{ a.localidad | tojson }},
-    upz: {{ a.upz | tojson }},
-    ubicacion: {{ a.ubicacion_texto | tojson }},
-    lat: {{ a.latitud }},
-    lng: {{ a.longitud }},
-    url: {{ a.url | tojson }},
-    comodidades: {{ (a.comodidades.split(',') | map('trim') | list if a.comodidades is string else (a.comodidades or [])) | tojson }},
-    compatibilidades: {{ a.compatibilidades | tojson | safe }}
-  },
-  {% endfor %}
-  ];
+  const anuncios = JSON.parse(document.getElementById('anuncios-data').textContent);
 
   const focusId = {{ focus_id if focus_id else 'null' }};
 
   // ── Inicialización de Leaflet ───────────────────
-  const map = L.map('map', { zoomControl: false }).setView([4.65, -74.08], 12);
+  const ciudadObjetivo = "{{ ciudad_objetivo|default('bogota') }}";
+  let defaultCenter = [4.65, -74.08]; // Bogota
+  let defaultZoom = 12;
+
+  if (ciudadObjetivo === "cali") {
+    defaultCenter = [3.4516, -76.5320];
+    defaultZoom = 13;
+  }
+
+  const map = L.map('map', { zoomControl: false }).setView(defaultCenter, defaultZoom);
   L.control.zoom({ position: 'topright' }).addTo(map);
 
   // Capas de Mapa Base
@@ -637,12 +629,12 @@
     })
   };
 
-  let currentTileLayer = baseTileLayers.carto_voyager;
+  let currentTileLayer = baseTileLayers.google_hybrid;
   currentTileLayer.addTo(map);
 
   function changeBaseMap(provider) {
     if (currentTileLayer) map.removeLayer(currentTileLayer);
-    currentTileLayer = baseTileLayers[provider] || baseTileLayers.carto_voyager;
+    currentTileLayer = baseTileLayers[provider] || baseTileLayers.google_hybrid;
     currentTileLayer.addTo(map);
   }
 
@@ -722,34 +714,46 @@
     }
   }
 
+  // Determina la ciudad basada en el centro actual del mapa
+  function getActiveCiudad() {
+    const center = map.getCenter();
+    // Si la latitud es menor a 4 y longitud menor a -75, asumimos Cali
+    if (center.lat < 3.9 && center.lng < -75.0) return 'cali';
+    return 'bogota';
+  }
+
   // ── Capas de Polígonos de Organización Territorial ──
   const _boundariesLoaded = {};
   async function cargarCapaBoundary(tipo) {
-    if (_boundariesLoaded[tipo]) return;
-    _boundariesLoaded[tipo] = true;
-    
-    let endpoint = '/api/boundaries/localidades';
-    let targetGroup = localidadesLayerGroup;
-    let strokeColor = '#1E293B';
-    let fillOpacity = 0.05;
-    let labelTitle = 'Localidad';
+    const activeCity = getActiveCiudad();
+    const cacheKey = tipo + '_' + activeCity;
+    if (_boundariesLoaded[cacheKey]) return;
+    _boundariesLoaded[cacheKey] = true;
 
-    if (tipo === 'upls') {
-      endpoint = '/api/boundaries/upls';
+    let endpoint = `/api/${activeCity}/boundaries/nivel_admin_1`;
+    let targetGroup, strokeColor, fillOpacity, labelTitle;
+
+    if (tipo === 'localidades') {
+      targetGroup = localidadesLayerGroup;
+      strokeColor = '#3B82F6';
+      fillOpacity = 0.1;
+      labelTitle = 'Localidad / Comuna';
+    } else if (tipo === 'upls') {
+      endpoint = `/api/${activeCity}/boundaries/upls`;
       targetGroup = uplsLayerGroup;
-      strokeColor = '#4F46E5';
-      fillOpacity = 0.06;
+      strokeColor = '#F59E0B';
+      fillOpacity = 0.28;
       labelTitle = 'UPL';
     } else if (tipo === 'upzs') {
-      endpoint = '/api/boundaries/upz';
+      endpoint = `/api/${activeCity}/boundaries/nivel_admin_2`;
       targetGroup = upzsLayerGroup;
-      strokeColor = '#64748B';
-      fillOpacity = 0.08;
-      labelTitle = 'UPZ';
+      strokeColor = '#EC4899'; // Vibrant pink instead of gray
+      fillOpacity = 0.05;
+      labelTitle = 'UPZ / Barrio';
     }
 
     try {
-      const res = await fetch(endpoint);
+      const res = await fetch(`${endpoint}?t=${Date.now()}`);
       if (!res.ok) return;
       const data = await res.json();
 
@@ -763,7 +767,7 @@
         },
         onEachFeature: (feature, layer) => {
           const p = feature.properties || {};
-          const nombre = p.NOMBRE || p.nombre || p.Nombre || p.LOCALIDAD || p.LOCNOMBRE || 'Sector';
+          const nombre = p.NOMBRE || p.nombre || p.Nombre || p.LOCALIDAD || p.LOCNOMBRE || p.ComNombre || p.BarNombre || 'Sector';
           layer.bindTooltip(`<strong>${labelTitle}:</strong> ${nombre}`);
         }
       }).addTo(targetGroup);
@@ -771,16 +775,7 @@
   }
 
   // ── Capa H3 y Recálculo Dinámico de Métricas ──
-  async function cargarCapaH3() {
-    try {
-      const res = await fetch("/api/h3/geojson");
-      if (!res.ok) return;
-      h3GeojsonData = await res.json();
-      renderH3Choropleth();
-      map.addLayer(h3LayerGroup);
-      document.getElementById('h3-legend').style.display = 'block';
-    } catch (e) { console.error("Error cargando GeoJSON H3", e); }
-  }
+
 
   // ── Capa H3 y Recálculo Dinámico de Métricas ──
   let useRankingScale = false;
@@ -871,11 +866,24 @@
     }
   }
 
+  let h3GeojsonDataCache = {};
+
   async function cargarCapaH3() {
+    const activeCity = getActiveCiudad();
+
+    if (h3GeojsonDataCache[activeCity]) {
+      h3GeojsonData = h3GeojsonDataCache[activeCity];
+      renderH3Choropleth();
+      map.addLayer(h3LayerGroup);
+      document.getElementById('h3-legend').style.display = 'block';
+      return;
+    }
+
     try {
-      const res = await fetch("/api/h3/geojson");
+      const res = await fetch(`/api/${activeCity}/h3/geojson?t=${Date.now()}`);
       if (!res.ok) return;
-      h3GeojsonData = await res.json();
+      h3GeojsonDataCache[activeCity] = await res.json();
+      h3GeojsonData = h3GeojsonDataCache[activeCity];
       renderH3Choropleth();
       map.addLayer(h3LayerGroup);
       document.getElementById('h3-legend').style.display = 'block';
@@ -1114,7 +1122,7 @@
 
     if (cat === 'transporte') {
       try {
-        const res = await fetch("/api/gis/estaciones_transporte");
+        const res = await fetch(`/api/gis/estaciones_transporte?ciudad=${ciudadObjetivo}`);
         if (!res.ok) return;
         const data = await res.json();
         (data.features || []).forEach(feat => {
@@ -1453,8 +1461,11 @@
       map.setView(marker.getLatLng(), 15);
       marker.openPopup();
     } else if (anuncios.length > 0) {
-      const bounds = L.latLngBounds(anuncios.map(a => [a.lat, a.lng]));
-      map.fitBounds(bounds, { padding: [50, 50] });
+      const validAnuncios = anuncios.filter(a => a.lat && a.lng);
+      if (validAnuncios.length > 0) {
+        const bounds = L.latLngBounds(validAnuncios.map(a => [a.lat, a.lng]));
+        map.fitBounds(bounds, { padding: [50, 50] });
+      }
     }
   });
 

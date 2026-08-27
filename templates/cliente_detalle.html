@@ -88,9 +88,11 @@
               <i data-lucide="info" style="width:12px; height:12px;"></i> Criterios
             </button>
             {% if b.status == 'pendiente' %}
-              <a href="{{ url_for('busqueda_lanzar', busqueda_id=b.id) }}" class="btn btn-primary btn-sm" style="background-color: #28a745; border-color: #28a745; color: white; display:inline-flex; align-items:center; gap:4px;">
-                <i data-lucide="play" style="width:12px; height:12px;"></i> Lanzar
-              </a>
+              <form action="{{ url_for('busqueda_lanzar', busqueda_id=b.id) }}" method="post" style="display:inline;">
+                <button type="submit" class="btn btn-primary btn-sm" style="background-color: #28a745; border-color: #28a745; color: white; display:inline-flex; align-items:center; gap:4px;">
+                  <i data-lucide="play" style="width:12px; height:12px;"></i> Lanzar
+                </button>
+              </form>
               <a href="{{ url_for('busqueda_editar', busqueda_id=b.id) }}" class="btn btn-secondary btn-sm" style="display:inline-flex; align-items:center; gap:4px;">
                 <i data-lucide="pencil" style="width:12px; height:12px;"></i> Editar
               </a>
@@ -104,9 +106,11 @@
               </a>
             {% endif %}
              {% if b.status != 'running' %}
-               <a href="{{ url_for('busqueda_lanzar', busqueda_id=b.id) }}" class="btn btn-secondary btn-sm" style="display:inline-flex; align-items:center; gap:4px;" title="Volver a ejecutar esta búsqueda">
+             <form action="{{ url_for('busqueda_lanzar', busqueda_id=b.id) }}" method="post" style="display:inline;">
+               <button type="submit" class="btn btn-secondary btn-sm" style="display:inline-flex; align-items:center; gap:4px;" title="Volver a ejecutar esta búsqueda">
                  <i data-lucide="rotate-cw" style="width:12px; height:12px;"></i> Reintentar
-               </a>
+               </button>
+             </form>
              {% endif %}
              <a href="{{ url_for('mapa', busqueda_id=b.id) }}" class="btn btn-secondary btn-sm" style="display:inline-flex; align-items:center; gap:4px;" title="Ver resultados de esta búsqueda en el mapa">
               <i data-lucide="map-pin" style="width:12px; height:12px;"></i> Mapa
@@ -176,7 +180,7 @@ function verCriteriosBusqueda(b) {
       <strong>Municipios:</strong> ${municipiosTxt}
     </div>
     ${b.localidad ? `<div style="margin-bottom:6px;"><strong>Localidad:</strong> <span class="badge" style="background:#EEF2FF; color:#3730A3; font-weight:600;">${b.localidad}</span></div>` : ''}
-    ${b.upz ? `<div style="margin-bottom:12px;"><strong>UPZ / Barrio:</strong> <span class="badge" style="background:#F0FDF4; color:#166534; font-weight:600;">${b.upz}</span></div>` : ''}
+    ${b.sectores ? `<div style="margin-bottom:12px;"><strong>Sector / Barrio:</strong> <span class="badge" style="background:#F0FDF4; color:#166534; font-weight:600;">${b.sectores}</span></div>` : ''}
 
     <div style="margin-bottom:12px;">
       <strong style="display:block; margin-bottom:6px;">Comodidades Indispensables (Filtro duro):</strong>

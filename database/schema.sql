@@ -63,8 +63,8 @@ CREATE TABLE IF NOT EXISTS anuncios (
     latitud DOUBLE PRECISION,
     longitud DOUBLE PRECISION,
     h3_index TEXT REFERENCES hexagonos(h3_index),
-    localidad TEXT,
-    upz TEXT,
+    nivel_admin_1 TEXT,                   -- Localidad (Bogotá) / Comuna o Corregimiento (Cali)
+    nivel_admin_2 TEXT,                   -- UPZ (Bogotá) / Barrio (Cali)
     municipio_geo TEXT,                   -- municipio geo-derivado (point-in-polygon)
     h3_data JSONB,                        -- snapshot de val_* y rank_* del hexágono H3 Res 9
     activo BOOLEAN DEFAULT TRUE,
@@ -72,8 +72,8 @@ CREATE TABLE IF NOT EXISTS anuncios (
     ultima_verificacion TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_anuncios_localidad    ON anuncios(localidad);
-CREATE INDEX IF NOT EXISTS idx_anuncios_upz          ON anuncios(upz);
+CREATE INDEX IF NOT EXISTS idx_anuncios_admin1       ON anuncios(nivel_admin_1);
+CREATE INDEX IF NOT EXISTS idx_anuncios_admin2       ON anuncios(nivel_admin_2);
 CREATE INDEX IF NOT EXISTS idx_anuncios_municipio_geo ON anuncios(municipio_geo);
 
 
@@ -133,7 +133,7 @@ CREATE TABLE IF NOT EXISTS busquedas (
     uso_previsto JSONB DEFAULT '[]'::jsonb,
     comodidades_relevantes JSONB DEFAULT '[]'::jsonb,
     comodidades_indispensables JSONB DEFAULT '[]'::jsonb,
-    upz JSONB DEFAULT '[]'::jsonb,
+    sectores JSONB DEFAULT '[]'::jsonb,   -- Reemplaza a 'upz', aplica a cualquier nivel_admin_2
     area_metros_min REAL,
     area_metros_max REAL,
     pregunta_abierta TEXT,

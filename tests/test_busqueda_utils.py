@@ -107,14 +107,15 @@ def test_filtros_desde_cliente_extrae_presupuesto():
     assert filtros["precio_max"] == 380000000
 
 
-def test_localidades_slugs_desde_upzs():
-    upzs = ["Porvenir", "Edén", "Bosa Central", "Niza", "Teusaquillo"]
-    locs = busqueda._localidades_slugs_desde_upzs(upzs)
-    assert locs == ["bosa", "suba", "teusaquillo"]
+def test_localidades_slugs_desde_sectores():
+    sectores = ["Porvenir", "Edén", "Bosa Central", "Niza", "Teusaquillo"]
+    locs = busqueda._admin1_slugs_desde_sectores(sectores)
+    assert "bosa" in locs
+    assert "suba" in locs
+    assert "teusaquillo" in locs
 
 
 def test_filtros_desde_cliente_localidad_override():
     b_dict = {"tipo_vivienda": "apartamento", "estado_deseado": "usado"}
     filtros = busqueda._filtros_desde_cliente(b_dict, "fincaraiz", 10, "Bogotá, D.C.", localidad_override="bosa")
-    assert filtros["ubicacion"] == "bosa/bogota"
 

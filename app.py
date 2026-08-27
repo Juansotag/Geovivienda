@@ -128,28 +128,25 @@ def api_bogota_localidades():
         return jsonify([])
 
 
-@app.route("/api/bogota/upzs")
-def api_bogota_upzs():
-    """Si se pasa ?localidad=X, solo devuelve las UPZ que caen dentro de esa
-    localidad (antes traia siempre las UPZ de toda la ciudad, sin importar
-    la localidad ya elegida)."""
+@app.route("/api/bogota/sectores")
+def api_bogota_sectores():
+    localidad = request.args.get("localidad")
     try:
         from services import spatial_analysis
-        sitp, tm, ciclo, estratos, col_estrato, localidades, upzs, metro, municipios, upz_a_loc = spatial_analysis._capas()
-        localidad_filtro = request.args.get("localidad", "").strip()
-
-        if localidad_filtro:
-            loc_norm = localidad_filtro.strip().lower()
+        sitp, tm, ciclo, estratos, col_estrato, localidades, upzs, metro, municipios, admin2_a_admin1 = spatial_analysis._capas()
+        
+        if localidad:
+            loc_norm = spatial_analysis._sin_tildes(localidad.strip().lower())
             nombres = [
-                nombre for nombre, loc in upz_a_loc.items()
-                if loc.strip().lower() == loc_norm
+                nombre for nombre, loc in admin2_a_admin1.items()
+                if spatial_analysis._sin_tildes(loc.strip().lower()) == loc_norm
             ]
             upz_names = sorted(str(n).strip().title() for n in nombres)
         else:
             upz_names = sorted([str(x).strip().title() for x in upzs["NOMBRE"].dropna().unique()])
         return jsonify(upz_names)
     except Exception as e:
-        print("Error al cargar UPZs:", e)
+        print("Error al cargar sectores:", e)
         return jsonify([])
 
 
@@ -312,27 +309,83 @@ def mapa():
     all_b = db.obtener_todas_busquedas()
 
     busqueda_resultados_map = db.obtener_mapa_busqueda_resultados()
+    
+    ciudad_objetivo = "bogota"
+    
+    if busqueda_id:
+        b = db.obtener_busqueda(busqueda_id)
+        if b and b.get("municipios") and isinstance(b["municipios"], list) and len(b["municipios"]) > 0:
+            mun_str = b["municipios"][0].get("municipio", "bogota").lower()
+            if "cali" in mun_str:
+                ciudad_objetivo = "cali"
+            else:
+                ciudad_objetivo = "bogota"
+    elif focus_id:
+        anuncio = db.obtener_anuncio(focus_id)
+        if anuncio and anuncio.get("ciudad"):
+            if "cali" in anuncio["ciudad"].lower():
+                ciudad_objetivo = "cali"
+
+    anuncios_list = []
+    for a in all_anuncios:
+        if not a.get("latitud") or not a.get("longitud"):
+            continue
+        
+        comodidades_list = []
+        if isinstance(a.get("comodidades"), str):
+            comodidades_list = [c.strip() for c in a["comodidades"].split(",")]
+        elif a.get("comodidades"):
+            comodidades_list = a["comodidades"]
+            
+        compat_val = a.get("compatibilidades")
+        if isinstance(compat_val, str):
+            try:
+                compat_val = json.loads(compat_val)
+            except:
+                compat_val = None
+                
+        anuncios_list.append({
+            "id": a["id"],
+            "tipo_inmueble": a.get("tipo_inmueble"),
+            "estado": a.get("estado"),
+            "portal": a.get("portal"),
+            "precio": a.get("precio_venta") or 0,
+            "area": a.get("area_metros") or 0,
+            "habitaciones": a.get("habitaciones") or 0,
+            "banos": a.get("banos") or 0,
+            "estrato": a.get("estrato") or 0,
+            "localidad": a.get("nivel_admin_1") or None,
+            "upz": a.get("nivel_admin_2") or None,
+            "ubicacion": a.get("ubicacion_texto"),
+            "lat": a.get("latitud"),
+            "lng": a.get("longitud"),
+            "url": a.get("url"),
+            "comodidades": comodidades_list,
+            "compatibilidades": compat_val
+        })
 
     return render_template(
         "mapa.html",
         activo="mapa",
-        anuncios=all_anuncios,
+        anuncios_json=json.dumps(anuncios_list),
         clientes=clientes,
         busquedas=all_b,
         focus_id=focus_id,
         busqueda_id=busqueda_id,
+        ciudad_objetivo=ciudad_objetivo,
         busqueda_resultados_map=busqueda_resultados_map,
         catalogo_comodidades=busqueda.CATALOGO_COMODIDADES,
         google_maps_api_key=os.environ.get("GOOGLE_MAPS_API_KEY", "") or getattr(config, "GOOGLE_MAPS_API_KEY", ""),
     )
 
 
-@app.route("/api/h3/geojson")
-def api_h3_geojson():
-    """Sirve el archivo GeoJSON de hexágonos H3 de Bogotá para la capa GIS del mapa."""
-    geo_path = os.path.join(BASE_DIR, "geodata", "mapa_h3_bogota.geojson")
+@app.route("/api/<ciudad>/h3/geojson")
+def api_h3_geojson(ciudad):
+    """Sirve el archivo GeoJSON de hexágonos H3 para la capa GIS del mapa."""
+    ciudad = ciudad.lower()
+    geo_path = os.path.join(BASE_DIR, "geodata", ciudad, f"mapa_h3_{ciudad}.geojson")
     if not os.path.exists(geo_path):
-        return jsonify({"error": "GeoJSON de hexágonos H3 no encontrado"}), 404
+        return jsonify({"error": f"GeoJSON de hexágonos H3 no encontrado para {ciudad}"}), 404
     with open(geo_path, encoding="utf-8") as f:
         data = json.load(f)
     resp = jsonify(data)
@@ -340,12 +393,18 @@ def api_h3_geojson():
     return resp
 
 
-@app.route("/api/boundaries/localidades")
-def api_boundaries_localidades():
-    """Sirve el polígono GeoJSON de las 20 localidades de Bogotá."""
-    path = os.path.join(BASE_DIR, "static", "geo", "localidad.geojson")
+@app.route("/api/<ciudad>/boundaries/nivel_admin_1")
+def api_boundaries_nivel_admin_1(ciudad):
+    """Sirve el polígono GeoJSON de nivel_admin_1 (Localidades en Bogotá, Comunas en Cali)."""
+    ciudad = ciudad.lower()
+    path = os.path.join(BASE_DIR, "static", "geo", ciudad, "localidad.geojson")
     if not os.path.exists(path):
-        return jsonify({"error": "GeoJSON de localidades no encontrado"}), 404
+        path = os.path.join(BASE_DIR, "static", "geo", ciudad, "comunas.geojson")
+    if not os.path.exists(path):
+        # Fallback a geodata si aún no lo han copiado a static
+        path = os.path.join(BASE_DIR, "geodata", ciudad, "comunas.geojson")
+    if not os.path.exists(path):
+        return jsonify({"error": f"GeoJSON de nivel_admin_1 no encontrado para {ciudad}"}), 404
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     resp = jsonify(data)
@@ -353,27 +412,28 @@ def api_boundaries_localidades():
     return resp
 
 
-@app.route("/api/boundaries/upls")
-def api_boundaries_upls():
-    """Sirve el polígono GeoJSON de las 33 UPL (post-2023) de Bogotá."""
-    path = os.path.join(BASE_DIR, "static", "geo", "upz.geojson")
+@app.route("/api/<ciudad>/boundaries/upls")
+def api_boundaries_upls(ciudad):
+    """Sirve el polígono GeoJSON de las UPL."""
+    ciudad = ciudad.lower()
+    path = os.path.join(BASE_DIR, "static", "geo", ciudad, "upz.geojson")
     if not os.path.exists(path):
-        return jsonify({"error": "GeoJSON de UPL no encontrado"}), 404
+        return jsonify({"error": f"GeoJSON de UPL no encontrado para {ciudad}"}), 404
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     resp = jsonify(data)
     resp.headers["Cache-Control"] = "public, max-age=86400"
     return resp
 
-
-@app.route("/api/boundaries/upz")
-def api_boundaries_upz():
-    """Sirve el polígono GeoJSON de las 116 UPZ (pre-2023) de Bogotá."""
-    path = os.path.join(BASE_DIR, "geodata", "upz.geojson")
+@app.route("/api/<ciudad>/boundaries/nivel_admin_2")
+def api_boundaries_nivel_admin_2(ciudad):
+    """Sirve el polígono GeoJSON de nivel_admin_2 (Sectores: UPZ en Bogotá, Barrios en Cali)."""
+    ciudad = ciudad.lower()
+    path = os.path.join(BASE_DIR, "geodata", ciudad, "upz.geojson")
     if not os.path.exists(path):
-        path = os.path.join(BASE_DIR, "static", "geo", "upz.geojson")
+        path = os.path.join(BASE_DIR, "geodata", ciudad, "barrios.geojson")
     if not os.path.exists(path):
-        return jsonify({"error": "GeoJSON de UPZ no encontrado"}), 404
+        return jsonify({"error": f"GeoJSON de nivel_admin_2 no encontrado para {ciudad}"}), 404
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     resp = jsonify(data)
@@ -383,40 +443,57 @@ def api_boundaries_upz():
 
 @app.route("/api/gis/estaciones_transporte")
 def api_gis_estaciones_transporte():
-    """Sirve las estaciones reales de TransMilenio, TransMiCable y Metro en formato GeoJSON."""
+    """Sirve las estaciones reales de TransMilenio, TransMiCable, Metro y MIO en formato GeoJSON."""
     from shapely.geometry import shape
+    ciudad = request.args.get("ciudad", "bogota").lower()
 
     features = []
 
-    # 1. TransMilenio
-    tm_path = os.path.join(BASE_DIR, "static", "geo", "estaciones_tm.geojson")
-    if os.path.exists(tm_path):
-        with open(tm_path, encoding="utf-8") as f:
-            tm = json.load(f)
-            for feat in tm.get("features", []):
-                nom = feat.get("properties", {}).get("nom_est") or "Estación TransMilenio"
-                coords = feat.get("geometry", {}).get("coordinates")
-                if coords and len(coords) >= 2:
-                    features.append({
-                        "type": "Feature",
-                        "properties": {"nombre": nom, "tipo": "TransMilenio", "ub": feat.get("properties", {}).get("ub_est", "")},
-                        "geometry": {"type": "Point", "coordinates": [coords[0], coords[1]]}
-                    })
+    if ciudad == "cali":
+        # 1. MIO (Estaciones)
+        mio_path = os.path.join(BASE_DIR, "static", "geo", "cali", "estaciones_mio.geojson")
+        if os.path.exists(mio_path):
+            with open(mio_path, encoding="utf-8") as f:
+                mio = json.load(f)
+                for feat in mio.get("features", []):
+                    nom = feat.get("properties", {}).get("nombre") or feat.get("properties", {}).get("name") or "Estación MIO"
+                    coords = feat.get("geometry", {}).get("coordinates")
+                    if coords and len(coords) >= 2:
+                        features.append({
+                            "type": "Feature",
+                            "properties": {"nombre": nom, "tipo": "MIO"},
+                            "geometry": {"type": "Point", "coordinates": [coords[0], coords[1]]}
+                        })
+    else:
+        # 1. TransMilenio
+        tm_path = os.path.join(BASE_DIR, "static", "geo", "estaciones_tm.geojson")
+        if os.path.exists(tm_path):
+            with open(tm_path, encoding="utf-8") as f:
+                tm = json.load(f)
+                for feat in tm.get("features", []):
+                    nom = feat.get("properties", {}).get("nom_est") or "Estación TransMilenio"
+                    coords = feat.get("geometry", {}).get("coordinates")
+                    if coords and len(coords) >= 2:
+                        features.append({
+                            "type": "Feature",
+                            "properties": {"nombre": nom, "tipo": "TransMilenio", "ub": feat.get("properties", {}).get("ub_est", "")},
+                            "geometry": {"type": "Point", "coordinates": [coords[0], coords[1]]}
+                        })
 
-    # 2. TransMiCable
-    cable_path = os.path.join(BASE_DIR, "static", "geo", "estaciones_cable.geojson")
-    if os.path.exists(cable_path):
-        with open(cable_path, encoding="utf-8") as f:
-            cb = json.load(f)
-            for feat in cb.get("features", []):
-                nom = feat.get("properties", {}).get("nom_est") or "Estación Cable"
-                coords = feat.get("geometry", {}).get("coordinates")
-                if coords and len(coords) >= 2:
-                    features.append({
-                        "type": "Feature",
-                        "properties": {"nombre": nom, "tipo": "TransMiCable"},
-                        "geometry": {"type": "Point", "coordinates": [coords[0], coords[1]]}
-                    })
+        # 2. TransMiCable
+        cable_path = os.path.join(BASE_DIR, "static", "geo", "estaciones_cable.geojson")
+        if os.path.exists(cable_path):
+            with open(cable_path, encoding="utf-8") as f:
+                cb = json.load(f)
+                for feat in cb.get("features", []):
+                    nom = feat.get("properties", {}).get("nom_est") or "Estación Cable"
+                    coords = feat.get("geometry", {}).get("coordinates")
+                    if coords and len(coords) >= 2:
+                        features.append({
+                            "type": "Feature",
+                            "properties": {"nombre": nom, "tipo": "TransMiCable"},
+                            "geometry": {"type": "Point", "coordinates": [coords[0], coords[1]]}
+                        })
 
     # 3. Metro (Centroides)
     metro_path = os.path.join(BASE_DIR, "static", "geo", "estaciones_metro_2.geojson")
@@ -626,12 +703,12 @@ def _float_opcional(valor):
     return float(valor) if valor else None
 
 
-def _upz_opciones():
-    """Lista (upz_nombre, localidad_nombre) para el checkbox grid del
-    formulario de busqueda, ordenada por localidad y luego por UPZ."""
-    from services import spatial_analysis
-    upz_a_loc = spatial_analysis.upz_a_localidad_map()
-    pares = [(nombre.strip().title(), loc.strip().title()) for nombre, loc in upz_a_loc.items()]
+def _sectores_opciones(ciudad="Bogotá, D.C."):
+    """Lista (sector_nombre, admin1_nombre) para el checkbox grid del
+    formulario, agrupados en la UI.
+    TODO: cargar admin2_a_admin1 de Cali si ciudad == 'Cali'"""
+    admin2_a_admin1 = spatial_analysis.upz_a_localidad_map()
+    pares = [(nombre.strip().title(), loc.strip().title()) for nombre, loc in admin2_a_admin1.items()]
     return sorted(pares, key=lambda par: (par[1], par[0]))
 
 
@@ -672,7 +749,7 @@ def _parse_busqueda_form(form) -> dict:
         "uso_previsto": form.getlist("uso_previsto"),
         "comodidades_relevantes": form.getlist("comodidades_relevantes"),
         "comodidades_indispensables": form.getlist("comodidades_indispensables"),
-        "upz": form.getlist("upz"),
+        "sectores": [u.strip().title() for u in form.getlist("sectores")],
         "area_metros_min": _float_opcional(form.get("area_metros_min")),
         "area_metros_max": _float_opcional(form.get("area_metros_max")),
         "pregunta_abierta": form["pregunta_abierta"],
@@ -695,7 +772,7 @@ def busqueda_nueva():
             ciudades=CIUDADES,
             busqueda=None,
             catalogo_comodidades=busqueda.CATALOGO_COMODIDADES,
-            upz_opciones=_upz_opciones(),
+            sectores_opciones=_sectores_opciones(),
         )
 
     # POST: Process search criteria
@@ -732,7 +809,7 @@ def busqueda_editar(busqueda_id):
             ciudades=CIUDADES,
             busqueda=busqueda_obj,
             catalogo_comodidades=busqueda.CATALOGO_COMODIDADES,
-            upz_opciones=_upz_opciones(),
+            sectores_opciones=_sectores_opciones(),
         )
 
     datos = _parse_busqueda_form(request.form)
@@ -740,7 +817,7 @@ def busqueda_editar(busqueda_id):
     return redirect(url_for("busquedas"))
 
 
-@app.route("/busquedas/<int:busqueda_id>/lanzar")
+@app.route("/busquedas/<int:busqueda_id>/lanzar", methods=["POST"])
 def busqueda_lanzar(busqueda_id):
     busqueda_obj = db.obtener_busqueda(busqueda_id)
     if not busqueda_obj:
@@ -964,7 +1041,7 @@ def inmueble_score_desglosado(anuncio_id):
 
     try:
         H3_DIMS = ["s_seguridad", "s_transporte", "s_comercio", "s_entorno_verde", "s_estrato_valor"]
-        INM_DIMS = ["presupuesto", "estrato", "habitaciones_banos", "upz", "tipo_vivienda",
+        INM_DIMS = ["presupuesto", "estrato", "habitaciones_banos", "sectores", "tipo_vivienda",
                     "antiguedad", "comodidades_indispensables", "comodidades_relevantes", "administracion"]
 
         # 1. Sub-scores H3 (Python puro)
@@ -987,13 +1064,16 @@ def inmueble_score_desglosado(anuncio_id):
         s_coms_ind = scoring._score_comodidades_indispensables(busqueda_obj, anuncio)
         s_coms_rel = scoring._score_comodidades_relevantes(busqueda_obj, anuncio)
         s_admin = scoring._score_administracion(anuncio)
-        s_upz = scoring._score_upz(busqueda_obj, anuncio)
-
+        s_sec = scoring._score_sectores(busqueda_obj, anuncio)
+        s_presupuesto = scoring._score_presupuesto(busqueda_obj, anuncio)
+        s_estrato = scoring._score_estrato(busqueda_obj, anuncio)
+        s_habs = scoring._score_habitaciones_banos(busqueda_obj, anuncio)
+        
         inmueble_componentes = {
-            "presupuesto":              round(scoring._score_presupuesto(busqueda_obj, anuncio), 3),
-            "estrato":                  round(scoring._score_estrato(busqueda_obj, anuncio), 3),
-            "habitaciones_banos":       round(scoring._score_habitaciones_banos(busqueda_obj, anuncio), 3),
-            "upz":                      round(s_upz, 3) if s_upz is not None else None,
+            "presupuesto":              round(s_presupuesto, 3) if s_presupuesto is not None else None,
+            "estrato":                  round(s_estrato, 3) if s_estrato is not None else None,
+            "habitaciones_banos":       round(s_habs, 3) if s_habs is not None else None,
+            "sectores":                 round(s_sec, 3) if s_sec is not None else None,
             "tipo_vivienda":            round(scoring._score_tipo_vivienda(busqueda_obj, anuncio), 3),
             "antiguedad":               round(scoring._score_antiguedad_estado(anuncio), 3),
             "comodidades_indispensables": round(s_coms_ind, 3) if s_coms_ind is not None else None,
@@ -1085,8 +1165,8 @@ def inmueble_chat(anuncio_id):
             coms = [coms]
 
     from services.busqueda import _upz_a_upl_norm
-    upz_raw = anuncio.get("upz") or ""
-    upl_norm = _upz_a_upl_norm(upz_raw) if upz_raw else ""
+    sec_raw = anuncio.get("nivel_admin_2") or ""
+    upl_norm = _upz_a_upl_norm(sec_raw) if sec_raw else ""
 
     inmueble_json = {
         "id": anuncio_id,
@@ -1094,7 +1174,7 @@ def inmueble_chat(anuncio_id):
         "estado": anuncio.get("estado"),
         "direccion": anuncio.get("ubicacion_texto"),
         "localidad": anuncio.get("localidad"),
-        "upz_tradicional": anuncio.get("upz"),
+        "nivel_admin_2": anuncio.get("nivel_admin_2"),
         "upl_post2023": upl_norm.title() if upl_norm else None,
         "precio_cop": int(precio_val) if precio_val else None,
         "precio_m2_cop": int(precio_val / area_val) if precio_val and area_val else None,
@@ -1181,7 +1261,7 @@ def inmueble_chat(anuncio_id):
                     "estrato_objetivo": bobj.get("estrato_objetivo"),
                     "municipios": bobj.get("municipios"),
                     "zona_deseada": bobj.get("zona_deseada"),
-                    "upz_o_upl_deseada": bobj.get("upz"),
+                    "sectores_deseados": bobj.get("sectores"),
                     "comodidades_relevantes": bobj.get("comodidades_relevantes"),
                     "comodidades_indispensables": bobj.get("comodidades_indispensables"),
                     "uso_previsto": bobj.get("uso_previsto"),

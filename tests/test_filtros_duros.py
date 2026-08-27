@@ -40,27 +40,27 @@ def test_cumple_comodidades_indispensables_falta_una():
     assert not busqueda._cumple_comodidades_indispensables(b, a)
 
 
-def test_cumple_upz_sin_criterio_siempre_pasa():
-    assert busqueda._cumple_upz({"upz": []}, {"id": 1, "upz": None})
+def test_cumple_sectores_sin_criterio_siempre_pasa():
+    assert busqueda._cumple_sectores({"sectores": []}, {"id": 1, "nivel_admin_2": None})
 
 
-def test_cumple_upz_coincide():
-    b = {"upz": ["Chapinero", "Usaquén"]}
-    assert busqueda._cumple_upz(b, {"id": 1, "upz": "Chapinero"})
+def test_cumple_sectores_coincide():
+    b = {"sectores": ["Chapinero", "Usaquén"]}
+    assert busqueda._cumple_sectores(b, {"id": 1, "nivel_admin_2": "Chapinero"})
 
 
-def test_cumple_upz_no_coincide():
-    b = {"upz": ["Chapinero", "Usaquén"]}
-    assert not busqueda._cumple_upz(b, {"id": 1, "upz": "Bosa"})
+def test_cumple_sectores_no_coincide():
+    b = {"sectores": ["Chapinero", "Usaquén"]}
+    assert not busqueda._cumple_sectores(b, {"id": 1, "nivel_admin_2": "Bosa"})
 
 
-def test_cumple_upz_sin_dato_no_descarta():
-    """Fail-open: sin upz precalculado y sin lat/lng no se intenta
+def test_cumple_sectores_sin_dato_no_descarta():
+    """Fail-open: sin sector precalculado y sin lat/lng no se intenta
     geolocalizar (evita tocar red/geopandas en una prueba unitaria) y el
     anuncio no se descarta."""
-    b = {"upz": ["Chapinero"]}
-    a = {"id": 1, "upz": None, "latitud": None, "longitud": None}
-    assert busqueda._cumple_upz(b, a)
+    b = {"sectores": ["Chapinero"]}
+    a = {"id": 1, "nivel_admin_2": None, "latitud": None, "longitud": None}
+    assert busqueda._cumple_sectores(b, a)
 
 
 def test_cumple_municipios_coincide():
@@ -77,18 +77,18 @@ def test_cumple_filtros_duros_combina_todos():
     b = {
         "antiguedad_anios_min": None, "antiguedad_anios_max": None,
         "comodidades_indispensables": ["Ascensor"],
-        "upz": ["Chapinero"],
+        "sectores": ["Chapinero"],
         "municipios": [{"municipio": "Bogotá, D.C."}],
     }
     a_ok = {
         "id": 1, "antiguedad_anios_min": 2, "antiguedad_anios_max": 8,
         "comodidades_normalizadas": ["Ascensor", "Balcón"],
-        "upz": "Chapinero", "municipio_geo": "Bogotá, D.C.",
+        "nivel_admin_2": "Chapinero", "municipio_geo": "Bogotá, D.C.",
     }
     assert busqueda._cumple_filtros_duros(b, a_ok)
 
-    a_upz_ajena = dict(a_ok, upz="Bosa")
-    assert not busqueda._cumple_filtros_duros(b, a_upz_ajena)
+    a_sec_ajena = dict(a_ok, nivel_admin_2="Bosa")
+    assert not busqueda._cumple_filtros_duros(b, a_sec_ajena)
 
     a_sin_comodidad = dict(a_ok, comodidades_normalizadas=[])
     assert not busqueda._cumple_filtros_duros(b, a_sin_comodidad)

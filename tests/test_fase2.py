@@ -11,7 +11,7 @@ def client():
 
 
 def test_api_h3_geojson_returns_ok(client):
-    res = client.get("/api/h3/geojson")
+    res = client.get("/api/bogota/h3/geojson")
     assert res.status_code == 200
     data = json.loads(res.data)
     assert data.get("type") == "FeatureCollection"

@@ -5,9 +5,11 @@
   <h1>Resultados de búsqueda</h1>
   <div style="display:flex; align-items:center; gap:10px;">
     {% if busqueda_id %}
-    <a href="{{ url_for('busqueda_lanzar', busqueda_id=busqueda_id) }}" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:6px;">
-      <i data-lucide="rotate-cw" style="width:16px; height:16px;"></i> Volver a ejecutar
-    </a>
+    <form action="{{ url_for('busqueda_lanzar', busqueda_id=busqueda_id) }}" method="post" style="display:inline;">
+      <button type="submit" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:6px;">
+        <i data-lucide="rotate-cw" style="width:16px; height:16px;"></i> Volver a ejecutar
+      </button>
+    </form>
     <a href="{{ url_for('mapa', busqueda_id=busqueda_id) }}" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:6px;">
       <i data-lucide="map-pin" style="width:16px; height:16px;"></i> Ver resultados en mapa
     </a>
@@ -54,8 +56,8 @@
       <input type="text" id="filtro-localidad" placeholder="Ej: Usaquén" oninput="aplicarFiltrosResultados()">
     </div>
     <div class="form-group" style="margin-bottom:0;">
-      <label for="filtro-upz" style="font-size:11px;">UPZ / Barrio</label>
-      <input type="text" id="filtro-upz" placeholder="Ej: Cedros" oninput="aplicarFiltrosResultados()">
+      <label for="filtro-sector" style="font-size:11px;">Sector / Barrio</label>
+      <input type="text" id="filtro-sector" placeholder="Ej: Cedros" oninput="aplicarFiltrosResultados()">
     </div>
     <div class="form-group" style="margin-bottom:0;">
       <label for="filtro-estado" style="font-size:11px;">Estado</label>
@@ -126,7 +128,7 @@
         <tr class="resultado-fila" data-id="{{ r.id }}" data-portal="{{ r.portal }}" data-tipo="{{ r.tipo_inmueble }}"
             data-estado="{{ r.estado or '' }}" data-estrato="{{ r.estrato or 0 }}" data-habitaciones="{{ r.habitaciones or 0 }}" data-banos="{{ r.banos or 0 }}"
             data-score="{{ r.score or 0 }}" data-precio="{{ r.precio_venta or 0 }}" data-area="{{ r.area_metros or 0 }}"
-            data-localidad="{{ r.localidad or '' }}" data-upz="{{ r.upz or '' }}">
+            data-localidad="{{ r.nivel_admin_1 or '' }}" data-sector="{{ r.nivel_admin_2 or '' }}">
           <td>
             {% if r.score >= 0.75 %}<span class="badge badge-alto">{{ "%.2f"|format(r.score) }}</span>
             {% elif r.score >= 0.4 %}<span class="badge badge-medio">{{ "%.2f"|format(r.score) }}</span>
@@ -156,11 +158,11 @@
           </td>
           <td>
             <div>{{ r.ubicacion_texto }}</div>
-            {% if r.localidad or r.upz %}
-            <div style="display:flex; gap:4px; margin-top:4px; flex-wrap:wrap;">
-              {% if r.localidad %}<span class="badge" style="background:#EEF2FF; color:#3730A3; font-weight:600; font-size:10px;">{{ r.localidad }}</span>{% endif %}
-              {% if r.upz %}<span class="badge" style="background:#F0FDF4; color:#166534; font-weight:600; font-size:10px;">{{ r.upz }}</span>{% endif %}
-            </div>
+            {% if r.nivel_admin_1 or r.nivel_admin_2 %}
+              <div style="display:flex; gap:6px; margin-bottom:8px;">
+                {% if r.nivel_admin_1 %}<span class="badge" style="background:rgba(24,31,89,0.08); color:var(--color-primary); font-weight:600; font-size:10px;">{{ r.nivel_admin_1 }}</span>{% endif %}
+                {% if r.nivel_admin_2 %}<span class="badge" style="background:#F0FDF4; color:#166534; font-weight:600; font-size:10px;">{{ r.nivel_admin_2 }}</span>{% endif %}
+              </div>
             {% endif %}
             <div class="fx-hint" style="margin-top:2px;">
               {{ r.area_metros }} m²
@@ -202,7 +204,7 @@
     <div class="inmueble-card resultado-tarjeta" data-id="{{ r.id }}" data-portal="{{ r.portal }}" data-tipo="{{ r.tipo_inmueble }}"
          data-estado="{{ r.estado or '' }}" data-estrato="{{ r.estrato or 0 }}" data-habitaciones="{{ r.habitaciones or 0 }}" data-banos="{{ r.banos or 0 }}"
          data-score="{{ r.score or 0 }}" data-precio="{{ r.precio_venta or 0 }}" data-area="{{ r.area_metros or 0 }}"
-         data-localidad="{{ r.localidad or '' }}" data-upz="{{ r.upz or '' }}">
+         data-localidad="{{ r.nivel_admin_1 or '' }}" data-sector="{{ r.nivel_admin_2 or '' }}">
       <div class="inmueble-card-foto">
         {% if r.foto_url %}
         <img src="{{ r.foto_url }}" alt="{{ r.tipo_inmueble }}" loading="lazy"
@@ -281,10 +283,14 @@
     </div>
     {% elif status == 'cancelada' %}
     <p>Esta búsqueda fue cancelada. Los inmuebles que ya se alcanzaron a procesar quedaron guardados.</p>
-    <a href="{{ url_for('busqueda_lanzar', busqueda_id=busqueda_id) }}" class="btn btn-primary btn-sm">Reintentar búsqueda</a>
+    <form action="{{ url_for('busqueda_lanzar', busqueda_id=busqueda_id) }}" method="post" style="display:inline;">
+      <button type="submit" class="btn btn-primary btn-sm">Reintentar búsqueda</button>
+    </form>
     {% elif status == 'error' %}
     <p style="color:var(--color-danger);">Esta búsqueda falló durante su ejecución.</p>
-    <a href="{{ url_for('busqueda_lanzar', busqueda_id=busqueda_id) }}" class="btn btn-primary btn-sm">Reintentar búsqueda</a>
+    <form action="{{ url_for('busqueda_lanzar', busqueda_id=busqueda_id) }}" method="post" style="display:inline;">
+      <button type="submit" class="btn btn-primary btn-sm">Reintentar búsqueda</button>
+    </form>
     {% else %}
     <p>Todavía no hay resultados para esta búsqueda.</p>
     {% endif %}
@@ -328,7 +334,7 @@
     const tipo = document.getElementById("filtro-tipo").value;
     const estado = document.getElementById("filtro-estado").value;
     const loc = (document.getElementById("filtro-localidad").value || "").trim().toLowerCase();
-    const upz = (document.getElementById("filtro-upz").value || "").trim().toLowerCase();
+    const sector = (document.getElementById("filtro-sector").value || "").trim().toLowerCase();
     const estratoMin = parseFloat(document.getElementById("filtro-estrato").value) || 0;
     const habsMin = parseFloat(document.getElementById("filtro-habs").value) || 0;
     const banosMin = parseFloat(document.getElementById("filtro-banos").value) || 0;
@@ -344,7 +350,7 @@
         && (!tipo || el.dataset.tipo === tipo)
         && (!estado || el.dataset.estado === estado)
         && (!loc || (el.dataset.localidad || "").toLowerCase().includes(loc))
-        && (!upz || (el.dataset.upz || "").toLowerCase().includes(upz))
+        && (!sector || (el.dataset.sector || "").toLowerCase().includes(sector))
         && (parseFloat(el.dataset.estrato) || 0) >= estratoMin
         && (parseFloat(el.dataset.habitaciones) || 0) >= habsMin
         && (parseFloat(el.dataset.banos) || 0) >= banosMin
@@ -359,7 +365,7 @@
 
   function limpiarFiltrosResultados() {
     ["filtro-id", "filtro-portal", "filtro-tipo", "filtro-estado", "filtro-estrato", "filtro-score"].forEach(id => document.getElementById(id).value = "");
-    ["filtro-localidad", "filtro-upz", "filtro-habs", "filtro-banos", "filtro-precio-min", "filtro-precio-max", "filtro-area-min", "filtro-area-max"].forEach(id => document.getElementById(id).value = "");
+    ["filtro-localidad", "filtro-sector", "filtro-habs", "filtro-banos", "filtro-precio-min", "filtro-precio-max", "filtro-area-min", "filtro-area-max"].forEach(id => document.getElementById(id).value = "");
     aplicarFiltrosResultados();
   }
 

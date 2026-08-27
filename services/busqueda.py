@@ -189,23 +189,38 @@ def _upz_a_upl_norm(nombre: str) -> str:
     return _sin_tildes(upl.strip().lower())
 
 
-def _cumple_upz(busqueda: dict, anuncio: dict) -> bool:
-    upzs_pedidas = busqueda.get("upz") or []
-    if not upzs_pedidas:
+def _cumple_sectores(busqueda: dict, anuncio: dict) -> bool:
+    sectores_pedidos = busqueda.get("sectores") or []
+    if not sectores_pedidos:
         return True
 
-    a_upz = anuncio.get("upz")
-    if not a_upz:
+    a_sec = anuncio.get("nivel_admin_2")
+    if not a_sec:
         return True
 
-    a_upz_norm = _sin_tildes(str(a_upz).strip().lower())
-    a_upl_norm = _upz_a_upl_norm(str(a_upz))
+    a_sec_norm = _sin_tildes(str(a_sec).strip().lower())
+    a_admin1_norm = _upz_a_upl_norm(str(a_sec)) # TODO: Mapeo generico Admin2->Admin1
 
-    for u_item in upzs_pedidas:
-        b_norm = _sin_tildes(str(u_item).strip().lower())
-        if b_norm in a_upz_norm or a_upz_norm in b_norm or b_norm in a_upl_norm or a_upl_norm in b_norm:
+    for s_item in sectores_pedidos:
+        b_norm = _sin_tildes(str(s_item).strip().lower())
+        if b_norm in a_sec_norm or a_sec_norm in b_norm or b_norm in a_admin1_norm or a_admin1_norm in b_norm:
             return True
     return False
+
+
+# Lista canónica de ciudades que NO son Bogotá y se usan para descartar URLs/textos
+# que claramente pertenecen a otra ciudad colombiana. Antes existían DOS versiones
+# inline con contenidos distintos en _es_url_valida_para_municipios y _cumple_municipios;
+# esta constante las unifica.
+_CIUDADES_AJENAS = [
+    "manizales", "cali", "barranquilla", "bucaramanga", "medellin", "cartagena",
+    "pereira", "cucuta", "pasto", "ibague", "neiva", "tunja", "bello",
+    "floridablanca", "itagui", "sabaneta", "dosquebradas", "piedecuesta", "armenia",
+    "barrancabermeja", "yumbo", "quimbaya", "la-estrella", "villamaria", "girardot",
+    "fusagasuga", "ricaurte", "flandes", "sopo", "tocancipa", "facatativa",
+    "zipaquira", "chia", "cajica", "madrid", "mosquera", "funza", "la-calera",
+    "soacha", "sibate", "tabio", "tenjo", "cota", "gachancipa",
+]
 
 
 def _es_url_valida_para_municipios(url: str, municipios_pedidos: list[str]) -> bool:
@@ -213,17 +228,8 @@ def _es_url_valida_para_municipios(url: str, municipios_pedidos: list[str]) -> b
         return True
     url_slug = url.lower()
     m_norms = [_sin_tildes(str(m).strip().lower()).replace(".", "").replace(",", "") for m in municipios_pedidos]
-    
-    ciudades_ajenas = [
-        "manizales", "cali", "barranquilla", "bucaramanga", "medellin", "cartagena", 
-        "pereira", "cucuta", "pasto", "ibague", "neiva", "tunja", "bello", 
-        "floridablanca", "itagui", "sabaneta", "dosquebradas", "piedecuesta", "armenia", 
-        "barrancabermeja", "yumbo", "quimbaya", "la-estrella", "villamaria", "girardot",
-        "fusagasuga", "ricaurte", "flandes", "sopo", "tocancipa", "facatativa",
-        "zipaquira", "chia", "cajica", "madrid", "mosquera", "funza", "la-calera",
-        "soacha", "sibate", "tabio", "tenjo", "cota", "gachancipa"
-    ]
-    for c in ciudades_ajenas:
+
+    for c in _CIUDADES_AJENAS:
         # Revisa si la ciudad ajena está presente en la URL como slug o segmento de ruta
         if f"-{c}" in url_slug or f"/{c}" in url_slug or f"{c}-" in url_slug:
             c_limpia = c.replace("-", "")
@@ -264,8 +270,8 @@ def _cumple_municipios(busqueda: dict, anuncio: dict) -> bool:
         if b_norm in ubi_txt:
             return True
 
-    ciudades_ajenas = ["manizales", "cali", "barranquilla", "bucaramanga", "medellin", "cartagena", "pereira", "cucuta", "pasto", "ibague", "neiva", "tunja", "bello", "floridablanca", "itagui", "sabaneta", "dosquebradas", "piedecuesta", "armenia", "barrancabermeja", "yumbo"]
-    if any(c in ubi_txt for c in ciudades_ajenas):
+    ciudades_ajenas_txt = [c.replace("-", "") for c in _CIUDADES_AJENAS]
+    if any(c in ubi_txt for c in ciudades_ajenas_txt):
         return False
 
     return True
@@ -305,8 +311,8 @@ def _cumple_filtros_duros(busqueda: dict, anuncio: dict) -> bool:
     return (
         _cumple_antiguedad(busqueda, anuncio)
         and _cumple_comodidades_indispensables(busqueda, anuncio)
-        and _cumple_upz(busqueda, anuncio)
-        and _cumple_municipios(busqueda, anuncio)
+        and _cumple_precio(busqueda, anuncio)
+        and _cumple_sectores(busqueda, anuncio)
         and _cumple_area_metros(busqueda, anuncio)
         and _cumple_precio(busqueda, anuncio)
     )
@@ -348,10 +354,10 @@ def revalidar_anuncios_existentes(urls: list[str]):
                 actualizaciones = {}
                 if geo.get("h3_data"):
                     actualizaciones["h3_data"] = geo["h3_data"]
-                if geo.get("upz"):
-                    actualizaciones["upz"] = geo["upz"]
-                if geo.get("localidad"):
-                    actualizaciones["localidad"] = geo["localidad"]
+                if geo.get("nivel_admin_2"):
+                    actualizaciones["nivel_admin_2"] = geo["nivel_admin_2"]
+                if geo.get("nivel_admin_1"):
+                    actualizaciones["nivel_admin_1"] = geo["nivel_admin_1"]
                 if geo.get("municipio"):
                     actualizaciones["municipio_geo"] = geo["municipio"]
                 import h3 as h3lib
@@ -401,7 +407,6 @@ def _fue_cancelada(busqueda_id: int) -> bool:
     return b is not None and b.get("status") == "cancelando"
 
 
-# Mapeo determinista UPL / UPZ -> Localidad oficial de Bogotá (slug de FincaRaiz)
 UPL_A_LOCALIDAD_SLUG: dict[str, str] = {
     "arborizadora": "ciudad-bolivar",
     "barrios unidos": "barrios-unidos",
@@ -452,47 +457,38 @@ LOCALIDADES_VALIDAS_BOGOTA = {
 }
 
 
-def _localidades_slugs_desde_upzs(upzs_pedidas: list[str]) -> list[str]:
-    slugs = []
-    upz_map = {}
+def _admin1_slugs_desde_sectores(sectores_pedidos: list[str]) -> list[str]:
+    """Obtiene slugs de nivel_admin_1 (ej. localidades) a partir de nombres de nivel_admin_2 (ej. UPZ)."""
+    admin2_map = {}
     try:
         from services import spatial_analysis
-        upz_map = spatial_analysis.upz_a_localidad_map() or {}
+        admin2_map = spatial_analysis.upz_a_localidad_map() or {}
     except Exception:
         pass
 
-    for item in upzs_pedidas:
-        norm = _sin_tildes(str(item).strip().lower())
-        loc_slug = None
-
-        # 1. Buscar en el mapa espacial real de 116 UPZs -> Localidades
-        for k, v in upz_map.items():
-            if _sin_tildes(str(k).strip().lower()) == norm:
+    slugs = set()
+    for item in sectores_pedidos:
+        item_norm = _sin_tildes(str(item).lower().strip())
+        
+        # 1. Búsqueda exacta primero
+        encontrado = False
+        for k, v in admin2_map.items():
+            if _sin_tildes(str(k).strip().lower()) == item_norm:
                 loc_slug = _sin_tildes(str(v).strip().lower()).replace(" ", "-")
+                if loc_slug in LOCALIDADES_VALIDAS_BOGOTA:
+                    slugs.add(loc_slug)
+                encontrado = True
                 break
 
         # 2. Buscar en UPL_A_LOCALIDAD_SLUG
-        if not loc_slug:
-            loc_slug = UPL_A_LOCALIDAD_SLUG.get(norm)
+        if not encontrado:
+            loc_slug = UPL_A_LOCALIDAD_SLUG.get(item_norm)
+            if loc_slug:
+                slugs.add(loc_slug)
+            else:
+                slugs.add("bogota")
 
-        # 3. Revisar si norm ya es el slug de una localidad válida
-        if not loc_slug:
-            norm_hyphen = norm.replace(" ", "-")
-            if norm_hyphen in LOCALIDADES_VALIDAS_BOGOTA:
-                loc_slug = norm_hyphen
-
-        # 4. Validar contra el set de localidades oficiales
-        if loc_slug:
-            loc_slug = _sin_tildes(loc_slug.lower()).replace(" ", "-")
-            if loc_slug not in LOCALIDADES_VALIDAS_BOGOTA:
-                loc_slug = "bogota"
-        else:
-            loc_slug = "bogota"
-
-        if loc_slug not in slugs:
-            slugs.append(loc_slug)
-
-    return slugs
+    return list(slugs)
 
 
 def _filtros_desde_cliente(busqueda: dict, portal: str, cantidad: int, municipio_nombre: str, paginas_limite: int = 7, localidad_override: str | None = None) -> dict:
@@ -614,7 +610,7 @@ def buscar_administracion_metrocuadrado(url: str) -> int | None:
     return None
 
 
-def procesar_anuncio_nuevo(url: str, upzs_pedidas: list = None, municipios_pedidos: list = None, driver=None) -> int | None:
+def procesar_anuncio_nuevo(url: str, sectores_pedidos: list = None, municipios_pedidos: list = None, driver=None) -> int | None:
     if municipios_pedidos and not _es_url_valida_para_municipios(url, municipios_pedidos):
         return None
     portal = _portal_desde_url(url)
@@ -671,17 +667,17 @@ def procesar_anuncio_nuevo(url: str, upzs_pedidas: list = None, municipios_pedid
                 if not pasa_mpio:
                     return None
 
-            if upzs_pedidas:
-                a_upz = ubi_rapida.get("upz") or ""
-                if a_upz:
-                    a_upl_norm = _upz_a_upl_norm(str(a_upz))
-                    pasa_upz = False
-                    for u_item in upzs_pedidas:
-                        u_norm = _sin_tildes(str(u_item).strip().lower())
-                        if u_norm in a_upl_norm or a_upl_norm in u_norm:
-                            pasa_upz = True
+            if sectores_pedidos:
+                a_sec = ubi_rapida.get("nivel_admin_2") or ""
+                if a_sec:
+                    a_admin1_norm = _upz_a_upl_norm(str(a_sec))
+                    pasa_sec = False
+                    for s_item in sectores_pedidos:
+                        s_norm = _sin_tildes(str(s_item).strip().lower())
+                        if s_norm in _sin_tildes(a_sec.lower()) or _sin_tildes(a_sec.lower()) in s_norm or s_norm in a_admin1_norm or a_admin1_norm in s_norm:
+                            pasa_sec = True
                             break
-                    if not pasa_upz:
+                    if not pasa_sec:
                         return None
         except Exception:
             pass
@@ -702,9 +698,9 @@ def procesar_anuncio_nuevo(url: str, upzs_pedidas: list = None, municipios_pedid
             geo = enriquecer_inmueble(lat, lng)
         except Exception:
             if ubi_rapida:
-                geo["upz"] = ubi_rapida.get("upz")
+                geo["nivel_admin_2"] = ubi_rapida.get("nivel_admin_2")
+                geo["nivel_admin_1"] = ubi_rapida.get("nivel_admin_1")
                 geo["municipio"] = ubi_rapida.get("municipio")
-                geo["localidad"] = ubi_rapida.get("localidad")
 
     h3_index = None
     if lat is not None and lng is not None:
@@ -720,10 +716,10 @@ def procesar_anuncio_nuevo(url: str, upzs_pedidas: list = None, municipios_pedid
 
     datos_anuncio = _normalizar_para_db(detalle, portal)
     datos_anuncio["h3_index"] = h3_index
-    if geo.get("localidad"):
-        datos_anuncio["localidad"] = geo["localidad"]
-    if geo.get("upz"):
-        datos_anuncio["upz"] = geo["upz"]
+    if geo.get("nivel_admin_1"):
+        datos_anuncio["nivel_admin_1"] = geo["nivel_admin_1"]
+    if geo.get("nivel_admin_2"):
+        datos_anuncio["nivel_admin_2"] = geo["nivel_admin_2"]
     if geo.get("municipio"):
         datos_anuncio["municipio_geo"] = geo["municipio"]
     if geo.get("h3_data"):
@@ -738,9 +734,9 @@ def ejecutar_busqueda(busqueda: dict, portales: list[str], cantidad: int, munici
             db.actualizar_busqueda_log(busqueda_id, "Detención solicitada: finalizando recolección de enlaces...", "info")
             break
 
-        upzs_pedidas = busqueda.get("upz") or []
+        sectores_pedidos = busqueda.get("sectores") or []
         es_bogota = _sin_tildes(municipio_nombre.strip().lower()).startswith("bogota")
-        loc_slugs = _localidades_slugs_desde_upzs(upzs_pedidas) if (es_bogota and upzs_pedidas) else []
+        loc_slugs = _admin1_slugs_desde_sectores(sectores_pedidos) if (es_bogota and sectores_pedidos) else []
 
         urls = []
         if loc_slugs and portal == "fincaraiz":
@@ -764,7 +760,7 @@ def ejecutar_busqueda(busqueda: dict, portales: list[str], cantidad: int, munici
     urls_existentes = [u for u in todas_urls if db.buscar_anuncio_por_url(u) is not None]
     revalidar_anuncios_existentes(urls_existentes)
 
-    upzs_pedidas = busqueda.get("upz") or []
+    sectores_pedidos = busqueda.get("sectores") or []
     urls_nuevas = filtrar_urls_nuevas(todas_urls)
     nombres_municipios = [m.get("municipio") for m in (busqueda.get("municipios") or []) if m.get("municipio")]
     urls_nuevas = [u for u in urls_nuevas if _es_url_valida_para_municipios(u, nombres_municipios)]
@@ -796,7 +792,7 @@ def ejecutar_busqueda(busqueda: dict, portales: list[str], cantidad: int, munici
             try:
                 resultado = procesar_anuncio_nuevo(
                     url,
-                    upzs_pedidas=upzs_pedidas or None,
+                    sectores_pedidos=sectores_pedidos or None,
                     municipios_pedidos=nombres_municipios or None,
                     driver=driver_compartido
                 )
@@ -809,12 +805,12 @@ def ejecutar_busqueda(busqueda: dict, portales: list[str], cantidad: int, munici
                     anuncio = db.buscar_anuncio_por_url(url)
                     detalle = ""
                     if anuncio:
-                        tipo  = anuncio.get("tipo_inmueble") or "?"
-                        upz_  = anuncio.get("upz") or "?"
+                        sec_  = anuncio.get("nivel_admin_2") or "?"
+                        tipo  = (anuncio.get("tipo_inmueble") or "Inmueble").title()
                         prec  = anuncio.get("precio_venta")
-                        prec_s = f"${prec/1_000_000:.0f}M" if prec else "precio N/D"
+                        prec_s = f"${prec:,.0f}" if prec else ""
                         h3ok  = "🔵" if anuncio.get("h3_data") else "🟡"
-                        detalle = f" — {h3ok} {tipo} en {upz_} {prec_s}"
+                        detalle = f" — {h3ok} {tipo} en {sec_} {prec_s}"
                     db.actualizar_busqueda_log(busqueda_id, f"{prefijo} ✅ Insertado ({elapsed}){detalle}", "ok")
             except Exception as e:
                 import traceback
@@ -875,27 +871,33 @@ def ejecutar_busqueda(busqueda: dict, portales: list[str], cantidad: int, munici
             a["comodidades_normalizadas"] = lista
 
     resultados = []
-    d_antiguedad = d_comods = d_upz = d_municipio = 0
+    d_antiguedad = d_comods = d_sectores = d_municipio = d_precio = d_area = 0
     for a in candidatos_activos:
         if not _cumple_antiguedad(busqueda, a):
             d_antiguedad += 1; continue
         if not _cumple_comodidades_indispensables(busqueda, a):
             d_comods += 1; continue
-        if not _cumple_upz(busqueda, a):
-            d_upz += 1; continue
+        if not _cumple_sectores(busqueda, a):
+            d_sectores += 1; continue
         if not _cumple_municipios(busqueda, a):
             d_municipio += 1; continue
+        if not _cumple_precio(busqueda, a):
+            d_precio += 1; continue
+        if not _cumple_area_metros(busqueda, a):
+            d_area += 1; continue
         resultados.append(a)
 
     razones = []
     if d_antiguedad: razones.append(f"{d_antiguedad} por antigüedad")
     if d_comods:    razones.append(f"{d_comods} por comodidades")
-    if d_upz:       razones.append(f"{d_upz} por UPZ")
+    if d_sectores:  razones.append(f"{d_sectores} por Sector")
     if d_municipio: razones.append(f"{d_municipio} por municipio")
+    if d_precio:    razones.append(f"{d_precio} por precio")
+    if d_area:      razones.append(f"{d_area} por área")
     if razones:
         db.actualizar_busqueda_log(
             busqueda_id,
-            f"{municipio_nombre}: {sum([d_antiguedad, d_comods, d_upz, d_municipio])} descartados — " + ", ".join(razones),
+            f"{municipio_nombre}: {sum([d_antiguedad, d_comods, d_sectores, d_municipio, d_precio, d_area])} descartados — " + ", ".join(razones),
             "info",
         )
     return resultados

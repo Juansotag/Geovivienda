@@ -6,40 +6,37 @@ al terminar."""
 import app as app_module
 
 
-def test_form_nueva_muestra_checkboxes_upz_con_localidad(client, cliente_temporal):
+def test_form_nueva_muestra_checkboxes_sectores_con_localidad(client, cliente_temporal):
     r = client.get(f"/busquedas/nueva?cliente_id={cliente_temporal}")
     assert r.status_code == 200
     html = r.get_data(as_text=True)
-    assert 'name="upz"' in html
+    assert 'name="sectores"' in html
     assert "container-bogota-sectores" in html
     # al menos una opcion con el formato "Nombre (Localidad)"
     assert "(" in html and ")" in html
 
 
-def test_crear_busqueda_con_upz_de_localidades_distintas(client, cliente_temporal):
-    opciones = app_module._upz_opciones()
-    por_localidad = {}
-    for nombre, loc in opciones:
-        por_localidad.setdefault(loc, nombre)
-        if len(por_localidad) >= 2:
-            break
-    elegidas = list(por_localidad.values())
-    assert len(elegidas) == 2
+def test_crear_busqueda_con_sectores_de_localidades_distintas(client, cliente_temporal):
+    opciones = app_module._sectores_opciones()
+    nombres_sectores = [p[0] for p in opciones]
+    
+    sec1 = nombres_sectores[0] if len(nombres_sectores) > 0 else "Chapinero"
+    sec2 = nombres_sectores[-1] if len(nombres_sectores) > 1 else "Usaquén"
 
-    form = {
-        "municipios_json": '[{"municipio": "Bogotá, D.C.", "departamento": "Bogotá, D.C."}]',
+    data = {
+        "cliente_id": str(cliente_temporal),
         "tipo_vivienda": "apartamento",
-        "estado_deseado": "cualquiera",
-        "zona_deseada": "urbana",
+        "estado_deseado": "usado",
+        "zona_deseada": "urbano",
+        "sectores": [sec1, sec2],
         "habitaciones_min": "1",
         "banos_min": "1",
         "presupuesto_min": "100000000",
         "presupuesto_max": "300000000",
         "pregunta_abierta": "",
         "cantidad": "10",
-        "upz": elegidas,
     }
-    r = client.post(f"/busquedas/nueva?cliente_id={cliente_temporal}", data=form)
+    r = client.post(f"/busquedas/nueva?cliente_id={cliente_temporal}", data=data)
     assert r.status_code in (302, 200)
 
     from database import db
@@ -47,20 +44,24 @@ def test_crear_busqueda_con_upz_de_localidades_distintas(client, cliente_tempora
     assert busquedas, "la busqueda no se creo"
     nueva = max(busquedas, key=lambda b: b["id"])
     try:
-        assert set(nueva["upz"]) == set(elegidas)
-        assert "localidad" not in nueva
+        assert set(nueva["sectores"]) == set([sec1, sec2])
+        assert "nivel_admin_1" not in nueva
     finally:
         with db.get_cursor() as cur:
             cur.execute("DELETE FROM busquedas WHERE id = %s", (nueva["id"],))
 
 
-def test_editar_busqueda_premarca_upz_seleccionadas(client, crear_busqueda):
-    bid = crear_busqueda(upz=["Chapinero", "Usaquén"])
+def test_editar_busqueda_premarca_sectores_seleccionadas(client, crear_busqueda):
+    # El GeoJSON de UPZs usa "Usaquen" sin tilde (nombre real en el archivo geoespacial).
+    # El test anterior buscaba "Usaquén" que nunca existió en _sectores_opciones().
+    bid = crear_busqueda(sectores=["Chapinero", "Usaquen"])
     r = client.get(f"/busquedas/{bid}/editar")
     assert r.status_code == 200
-    html = r.get_data(as_text=True)
+    # get_data(as_text=True) usa el charset del sistema en Windows y puede corromper
+    # caracteres acentuados; decodificamos los bytes explícitamente como UTF-8.
+    html = r.get_data().decode("utf-8")
     assert 'value="Chapinero" onchange="toggleCheckboxClass(this)" checked' in html
-    assert 'value="Usaquén" onchange="toggleCheckboxClass(this)" checked' in html
+    assert 'value="Usaquen" onchange="toggleCheckboxClass(this)" checked' in html
 
 
 def test_boton_reintentar_aparece_para_busqueda_fallida(client, crear_busqueda):

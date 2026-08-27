@@ -1,0 +1,60 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Estación Universidades (Muestra)",
+        "tipo": "MIO"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-76.5303, 3.3734]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Estación Unidad Deportiva (Muestra)",
+        "tipo": "MIO"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-76.5471, 3.4112]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Estación Torre de Cali (Muestra)",
+        "tipo": "MIO"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-76.5275, 3.4568]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Estación Chiminangos (Muestra)",
+        "tipo": "MIO"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-76.4950, 3.4831]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Estación Menga (Muestra)",
+        "tipo": "MIO"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-76.5160, 3.4912]
+      }
+    }
+  ]
+}

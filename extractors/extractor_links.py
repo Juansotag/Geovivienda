@@ -77,10 +77,9 @@ def construir_url_fincaraiz(operacion, tipos_inmueble, ubicacion="bogota/bogota-
         
     if banos is not None:
         banos_str = str(banos)
-        if "banos" not in banos_str and "banos" not in banos_str:
+        if "banos" not in banos_str and "baños" not in banos_str:
             # Mismo patron: /2-o-mas-banos en vez de /2-banos
             banos_str = f"{banos_str}-o-mas-banos"
-        banos_str = banos_str.replace("banos", "banos")
         path_extras += f"/{banos_str}"
         
     # Variables de extras/amenidades (FincaRaíz las encadena con '-y-')
