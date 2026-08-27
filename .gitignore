@@ -14,8 +14,15 @@ static/geo/municipios.geojson
 # Ignorar todo el contenido pesado de geodata/ (archivos de delincuencia, raster, shapefiles)
 geodata/*
 
-# Excepciones: Incluir únicamente el Mapa H3 final y los POIs
-!geodata/mapa_h3_bogota.geojson
+# Excepciones: Incluir únicamente el Mapa H3 final y los límites de las ciudades
+!geodata/bogota/
+!geodata/cali/
+geodata/bogota/*
+geodata/cali/*
+!geodata/bogota/*.geojson
+!geodata/cali/*.geojson
+!geodata/DIVIPOLA*.csv
+
 !geodata/entorno/
 geodata/entorno/*
 !geodata/entorno/poi/
